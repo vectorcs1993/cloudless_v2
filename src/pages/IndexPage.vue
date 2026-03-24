@@ -17,6 +17,7 @@
           <label><input type="checkbox" v-model="showGrid" /> Сетка</label>
           <label><input type="checkbox" v-model="showPorts" /> Показать порты</label>
           <label><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
+          <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
         </div>
       </div>
 
@@ -40,6 +41,9 @@
         <p>Тип: {{ selectedElement.getTypeName() }}</p>
         <p>Позиция: ({{ Math.round(selectedElement.x) }}, {{ Math.round(selectedElement.y) }})</p>
         <p>Поворот: {{ selectedElement.rotation || 0 }}°</p>
+
+        <!-- Добавляем кнопку добавления выноски -->
+        <!-- <button @click="addCalloutToSelected" class="add-callout-btn">📝 Добавить выноску</button> -->
 
         <div v-if="selectedElement.getParameters().length > 0" class="element-params">
           <div v-for="param in selectedElement.getParameters()" :key="param.name" class="param-field">
@@ -76,71 +80,17 @@
     </div>
 
     <canvas ref="mainCanvas" class="main-canvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
-      @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel">
+      @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent>
     </canvas>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { Callout } from './Callout.js';
+import { Port } from './Port.js';
 
-// ========== КЛАСС ПОРТА ==========
-class Port {
-  constructor(id, elementId, direction, side, localX, localY, worldX, worldY) {
-    this.id = id;
-    this.elementId = elementId;
-    this.direction = direction;
-    this.side = side;
-    this.localX = localX;
-    this.localY = localY;
-    this.worldX = worldX;
-    this.worldY = worldY;
-    this.connectedElementId = null;
-    this.connectedPortId = null;
-  }
 
-  isConnected() {
-    return this.connectedElementId !== null;
-  }
-
-  disconnect() {
-    this.connectedElementId = null;
-    this.connectedPortId = null;
-  }
-
-  connectTo(port) {
-    this.connectedElementId = port.elementId;
-    this.connectedPortId = port.id;
-  }
-
-  getDirectionName() {
-    const directions = { 'inlet': 'Вход', 'outlet': 'Выход', 'branch': 'Ответвление' };
-    return directions[this.direction] || this.direction;
-  }
-
-  updateWorldPosition(centerX, centerY, rotation, pointX, pointY) {
-    const angleRad = rotation * Math.PI / 180;
-    const dx = pointX - centerX;
-    const dy = pointY - centerY;
-    this.worldX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
-    this.worldY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
-  }
-
-  toJSON() {
-    return {
-      id: this.id,
-      elementId: this.elementId,
-      direction: this.direction,
-      side: this.side,
-      localX: this.localX,
-      localY: this.localY,
-      worldX: this.worldX,
-      worldY: this.worldY,
-      connectedElementId: this.connectedElementId,
-      connectedPortId: this.connectedPortId
-    };
-  }
-}
 
 // ========== БАЗОВЫЙ КЛАСС ЭЛЕМЕНТА ==========
 class BaseElement {
@@ -153,15 +103,79 @@ class BaseElement {
     this.color = color;
     this.rotation = 0;
     this.ports = [];
+    this.callouts = []; // Массив выносок элемента
   }
 
   static getAvailableTypes() {
     return { 'duct': 'Прямой воздуховод', 'fan': 'Вентилятор', 'tee': 'Тройник' };
   }
 
+  getCalloutEntryPoint() {
+    return { x: 0.5, y: 0.5 };
+  }
+  // Метод для получения абсолютных координат точки привязки
+  getAbsoluteCalloutPoint() {
+    const relative = this.getCalloutEntryPoint();
+    const width = this.getWidth();
+    const height = this.getHeight();
+
+    // Учитываем поворот элемента
+    const centerX = this.x + width / 2;
+    const centerY = this.y + height / 2;
+    const localX = this.x + width * relative.x;
+    const localY = this.y + height * relative.y;
+
+    // Применяем поворот
+    const angleRad = (this.rotation || 0) * Math.PI / 180;
+    const dx = localX - centerX;
+    const dy = localY - centerY;
+
+    return {
+      x: dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX,
+      y: dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY
+    };
+  }
+
+  // Вспомогательный метод для получения размеров (должен быть переопределен)
+  getWidth() { return 100; }
+  getHeight() { return 100; }
   getTypeName() {
     const types = BaseElement.getAvailableTypes();
     return types[this.type] || this.type;
+  }
+
+  // Метод для получения текста выноски - должен быть переопределен в дочерних классах
+  getCalloutText() {
+    return `${this.name}\n${this.getTypeName()}`;
+  }
+
+  getElementText() {
+    return '';
+  }
+
+  // Обновить текст выноски
+  updateCalloutText() {
+    if (this.callouts.length > 0) {
+      this.callouts[0].text = this.getCalloutText();
+    }
+  }
+
+  // Добавить выноску
+  // Добавляем параметры для относительной точки привязки
+  // Упрощаем - теперь не нужно передавать относительные координаты
+  addCallout(x, y) {
+    const calloutId = Date.now() + Math.random();
+    const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
+    this.callouts.push(callout);
+    return callout;
+  }
+
+  // Удалить выноску
+  removeCallout(calloutId) {
+    const index = this.callouts.findIndex(c => c.id === calloutId);
+    if (index !== -1) {
+      this.callouts.splice(index, 1);
+    }
   }
 
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
@@ -186,7 +200,9 @@ class BaseElement {
   toJSON() {
     return {
       id: this.id, type: this.type, x: this.x, y: this.y, name: this.name,
-      color: this.color, rotation: this.rotation, ports: this.ports.map(p => p.toJSON())
+      color: this.color, rotation: this.rotation,
+      ports: this.ports.map(p => p.toJSON()),
+      callouts: this.callouts.map(c => c.toJSON())
     };
   }
 
@@ -209,10 +225,15 @@ class DuctDirect extends BaseElement {
     this.width = width;
   }
 
+  // Специфичный текст выноски для воздуховода
+  getCalloutText() {
+    return `${this.name}\nДлина: ${this.length} мм\nШирина: ${this.width} мм\nПлощадь: ${(this.length * this.width / 1000000).toFixed(2)} м²`;
+  }
+
   getParameters() {
     return [
-      { name: 'length', label: 'Длина', type: 'number', step: 50, min: 100, value: this.length },
-      { name: 'width', label: 'Ширина', type: 'number', step: 50, min: 50, value: this.width }
+      { name: 'length', label: 'Длина', type: 'number', step: 50, min: 100, value: this.length, unit: 'мм' },
+      { name: 'width', label: 'Ширина', type: 'number', step: 50, min: 50, value: this.width, unit: 'мм' }
     ];
   }
 
@@ -260,14 +281,14 @@ class DuctDirect extends BaseElement {
       ctx.lineWidth = 1 / scale;
       ctx.strokeRect(this.x, this.y, this.length, this.width);
     }
+    ctx.restore();
 
     ctx.fillStyle = '#fff';
     ctx.font = `${Math.max(10, 14 / scale)}px Arial`;
     ctx.fillText('→', this.x + this.length / 2 - 5 / scale, centerY + 5 / scale);
     ctx.fillStyle = isDarkTheme.value ? '#fff' : '#000';
     ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.name, this.x + 5, this.y + 20 / scale);
-    ctx.restore();
+    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
   }
 
   hitTest(worldX, worldY) {
@@ -300,9 +321,14 @@ class Fan extends BaseElement {
     this.flow = 1000;
   }
 
+  // Специфичный текст выноски для вентилятора
+  getCalloutText() {
+    return `${this.name}\nДиаметр: ${this.diameter} мм\nПроизводительность: ${this.flow} м³/ч\nМощность: ${(this.flow * 0.3).toFixed(1)} Вт`;
+  }
+
   getParameters() {
     return [
-      { name: 'diameter', label: 'Диаметр', type: 'number', step: 50, min: 100, value: this.diameter },
+      { name: 'diameter', label: 'Диаметр', type: 'number', step: 50, min: 100, value: this.diameter, unit: 'мм' },
       { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' }
     ];
   }
@@ -370,13 +396,11 @@ class Fan extends BaseElement {
       ctx.fillStyle = '#fff';
       ctx.fill();
     }
+    ctx.restore();
 
     ctx.fillStyle = isDarkTheme.value ? '#fff' : '#000';
-    ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.name, this.x + 5, this.y + 20 / scale);
     ctx.font = `${Math.max(6, 10 / scale)}px Arial`;
-    ctx.fillText(`${this.flow} м³/ч`, this.x + 5, this.y + 35 / scale);
-    ctx.restore();
+    ctx.fillText(this.getElementText(), this.x + 5, this.y + 35 / scale);
   }
 
   hitTest(worldX, worldY) {
@@ -400,10 +424,17 @@ class Tee extends BaseElement {
     this.height = height;
   }
 
+  // Специфичный текст выноски для тройника
+  getCalloutText() {
+    return `${this.name}\nШирина: ${this.width} мм\nВысота: ${this.height} мм\nТип: тройник\nСечение: ${(this.width * this.height / 1000000).toFixed(2)} м²`;
+  }
+  getCalloutEntryPoint() {
+    return { x: 0.9, y: 0.9 };
+  }
   getParameters() {
     return [
-      { name: 'width', label: 'Ширина', type: 'number', step: 50, min: 100, value: this.width },
-      { name: 'height', label: 'Высота', type: 'number', step: 50, min: 100, value: this.height }
+      { name: 'width', label: 'Ширина', type: 'number', step: 50, min: 100, value: this.width, unit: 'мм' },
+      { name: 'height', label: 'Высота', type: 'number', step: 50, min: 100, value: this.height, unit: 'мм' }
     ];
   }
 
@@ -455,11 +486,8 @@ class Tee extends BaseElement {
     ctx.stroke();
 
     ctx.fillStyle = '#fff';
-    ctx.font = `${Math.max(12, 16 / scale)}px Arial`;
-    ctx.fillText('T', centerX - 4 / scale, centerY + 4 / scale);
-    ctx.fillStyle = isDarkTheme.value ? '#fff' : '#000';
     ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.name, this.x + 5, this.y + 20 / scale);
+    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
     ctx.restore();
   }
 
@@ -564,6 +592,11 @@ class CanvasRenderer {
     this.options = options;
     this.selectedElement = null;
     this.highlightedPort = null;
+    this.draggingCallout = null;
+  }
+
+  getSelectedElement() {
+    return this.selectedElement;
   }
 
   setSelectedElement(element) {
@@ -586,6 +619,7 @@ class CanvasRenderer {
     this.drawAxes();
     this.drawElements();
     this.drawPorts();
+    this.drawCallouts();
 
     this.ctx.restore();
     this.drawInfo();
@@ -694,6 +728,24 @@ class CanvasRenderer {
     });
   }
 
+  drawCallouts() {
+    if (!this.options.showCallouts.value) return;
+
+    this.elements.value.forEach(element => {
+      element.callouts.forEach(callout => {
+        if (callout && callout.text) {
+          // Передаем элемент в метод draw
+          callout.draw(
+            this.ctx,
+            this.options.scale.value,
+            this.options.isDarkTheme.value,
+            element // Передаем элемент целиком
+          );
+        }
+      });
+    });
+  }
+
   drawInfo() {
     this.ctx.fillStyle = this.options.isDarkTheme.value ? '#fff' : '#000';
     this.ctx.font = '14px Arial';
@@ -706,6 +758,10 @@ class CanvasRenderer {
       this.ctx.fillStyle = '#00ff00';
       this.ctx.fillText('Порт: ' + this.highlightedPort.side + ' (' +
         this.highlightedPort.getDirectionName() + ')', 50, 110);
+    }
+    if (this.draggingCallout) {
+      this.ctx.fillStyle = '#ff6600';
+      this.ctx.fillText('Перемещение выноски...', 50, 130);
     }
   }
 
@@ -726,15 +782,22 @@ class InteractionManager {
     this.renderer = renderer;
     this.connectionManager = connectionManager;
     this.options = options;
+    this.onElementMoveCallback = null; // Добавляем callback
 
     this.isDragging = false;
     this.isPanning = false;
     this.draggingElement = null;
+    this.draggingCallout = null;
     this.dragStartMouse = { x: 0, y: 0 };
     this.dragStartPan = { x: 0, y: 0 };
     this.dragStartElementPos = { x: 0, y: 0 };
     this.wasSnapped = false;
     this.currentSnappedPorts = null;
+  }
+
+  // Добавляем метод для установки callback
+  setOnElementMoveCallback(callback) {
+    this.onElementMoveCallback = callback;
   }
 
   findElementAt(x, y) {
@@ -746,27 +809,76 @@ class InteractionManager {
     return null;
   }
 
+  findCalloutAt(x, y) {
+    for (const element of this.elements.value) {
+      for (const callout of element.callouts) {
+        const hitResult = callout.hitTest(x, y, this.options.scale.value, element);
+        if (hitResult.hit) {
+          return { callout, element, isHandle: hitResult.isHandle };
+        }
+      }
+    }
+    return null;
+  }
+
   onMouseDown(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (e.button === 0) {
+      // Сначала проверяем выноски
+      const calloutHit = this.findCalloutAt(worldPos.x, worldPos.y);
+      if (calloutHit) {
+        this.startDragCallout(calloutHit, e);
+        return;
+      }
+
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
       if (clickedElement) {
+        // ВАЖНО: Обновляем выделенный элемент
+        this.renderer.setSelectedElement(clickedElement);
         this.startDrag(clickedElement, e);
       } else {
+        // Снимаем выделение если кликнули мимо
         this.renderer.setSelectedElement(null);
         this.renderer.draw();
       }
     } else if (e.button === 1) {
       e.preventDefault();
       this.startPan(e);
+    } else if (e.button === 2) {
+      // Правый клик - добавить выноску
+      const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
+      if (clickedElement) {
+        this.addCalloutToElement(clickedElement, worldPos);
+      }
     }
+  }
+
+  addCalloutToElement(element, worldPos) {
+    // Добавляем выноску в позиции курсора, но со смещением
+    const calloutX = worldPos.x + 50 / this.options.scale.value;
+    const calloutY = worldPos.y - 30 / this.options.scale.value;
+    element.addCallout(calloutX, calloutY);
+
+    // Обновляем текст выноски
+    element.updateCalloutText();
+
+    this.renderer.draw();
+  }
+
+  startDragCallout(calloutHit, e) {
+    this.isDragging = true;
+    this.draggingCallout = calloutHit;
+    this.dragStartMouse = { x: e.clientX, y: e.clientY };
+    this.dragStartElementPos = { x: calloutHit.callout.x, y: calloutHit.callout.y };
+    this.canvas.style.cursor = 'grabbing';
+    this.renderer.draw();
   }
 
   startDrag(element, e) {
     this.isDragging = true;
     this.draggingElement = element;
-    this.renderer.setSelectedElement(element); // Добавьте эту строку
+    // Убираем дублирование, так как setSelectedElement уже вызван в onMouseDown
     this.dragStartMouse = { x: e.clientX, y: e.clientY };
     this.dragStartElementPos = { x: element.x, y: element.y };
     this.wasSnapped = element.ports?.some(p => p.isConnected()) || false;
@@ -797,15 +909,25 @@ class InteractionManager {
   onMouseMove(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
-    if (this.options.showPorts.value && !this.isDragging) {
+    if (this.options.showPorts.value && !this.isDragging && !this.draggingCallout) {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       this.renderer.setHighlightedPort(portUnderCursor);
       this.canvas.style.cursor = portUnderCursor ? 'pointer' : 'default';
-    } else if (!this.isDragging) {
+    } else if (!this.isDragging && !this.draggingCallout) {
       this.renderer.setHighlightedPort(null);
     }
 
-    if (this.isDragging && this.draggingElement) {
+    if (this.draggingCallout) {
+      // Исправляем перетаскивание выноски
+      const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
+      const startWorldPos = this.renderer.screenToWorld(this.dragStartMouse.x, this.dragStartMouse.y);
+      const deltaX = currentWorldPos.x - startWorldPos.x;
+      const deltaY = currentWorldPos.y - startWorldPos.y;
+
+      this.draggingCallout.callout.x = this.dragStartElementPos.x + deltaX;
+      this.draggingCallout.callout.y = this.dragStartElementPos.y + deltaY;
+      this.renderer.draw();
+    } else if (this.isDragging && this.draggingElement) {
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouse.x, this.dragStartMouse.y);
       const deltaX = worldPos.x - startWorldPos.x;
       const deltaY = worldPos.y - startWorldPos.y;
@@ -822,6 +944,8 @@ class InteractionManager {
     if (!this.options.snapToPorts.value) {
       this.draggingElement.x = this.dragStartElementPos.x + deltaX;
       this.draggingElement.y = this.dragStartElementPos.y + deltaY;
+      // Обновляем реактивную переменную
+      this.updateSelectedElementReactive();
       return;
     }
 
@@ -884,8 +1008,20 @@ class InteractionManager {
       this.draggingElement.updatePorts();
       this.renderer.setHighlightedPort(null);
     }
+
+    // Обновляем текст выноски при перемещении
+    this.draggingElement.updateCalloutText();
+    // Обновляем реактивную переменную
+    this.updateSelectedElementReactive();
   }
 
+  // Добавляем метод для обновления реактивной переменной
+  updateSelectedElementReactive() {
+    // Этот метод будет вызываться из onCanvasMouseMove через callback
+    if (this.onElementMoveCallback) {
+      this.onElementMoveCallback(this.draggingElement);
+    }
+  }
   findPortAtPosition(worldX, worldY, maxDistance = 15) {
     const allPorts = this.connectionManager.getAllPorts();
     for (const port of allPorts) {
@@ -904,13 +1040,18 @@ class InteractionManager {
       this.canvas.style.cursor = '';
       this.renderer.draw();
     }
+    if (this.draggingCallout) {
+      this.draggingCallout = null;
+      this.canvas.style.cursor = '';
+      this.renderer.draw();
+    }
     if (this.isPanning) {
       this.isPanning = false;
       this.canvas.style.cursor = '';
       this.renderer.draw();
     }
     setTimeout(() => {
-      if (!this.isDragging) this.renderer.setHighlightedPort(null);
+      if (!this.isDragging && !this.draggingCallout) this.renderer.setHighlightedPort(null);
       this.renderer.draw();
     }, 100);
   }
@@ -957,6 +1098,11 @@ class ElementFactory {
       port.connectedElementId = jsonData.ports?.find(op => op.id === port.id)?.connectedElementId || null;
       port.connectedPortId = jsonData.ports?.find(op => op.id === port.id)?.connectedPortId || null;
     });
+    element.callouts = jsonData.callouts?.map(c => {
+      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y,
+        c.relativeAnchorX || 0.5, c.relativeAnchorY || 0.5);
+      return callout;
+    }) || [];
     return element;
   }
 }
@@ -1040,6 +1186,7 @@ const isDarkTheme = ref(false);
 const pixelsPerMeter = ref(50);
 const showGrid = ref(true);
 const showPorts = ref(true);
+const showCallouts = ref(true);
 const snapToPorts = ref(true);
 const gridStepM = ref(1);
 
@@ -1065,6 +1212,7 @@ const renderOptions = {
   panY: ref(0),
   showGrid,
   showPorts,
+  showCallouts,
   pixelsPerMeter,
   gridStepM,
   isDarkTheme,
@@ -1077,6 +1225,11 @@ const defaultElements = [
   new Fan(2, 500, 250, 120),
   new Tee(3, 350, 450, 150, 150)
 ];
+
+// Добавляем выноски для стандартных элементов
+defaultElements[0].addCallout(250, 170);
+defaultElements[1].addCallout(550, 220);
+defaultElements[2].addCallout(400, 420);
 
 // ========== Функции ==========
 const saveToLocalStorage = () => {
@@ -1112,26 +1265,59 @@ const loadFromLocalStorage = () => {
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     elements.value = defaultElements.map(el => {
-      if (el.type === 'duct') return new DuctDirect(el.id, el.x, el.y, el.length, el.width);
-      if (el.type === 'fan') return new Fan(el.id, el.x, el.y, el.diameter);
-      return new Tee(el.id, el.x, el.y, el.width, el.height);
+      let newElement;
+      if (el.type === 'duct') {
+        newElement = new DuctDirect(el.id, el.x, el.y, el.length, el.width);
+      } else if (el.type === 'fan') {
+        newElement = new Fan(el.id, el.x, el.y, el.diameter);
+        newElement.flow = el.flow;
+      } else {
+        newElement = new Tee(el.id, el.x, el.y, el.width, el.height);
+      }
+
+      // Копируем выноски с относительными координатами
+      if (el.callouts && el.callouts.length > 0) {
+        el.callouts.forEach(callout => {
+          newElement.addCallout(callout.x, callout.y,
+            callout.relativeAnchorX || 0.5,
+            callout.relativeAnchorY || 0.5);
+        });
+      } else {
+        // Добавляем выноски с относительными координатами
+        if (el.type === 'duct') {
+          newElement.addCallout(el.x + 150, el.y - 30, 0.7, 0.3);
+        } else if (el.type === 'fan') {
+          newElement.addCallout(el.x + 150, el.y - 30, 0.5, 0.5);
+        } else {
+          newElement.addCallout(el.x + 150, el.y - 30, 0.3, 0.8);
+        }
+      }
+
+      newElement.updateCalloutText();
+      return newElement;
     });
+
     nextElementId = 100;
     nextPortId = 1000;
     selectedElement.value = null;
-    renderer?.setSelectedElement(null); // Добавьте эту строку
+    renderer?.setSelectedElement(null);
     elements.value.forEach(el => el.updatePorts());
     renderer?.draw();
   }
 };
 
-const addElement = (ElementClass, params = {}) => {
+const addElement = (ElementClass, params = []) => {
   const newId = ++nextElementId;
-  const newElement = new ElementClass(newId, 100, 100, ...Object.values(params));
+  const newElement = new ElementClass(newId, 100, 100, ...params);
   elements.value.push(newElement);
   newElement.updatePorts();
+
+  const calloutX = newElement.x + 150;
+  const calloutY = newElement.y - 30;
+  newElement.addCallout(calloutX, calloutY);
+
   selectedElement.value = newElement;
-  renderer?.setSelectedElement(newElement); // Добавьте эту строку
+  renderer?.setSelectedElement(newElement);
   renderer?.draw();
 };
 
@@ -1142,6 +1328,7 @@ const addTee = () => addElement(Tee, [150, 150]);
 const onParameterChange = () => {
   if (selectedElement.value) {
     selectedElement.value.updatePorts();
+    selectedElement.value.updateCalloutText(); // Обновляем текст выноски
     renderer?.draw();
   }
 };
@@ -1151,6 +1338,7 @@ const rotateLeft = () => {
   connectionManager.disconnectElement(selectedElement.value);
   selectedElement.value.rotation = ((selectedElement.value.rotation || 0) - 90 + 360) % 360;
   selectedElement.value.updatePorts();
+  selectedElement.value.updateCalloutText();
   renderer?.draw();
 };
 
@@ -1159,6 +1347,7 @@ const rotateRight = () => {
   connectionManager.disconnectElement(selectedElement.value);
   selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + 90) % 360;
   selectedElement.value.updatePorts();
+  selectedElement.value.updateCalloutText();
   renderer?.draw();
 };
 
@@ -1174,7 +1363,7 @@ const deleteSelected = () => {
     if (index !== -1) {
       elements.value.splice(index, 1);
       selectedElement.value = null;
-      renderer?.setSelectedElement(null); // Добавьте эту строку
+      renderer?.setSelectedElement(null);
       renderer?.draw();
     }
   }
@@ -1193,27 +1382,23 @@ const toggleTheme = () => {
 
 // Обработчики событий canvas
 const onCanvasMouseDown = (e) => {
-  const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
+  interactionManager?.onMouseDown(e);
 
-  if (e.button === 0) {
-    const clickedElement = interactionManager?.findElementAt(worldPos.x, worldPos.y);
-    if (clickedElement) {
-      selectedElement.value = clickedElement;
-      renderer?.setSelectedElement(clickedElement); // Добавьте эту строку
-      interactionManager?.onMouseDown(e);
-    } else {
-      selectedElement.value = null;
-      renderer?.setSelectedElement(null); // Добавьте эту строку
-      renderer?.draw();
-    }
+  if (renderer?.selectedElement) {
+    selectedElement.value = renderer.selectedElement;
   } else {
-    interactionManager?.onMouseDown(e);
+    selectedElement.value = null;
   }
 };
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
   interactionManager?.onMouseMove(e);
+
+  // Обновляем selectedElement при перемещении
+  if (renderer?.selectedElement) {
+    selectedElement.value = renderer.selectedElement;
+  }
 };
 const onCanvasMouseUp = (e) => interactionManager?.onMouseUp(e);
 const onWheel = (e) => interactionManager?.onWheel(e);
@@ -1227,8 +1412,14 @@ onMounted(() => {
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
   interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, {
-    snapToPorts, showPorts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
+    snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
   });
+
+  // Устанавливаем callback для обновления selectedElement
+  interactionManager.setOnElementMoveCallback((element) => {
+    selectedElement.value = element;
+  });
+
   layerManager = new LayerManager(elements, renderer);
 
   loadFromLocalStorage();
