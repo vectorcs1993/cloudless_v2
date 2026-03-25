@@ -1,4 +1,4 @@
-// ========== КЛАСС ПОРТА ==========
+// Port.js
 export class Port {
   constructor(id, elementId, direction, side, localX, localY, worldX, worldY) {
     this.id = id;
@@ -11,6 +11,8 @@ export class Port {
     this.worldY = worldY;
     this.connectedElementId = null;
     this.connectedPortId = null;
+    // Фиксированный радиус порта в пикселях
+    this.radius = 5;
   }
 
   isConnected() {
@@ -51,7 +53,8 @@ export class Port {
       worldX: this.worldX,
       worldY: this.worldY,
       connectedElementId: this.connectedElementId,
-      connectedPortId: this.connectedPortId
+      connectedPortId: this.connectedPortId,
+      radius: this.radius
     };
   }
 }
