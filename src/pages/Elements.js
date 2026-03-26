@@ -771,3 +771,190 @@ export class ElementFactory {
 }
 
 
+// ========== КЛАСС ГРУППЫ ==========
+export class Group extends BaseElement {
+  constructor(id, elements) {
+    super(id, 'group', 0, 0, `Группа ${id}`, '#9e9e9e');
+    this.elements = elements || [];
+    this._x = 0;
+    this._y = 0;
+    this.width = 0;
+    this.height = 0;
+    this.updateBounds();
+  }
+
+  updateBounds() {
+    if (!this.elements || this.elements.length === 0) {
+      this._x = 0;
+      this._y = 0;
+      this.width = 0;
+      this.height = 0;
+      return;
+    }
+
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+
+    this.elements.forEach(element => {
+      if (!element) return;
+      const elementMinX = element.x;
+      const elementMinY = element.y;
+      const elementMaxX = element.x + element.getWidth();
+      const elementMaxY = element.y + element.getHeight();
+
+      minX = Math.min(minX, elementMinX);
+      minY = Math.min(minY, elementMinY);
+      maxX = Math.max(maxX, elementMaxX);
+      maxY = Math.max(maxY, elementMaxY);
+    });
+
+    this._x = minX;
+    this._y = minY;
+    this.width = maxX - minX;
+    this.height = maxY - minY;
+  }
+
+  getElements() {
+    return [...(this.elements || [])];
+  }
+
+  getWidth() {
+    return this.width || 0;
+  }
+
+  getHeight() {
+    return this.height || 0;
+  }
+
+  get x() {
+    return this._x;
+  }
+
+  set x(value) {
+    const deltaX = value - this._x;
+    if (deltaX !== 0 && !isNaN(deltaX) && isFinite(deltaX)) {
+      this.move(deltaX, 0);
+    }
+  }
+
+  get y() {
+    return this._y;
+  }
+
+  set y(value) {
+    const deltaY = value - this._y;
+    if (deltaY !== 0 && !isNaN(deltaY) && isFinite(deltaY)) {
+      this.move(0, deltaY);
+    }
+  }
+
+  getCalloutText() {
+    return `${this.name}\nКоличество элементов: ${this.elements ? this.elements.length : 0}`;
+  }
+
+  getParameters() {
+    return [];
+  }
+
+  getPorts() {
+    return [];
+  }
+
+  // Метод для перемещения всех элементов группы
+  move(deltaX, deltaY) {
+    if (!this.elements || this.elements.length === 0) return;
+
+    // Проверяем, что дельта корректна
+    if (isNaN(deltaX) || isNaN(deltaY) || !isFinite(deltaX) || !isFinite(deltaY)) {
+      console.warn('Invalid delta in group move:', deltaX, deltaY);
+      return;
+    }
+
+    console.log('Group move - delta:', deltaX, deltaY, 'current pos:', this._x, this._y);
+
+    // Перемещаем каждый элемент
+    this.elements.forEach(element => {
+      if (element) {
+        element.x += deltaX;
+        element.y += deltaY;
+        if (element.updatePorts) element.updatePorts();
+        if (element.updateCalloutText) element.updateCalloutText();
+      }
+    });
+
+    // Обновляем границы группы
+    this.updateBounds();
+
+    console.log('Group move - new pos:', this._x, this._y);
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    // Рисуем все элементы группы
+    if (this.elements) {
+      this.elements.forEach(element => {
+        if (element && element.draw) {
+          element.draw(ctx, scale, isSelected, isDarkTheme);
+        }
+      });
+    }
+
+    // Если группа выбрана, рисуем рамку вокруг всей группы
+    if (isSelected && this.width > 0 && this.height > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#ff6600';
+      ctx.lineWidth = Math.max(2, 3 / scale);
+      ctx.setLineDash([5 / scale, 5 / scale]);
+      ctx.strokeRect(this._x, this._y, this.width, this.height);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+
+  hitTest(worldX, worldY) {
+    if (!this.elements) return false;
+
+    // Проверяем попадание в любой элемент группы
+    for (const element of this.elements) {
+      if (element && element.hitTest && element.hitTest(worldX, worldY)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  updatePorts() {
+    if (this.elements) {
+      this.elements.forEach(element => {
+        if (element && element.updatePorts) element.updatePorts();
+      });
+    }
+  }
+
+  updateCalloutText() {
+    if (this.elements) {
+      this.elements.forEach(element => {
+        if (element && element.updateCalloutText) element.updateCalloutText();
+      });
+    }
+  }
+
+  addCallout(x, y) {
+    const calloutId = Date.now() + Math.random();
+    const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
+    if (!this.callouts) this.callouts = [];
+    this.callouts.push(callout);
+    return callout;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      type: 'group',
+      elements: this.elements ? this.elements.map(el => el.toJSON()) : [],
+      width: this.width,
+      height: this.height,
+      _x: this._x,
+      _y: this._y
+    };
+  }
+}

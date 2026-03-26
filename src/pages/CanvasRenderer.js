@@ -1,197 +1,285 @@
-// ========== КЛАСС РЕНДЕРЕРА ==========
+// CanvasRenderer.js
 export class CanvasRenderer {
   constructor(canvas, elements, options) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
     this.elements = elements;
     this.options = options;
-    this.selectedElement = null;
+    this.scale = options.scale;
+    this.panX = options.panX;
+    this.panY = options.panY;
+    this.selectedElements = [];
     this.highlightedPort = null;
-    this.draggingCallout = null;
+    this.selectionRect = null;
   }
 
-  getSelectedElement() {
-    return this.selectedElement;
-  }
-
-  setSelectedElement(element) {
-    this.selectedElement = element;
+  setSelectedElements(elements) {
+    this.selectedElements = Array.isArray(elements) ? elements : [elements];
   }
 
   setHighlightedPort(port) {
     this.highlightedPort = port;
   }
 
-  draw() {
-    if (!this.ctx) return;
-    this.updateCanvasSize();
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.save();
-    this.ctx.translate(this.options.panX.value, this.options.panY.value);
-    this.ctx.scale(this.options.scale.value, this.options.scale.value); // <- здесь применяется масштаб
-
-    this.drawGrid();
-    this.drawAxes();
-    this.drawElements(); // <- элементы рисуются с учетом scale
-    this.drawPorts(); // <- порты рисуются с учетом scale
-    this.drawCallouts();  // <- выноски рисуются с учетом scale
-
-    this.ctx.restore();
-    this.drawInfo();
+  startSelectionRect(x, y) {
+    this.selectionRect = { startX: x, startY: y, endX: x, endY: y };
   }
 
-  updateCanvasSize() {
-    this.canvas.width = this.canvas.clientWidth;
-    this.canvas.height = this.canvas.clientHeight;
-  }
-
-  drawGrid() {
-    if (!this.options.showGrid.value) return;
-    const step = this.options.gridStepM.value * this.options.pixelsPerMeter.value;
-    if (step <= 5) return;
-    const startX = Math.floor(-this.options.panX.value / this.options.scale.value / step) * step;
-    const startY = Math.floor(-this.options.panY.value / this.options.scale.value / step) * step;
-    const endX = startX + this.canvas.width / this.options.scale.value + step;
-    const endY = startY + this.canvas.height / this.options.scale.value + step;
-
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = this.options.isDarkTheme.value ? '#444' : '#ddd';
-    this.ctx.lineWidth = 0.5 / this.options.scale.value;
-    for (let x = startX; x < endX; x += step) {
-      this.ctx.moveTo(x, startY);
-      this.ctx.lineTo(x, endY);
+  updateSelectionRect(x, y) {
+    if (this.selectionRect) {
+      this.selectionRect.endX = x;
+      this.selectionRect.endY = y;
     }
-    for (let y = startY; y < endY; y += step) {
-      this.ctx.moveTo(startX, y);
-      this.ctx.lineTo(endX, y);
-    }
-    this.ctx.stroke();
   }
 
-  drawAxes() {
-    const startX = -this.options.panX.value / this.options.scale.value;
-    const startY = -this.options.panY.value / this.options.scale.value;
-    const endX = startX + this.canvas.width / this.options.scale.value;
-    const endY = startY + this.canvas.height / this.options.scale.value;
+  endSelectionRect() {
+    if (this.selectionRect) {
+      const rect = {
+        minX: Math.min(this.selectionRect.startX, this.selectionRect.endX),
+        minY: Math.min(this.selectionRect.startY, this.selectionRect.endY),
+        maxX: Math.max(this.selectionRect.startX, this.selectionRect.endX),
+        maxY: Math.max(this.selectionRect.startY, this.selectionRect.endY)
+      };
 
-    this.ctx.beginPath();
-    this.ctx.strokeStyle = this.options.isDarkTheme.value ? '#888' : '#666';
-    this.ctx.lineWidth = Math.max(1, 1.5 / this.options.scale.value);
-    this.ctx.moveTo(startX, 0);
-    this.ctx.lineTo(endX, 0);
-    this.ctx.stroke();
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, startY);
-    this.ctx.lineTo(0, endY);
-    this.ctx.stroke();
+      // Преобразуем экранные координаты прямоугольника в мировые
+      const worldRect = {
+        minX: (rect.minX - this.panX.value) / this.scale.value,
+        minY: (rect.minY - this.panY.value) / this.scale.value,
+        maxX: (rect.maxX - this.panX.value) / this.scale.value,
+        maxY: (rect.maxY - this.panY.value) / this.scale.value
+      };
 
-    const arrowSize = 8 / this.options.scale.value;
-    this.ctx.beginPath();
-    this.ctx.moveTo(endX, 0);
-    this.ctx.lineTo(endX - arrowSize, -arrowSize / 2);
-    this.ctx.lineTo(endX - arrowSize, arrowSize / 2);
-    this.ctx.fillStyle = this.options.isDarkTheme.value ? '#888' : '#666';
-    this.ctx.fill();
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, endY);
-    this.ctx.lineTo(-arrowSize / 2, endY - arrowSize);
-    this.ctx.lineTo(arrowSize / 2, endY - arrowSize);
-    this.ctx.fill();
+      // Находим все элементы в прямоугольнике
+      const selected = this.elements.value.filter(element => {
+        const elementBounds = {
+          minX: element.x,
+          minY: element.y,
+          maxX: element.x + element.getWidth(),
+          maxY: element.y + element.getHeight()
+        };
 
-    this.ctx.fillStyle = this.options.isDarkTheme.value ? '#888' : '#666';
-    this.ctx.font = `${Math.max(10, 12 / this.options.scale.value)}px Arial`;
-    this.ctx.fillText('X', endX - 15 / this.options.scale.value, -5 / this.options.scale.value);
-    this.ctx.fillText('Y', 5 / this.options.scale.value, endY - 5 / this.options.scale.value);
-  }
-
-  drawElements() {
-    this.elements.value.forEach(element => {
-      element.draw(
-        this.ctx,
-        this.options.scale.value,
-        this.selectedElement?.id === element.id,
-        this.options.isDarkTheme.value
-      );
-    });
-  }
-
-  drawPorts() {
-    if (!this.options.showPorts.value) return;
-    const allPorts = [];
-    this.elements.value.forEach(el => { if (el.ports) allPorts.push(...el.ports); });
-
-    allPorts.forEach(port => {
-      const isHighlighted = this.highlightedPort?.id === port.id;
-      const isConnected = port.isConnected();
-
-      this.ctx.save();
-      if (isHighlighted) {
-        this.ctx.fillStyle = '#ff6600';
-        this.ctx.shadowBlur = 12;
-        this.ctx.shadowColor = '#ff6600';
-      } else if (isConnected) {
-        this.ctx.fillStyle = '#ffaa00';
-        this.ctx.shadowBlur = 8;
-        this.ctx.shadowColor = '#ffaa00';
-      } else {
-        this.ctx.fillStyle = '#00ff00';
-        this.ctx.shadowBlur = 0;
-      }
-
-      // Используем фиксированный радиус порта - canvas масштабирует его автоматически
-      const portSize = port.radius;
-      this.ctx.beginPath();
-      this.ctx.arc(port.worldX, port.worldY, portSize, 0, 2 * Math.PI);
-      this.ctx.fill();
-      this.ctx.strokeStyle = '#ffffff';
-      this.ctx.lineWidth = 1;
-      this.ctx.stroke();
-      this.ctx.restore();
-    });
-  }
-
-  drawCallouts() {
-    if (!this.options.showCallouts.value) return;
-
-    this.elements.value.forEach(element => {
-      element.callouts.forEach(callout => {
-        if (callout && callout.text) {
-          // Передаем элемент в метод draw
-          callout.draw(
-            this.ctx,
-            this.options.scale.value,
-            this.options.isDarkTheme.value,
-            element // Передаем элемент целиком
-          );
-        }
+        return !(elementBounds.maxX < worldRect.minX ||
+          elementBounds.minX > worldRect.maxX ||
+          elementBounds.maxY < worldRect.minY ||
+          elementBounds.minY > worldRect.maxY);
       });
-    });
-  }
 
-  drawInfo() {
-    this.ctx.fillStyle = this.options.isDarkTheme.value ? '#fff' : '#000';
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText('Масштаб: ' + this.options.scale.value.toFixed(2) + 'x', 50, 50);
-    if (this.options.mouseWorldPos?.value) {
-      this.ctx.fillText('X, Y: ' + this.options.mouseWorldPos.value.x.toFixed(2) + ', ' +
-        this.options.mouseWorldPos.value.y.toFixed(2), 50, 70);
-    }
-    if (this.highlightedPort) {
-      this.ctx.fillStyle = '#00ff00';
-      this.ctx.fillText('Порт: ' + this.highlightedPort.side + ' (' +
-        this.highlightedPort.getDirectionName() + ')', 50, 110);
-    }
-    if (this.draggingCallout) {
-      this.ctx.fillStyle = '#ff6600';
-      this.ctx.fillText('Перемещение выноски...', 50, 130);
+      this.selectedElements = selected;
+      this.selectionRect = null;
     }
   }
 
   screenToWorld(screenX, screenY) {
     const rect = this.canvas.getBoundingClientRect();
+    const canvasX = screenX - rect.left;
+    const canvasY = screenY - rect.top;
     return {
-      x: (screenX - rect.left - this.options.panX.value) / this.options.scale.value,
-      y: (screenY - rect.top - this.options.panY.value) / this.options.scale.value
+      x: (canvasX - this.panX.value) / this.scale.value,
+      y: (canvasY - this.panY.value) / this.scale.value
     };
+  }
+
+  worldToScreen(worldX, worldY) {
+    return {
+      x: worldX * this.scale.value + this.panX.value,
+      y: worldY * this.scale.value + this.panY.value
+    };
+  }
+
+  draw() {
+    // Получаем контекст canvas
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+
+    // Устанавливаем размеры canvas
+    this.canvas.width = rect.width;
+    this.canvas.height = rect.height;
+
+    // Очищаем canvas
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Сохраняем состояние контекста
+    ctx.save();
+
+    // Применяем масштаб и панорамирование для всего контента
+    ctx.translate(this.panX.value, this.panY.value);
+    ctx.scale(this.scale.value, this.scale.value);
+
+    // Рисуем сетку
+    if (this.options.showGrid.value) {
+      this.drawGrid(ctx);
+    }
+
+    // Рисуем все элементы
+    this.elements.value.forEach(element => {
+      const isSelected = this.selectedElements.some(sel => sel.id === element.id);
+      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value);
+    });
+
+
+    this.drawAxes(ctx);
+
+    // Рисуем порты (в мировых координатах, без дополнительных трансформаций)
+    if (this.options.showPorts.value) {
+      this.drawPorts(ctx);
+    }
+
+    // Рисуем выноски (в мировых координатах, без дополнительных трансформаций)
+    if (this.options.showCallouts.value) {
+      this.drawCallouts(ctx);
+    }
+
+    // Восстанавливаем состояние контекста (убираем трансформации)
+    ctx.restore();
+
+    // Рисуем прямоугольник выделения (в экранных координатах)
+    if (this.selectionRect) {
+      ctx.save();
+      ctx.strokeStyle = '#00ff00';
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+
+      const x = Math.min(this.selectionRect.startX, this.selectionRect.endX);
+      const y = Math.min(this.selectionRect.startY, this.selectionRect.endY);
+      const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
+      const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
+
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeRect(x, y, width, height);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+
+  drawGrid(ctx) {
+    // Используем pixelsPerMeter для определения шага сетки в пикселях
+    const gridStepPx = 50; // Фиксированный шаг сетки в пикселях (50px)
+    // Или можно сделать шаг зависимым от масштаба:
+    // const gridStepPx = 50 / this.scale.value; // для постоянного размера в мировых координатах
+
+    const width = this.canvas.width / this.scale.value;
+    const height = this.canvas.height / this.scale.value;
+    const startX = -this.panX.value / this.scale.value;
+    const startY = -this.panY.value / this.scale.value;
+
+    ctx.save();
+    ctx.strokeStyle = this.options.isDarkTheme.value ? '#444' : '#ddd';
+    ctx.lineWidth = 0.5 / this.scale.value;
+
+    // Вертикальные линии
+    const firstX = Math.floor(startX / gridStepPx) * gridStepPx;
+    for (let x = firstX; x < startX + width; x += gridStepPx) {
+      ctx.beginPath();
+      ctx.moveTo(x, startY);
+      ctx.lineTo(x, startY + height);
+      ctx.stroke();
+    }
+
+    // Горизонтальные линии
+    const firstY = Math.floor(startY / gridStepPx) * gridStepPx;
+    for (let y = firstY; y < startY + height; y += gridStepPx) {
+      ctx.beginPath();
+      ctx.moveTo(startX, y);
+      ctx.lineTo(startX + width, y);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+
+  drawAxes(ctx) {
+    const startX = -this.options.panX.value / this.options.scale.value;
+    const startY = -this.options.panY.value / this.options.scale.value;
+    const endX = startX + this.canvas.width / this.options.scale.value;
+    const endY = startY + this.canvas.height / this.options.scale.value;
+
+    ctx.beginPath();
+    ctx.strokeStyle = this.options.isDarkTheme.value ? '#888' : '#666';
+    ctx.lineWidth = Math.max(1, 1.5 / this.options.scale.value);
+    ctx.moveTo(startX, 0);
+    ctx.lineTo(endX, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, startY);
+    ctx.lineTo(0, endY);
+    ctx.stroke();
+
+    const arrowSize = 8 / this.options.scale.value;
+    ctx.beginPath();
+    ctx.moveTo(endX, 0);
+    ctx.lineTo(endX - arrowSize, -arrowSize / 2);
+    ctx.lineTo(endX - arrowSize, arrowSize / 2);
+    ctx.fillStyle = this.options.isDarkTheme.value ? '#888' : '#666';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, endY);
+    ctx.lineTo(-arrowSize / 2, endY - arrowSize);
+    ctx.lineTo(arrowSize / 2, endY - arrowSize);
+    ctx.fill();
+
+    ctx.fillStyle = this.options.isDarkTheme.value ? '#888' : '#666';
+    ctx.font = `${Math.max(10, 12 / this.options.scale.value)}px Arial`;
+    ctx.fillText('X', endX - 15 / this.options.scale.value, -5 / this.options.scale.value);
+    ctx.fillText('Y', 5 / this.options.scale.value, endY - 5 / this.options.scale.value);
+  }
+
+  drawPorts(ctx) {
+    // Рисуем порты в мировых координатах (трансформации уже применены)
+    for (const element of this.elements.value) {
+      if (element.ports) {
+        for (const port of element.ports) {
+          // Проверяем, что порт имеет координаты
+          if (port.worldX === undefined || port.worldY === undefined) continue;
+
+          ctx.save();
+
+          // Рисуем порт в мировых координатах
+          ctx.beginPath();
+          ctx.arc(port.worldX, port.worldY, port.radius || 5, 0, 2 * Math.PI);
+
+          // Цвет порта в зависимости от направления и состояния
+          if (this.highlightedPort && this.highlightedPort.id === port.id) {
+            ctx.fillStyle = '#ff00ff';
+          } else if (port.isConnected()) {
+            ctx.fillStyle = '#00ff00';
+          } else {
+            switch (port.direction) {
+              case 'inlet':
+                ctx.fillStyle = '#00aaff';
+                break;
+              case 'outlet':
+                ctx.fillStyle = '#ffaa00';
+                break;
+              case 'branch':
+                ctx.fillStyle = '#aa00ff';
+                break;
+              default:
+                ctx.fillStyle = '#888888';
+            }
+          }
+
+          ctx.fill();
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 1 / this.scale.value;
+          ctx.stroke();
+
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  drawCallouts(ctx) {
+    // Рисуем выноски в мировых координатах (трансформации уже применены)
+    for (const element of this.elements.value) {
+      if (element.callouts) {
+        for (const callout of element.callouts) {
+          callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
+        }
+      }
+    }
   }
 }
