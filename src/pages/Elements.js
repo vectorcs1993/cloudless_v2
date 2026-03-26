@@ -860,7 +860,7 @@ export class Group extends BaseElement {
     return [];
   }
 
-  // Метод для перемещения всех элементов группы
+  // Метод для перемещения всех элементов группыe
   move(deltaX, deltaY) {
     if (!this.elements || this.elements.length === 0) return;
 
@@ -877,6 +877,15 @@ export class Group extends BaseElement {
       if (element) {
         element.x += deltaX;
         element.y += deltaY;
+
+        // Перемещаем выноски элемента вместе с ним
+        if (element.callouts && element.callouts.length > 0) {
+          element.callouts.forEach(callout => {
+            callout.x += deltaX;
+            callout.y += deltaY;
+          });
+        }
+
         if (element.updatePorts) element.updatePorts();
         if (element.updateCalloutText) element.updateCalloutText();
       }
@@ -894,6 +903,17 @@ export class Group extends BaseElement {
       this.elements.forEach(element => {
         if (element && element.draw) {
           element.draw(ctx, scale, isSelected, isDarkTheme);
+        }
+      });
+    }
+
+    // Рисуем выноски всех элементов группы
+    if (this.elements) {
+      this.elements.forEach(element => {
+        if (element && element.callouts && element.callouts.length > 0) {
+          for (const callout of element.callouts) {
+            callout.draw(ctx, scale, isDarkTheme, element);
+          }
         }
       });
     }
