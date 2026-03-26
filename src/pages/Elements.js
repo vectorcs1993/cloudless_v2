@@ -585,18 +585,28 @@ export class Tee extends BaseElement {
     return 150;
   }
 
-  // Фиксированная высота горизонтальной части (по центру)
+  // Полная высота тройника (включая отросток)
   getHeight() {
-    return 100;
+    const centerY = this.getHeightCenter();
+    const halfWidth = this.width / 2;
+    const branchHeight = this.getBranchHeight();
+    // Высота от верхней границы до нижней точки отростка
+    return (centerY + halfWidth + branchHeight);
+  }
+
+  // Полная ширина тройника (горизонтальная часть)
+  getWidth() {
+    return this.getLength();
+  }
+
+  // Центр по высоте для позиционирования (чтобы отросток был внизу)
+  getHeightCenter() {
+    return 50; // Фиксированная точка центра для горизонтальной трубы
   }
 
   // Высота отростка (от центра горизонтальной трубы до конца отростка)
   getBranchHeight() {
     return 75; // общая высота от центра до конца отростка
-  }
-
-  getWidth() {
-    return this.getLength();
   }
 
   getRelativeCalloutEntryPoint() {
@@ -613,7 +623,7 @@ export class Tee extends BaseElement {
     const ports = [];
     const rotation = this.rotation || 0;
     const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeight() / 2;
+    const centerY = this.y + this.getHeightCenter();
 
     const halfWidth = this.width / 2;
 
@@ -630,7 +640,7 @@ export class Tee extends BaseElement {
       'inlet',
       'left',
       0,
-      this.getHeight() / 2,
+      this.getHeightCenter(),
       inletPos.x,
       inletPos.y
     ));
@@ -648,7 +658,7 @@ export class Tee extends BaseElement {
       'outlet',
       'right',
       this.getLength(),
-      this.getHeight() / 2,
+      this.getHeightCenter(),
       outletPos.x,
       outletPos.y
     ));
@@ -669,7 +679,7 @@ export class Tee extends BaseElement {
       'branch',
       'bottom',
       this.getLength() / 2,
-      this.getHeight() / 2 + this.getBranchHeight(),
+      this.getHeightCenter() + this.getBranchHeight(),
       branchPos.x,
       branchPos.y
     ));
@@ -681,7 +691,7 @@ export class Tee extends BaseElement {
   isPointInTeeShape(localX, localY) {
     const halfWidth = this.width / 2;
     const centerX = this.getLength() / 2;
-    const centerY = this.getHeight() / 2;
+    const centerY = this.getHeightCenter();
     const branchHeight = this.getBranchHeight();
 
     // Горизонтальная труба (от левого края до правого)
@@ -704,7 +714,7 @@ export class Tee extends BaseElement {
   draw(ctx, scale, isSelected, isDarkTheme) {
     const rotation = this.rotation || 0;
     const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeight() / 2;
+    const centerY = this.y + this.getHeightCenter();
     const halfWidth = this.width / 2;
     const branchHeight = this.getBranchHeight();
 
@@ -770,7 +780,7 @@ export class Tee extends BaseElement {
   hitTest(worldX, worldY) {
     const rotation = this.rotation || 0;
     const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeight() / 2;
+    const centerY = this.y + this.getHeightCenter();
 
     // Преобразуем координаты в локальную систему координат элемента (без поворота)
     let localX = worldX;
