@@ -26,6 +26,7 @@
         <button @click="addDuctDirect" class="add-btn">➕ Прямой воздуховод</button>
         <button @click="addFan" class="add-btn">🌀 Вентилятор</button>
         <button @click="addTee" class="add-btn">🔀 Тройник</button>
+        <button @click="addElbow" class="add-btn">↪️ Отвод</button>
       </div>
 
       <!-- Кнопки управления сохранением -->
@@ -105,7 +106,7 @@ import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, Group } from './Elements.js';
+import { Tee, DuctDirect, Fan, ElementFactory, Group, Elbow } from './Elements.js';
 
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
@@ -237,6 +238,7 @@ const addElement = (ElementClass, params = []) => {
 const addDuctDirect = () => addElement(DuctDirect, [200, 50]);
 const addFan = () => addElement(Fan, [50]);
 const addTee = () => addElement(Tee, [50]);
+const addElbow = () => addElement(Elbow, [100, 50]);
 
 const onParameterChange = () => {
   if (selectedElements.value.length === 1) {
