@@ -227,48 +227,55 @@ export class CanvasRenderer {
   }
 
   drawPorts(ctx) {
-    // Рисуем порты в мировых координатах (трансформации уже применены)
-    for (const element of this.elements.value) {
-      if (element.ports) {
-        for (const port of element.ports) {
-          // Проверяем, что порт имеет координаты
-          if (port.worldX === undefined || port.worldY === undefined) continue;
+    // Получаем все порты из всех элементов, включая группы
+    const allPorts = [];
 
-          ctx.save();
-
-          // Рисуем порт в мировых координатах
-          ctx.beginPath();
-          ctx.arc(port.worldX, port.worldY, port.radius || 5, 0, 2 * Math.PI);
-
-          // Цвет порта в зависимости от направления и состояния
-          if (this.highlightedPort && this.highlightedPort.id === port.id) {
-            ctx.fillStyle = '#ff00ff';
-          } else if (port.isConnected()) {
-            ctx.fillStyle = '#00ff00';
-          } else {
-            switch (port.direction) {
-              case 'inlet':
-                ctx.fillStyle = '#00aaff';
-                break;
-              case 'outlet':
-                ctx.fillStyle = '#ffaa00';
-                break;
-              case 'branch':
-                ctx.fillStyle = '#aa00ff';
-                break;
-              default:
-                ctx.fillStyle = '#888888';
-            }
-          }
-
-          ctx.fill();
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 1 / this.scale.value;
-          ctx.stroke();
-
-          ctx.restore();
+    const collectPorts = (elements) => {
+      for (const element of elements) {
+        if (element.ports && element.ports.length > 0) {
+          allPorts.push(...element.ports);
+        }
+        if (element.type === 'group' && element.elements) {
+          collectPorts(element.elements);
         }
       }
+    };
+
+    collectPorts(this.elements.value);
+
+    // Рисуем все собранные порты
+    for (const port of allPorts) {
+      if (port.worldX === undefined || port.worldY === undefined) continue;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(port.worldX, port.worldY, port.radius || 5, 0, 2 * Math.PI);
+
+      if (this.highlightedPort && this.highlightedPort.id === port.id) {
+        ctx.fillStyle = '#ff00ff';
+      } else if (port.isConnected()) {
+        ctx.fillStyle = '#00ff00';
+      } else {
+        switch (port.direction) {
+          case 'inlet':
+            ctx.fillStyle = '#00aaff';
+            break;
+          case 'outlet':
+            ctx.fillStyle = '#ffaa00';
+            break;
+          case 'branch':
+            ctx.fillStyle = '#aa00ff';
+            break;
+          default:
+            ctx.fillStyle = '#888888';
+        }
+      }
+
+      ctx.fill();
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1 / this.scale.value;
+      ctx.stroke();
+      ctx.restore();
     }
   }
 

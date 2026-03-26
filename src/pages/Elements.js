@@ -885,6 +885,21 @@ export class Group extends BaseElement {
     return [];
   }
 
+  getAllPorts() {
+    const allPorts = [];
+
+    const collectPorts = (element) => {
+      if (element.ports && element.ports.length > 0) {
+        allPorts.push(...element.ports);
+      }
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(collectPorts);
+      }
+    };
+
+    collectPorts(this);
+    return allPorts;
+  }
   // Метод для перемещения всех элементов группыe
   move(deltaX, deltaY) {
     if (!this.elements || this.elements.length === 0) return;
