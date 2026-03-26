@@ -572,7 +572,7 @@ export class Fan extends BaseElement {
 export class Tee extends BaseElement {
   constructor(id, x, y, width = 50) {
     super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0');
-    this.width = width; // пользовательская ширина (высота прямоугольника)
+    this.width = width; // ширина воздуховода (толщина всех труб)
   }
 
   // Специфичный текст выноски для тройника
@@ -580,21 +580,27 @@ export class Tee extends BaseElement {
     return `${this.name}\nШирина: ${this.width} мм\nТип: тройник\nСечение: ${(150 * this.width / 1000000).toFixed(2)} м²`;
   }
 
-  // Фиксированная длина тройника (горизонтальный размер)
+  // Фиксированная длина горизонтальной части
   getLength() {
     return 150;
   }
-  getRelativeCalloutEntryPoint() {
-    return { x: this.getWidth() / 2 + this.getWidth() * 0.35, y: this.getHeight() / 2 - this.getHeight() * 0.2 };
-  }
-  // Фиксированная высота тройника (вертикальный размер)
+
+  // Фиксированная высота горизонтальной части (по центру)
   getHeight() {
     return 100;
   }
 
-  // Для совместимости с базовым классом
+  // Высота отростка (от центра горизонтальной трубы до конца отростка)
+  getBranchHeight() {
+    return 75; // общая высота от центра до конца отростка
+  }
+
   getWidth() {
     return this.getLength();
+  }
+
+  getRelativeCalloutEntryPoint() {
+    return { x: this.getWidth() * 0.7, y: this.getHeight() * 0.3 };
   }
 
   getParameters() {
@@ -608,6 +614,8 @@ export class Tee extends BaseElement {
     const rotation = this.rotation || 0;
     const centerX = this.x + this.getLength() / 2;
     const centerY = this.y + this.getHeight() / 2;
+
+    const halfWidth = this.width / 2;
 
     // Левый порт (вход) - на левом конце горизонтальной трубы
     const inletPos = this.rotatePoint(
@@ -645,10 +653,8 @@ export class Tee extends BaseElement {
       outletPos.y
     ));
 
-    // Нижний порт (ответвление) - в самом низу отростка
-    // Отросток начинается на Y = centerY + this.width / 2 и имеет высоту 50px
-    const branchStartY = centerY + this.width / 2;
-    const branchBottomY = branchStartY + 50; // низ отростка
+    // Нижний порт (ответвление) - внизу отростка
+    const branchBottomY = centerY + this.getBranchHeight();
     const branchCenterX = this.x + this.getLength() / 2;
 
     const branchPos = this.rotatePoint(
@@ -663,7 +669,7 @@ export class Tee extends BaseElement {
       'branch',
       'bottom',
       this.getLength() / 2,
-      branchBottomY - this.y, // относительная Y координата
+      this.getHeight() / 2 + this.getBranchHeight(),
       branchPos.x,
       branchPos.y
     ));
@@ -671,26 +677,78 @@ export class Tee extends BaseElement {
     return ports;
   }
 
+  // Проверка, находится ли точка внутри контура тройника
+  isPointInTeeShape(localX, localY) {
+    const halfWidth = this.width / 2;
+    const centerX = this.getLength() / 2;
+    const centerY = this.getHeight() / 2;
+    const branchHeight = this.getBranchHeight();
+
+    // Горизонтальная труба (от левого края до правого)
+    const inHorizontal = localX >= 0 &&
+      localX <= this.getLength() &&
+      localY >= centerY - halfWidth &&
+      localY <= centerY + halfWidth;
+
+    // Вертикальный отросток (от центра горизонтальной трубы вниз)
+    const branchStartY = centerY;
+    const branchEndY = centerY + branchHeight;
+    const inBranch = localX >= centerX - halfWidth &&
+      localX <= centerX + halfWidth &&
+      localY >= branchStartY &&
+      localY <= branchEndY;
+
+    return inHorizontal || inBranch;
+  }
+
   draw(ctx, scale, isSelected, isDarkTheme) {
     const rotation = this.rotation || 0;
     const centerX = this.x + this.getLength() / 2;
     const centerY = this.y + this.getHeight() / 2;
+    const halfWidth = this.width / 2;
+    const branchHeight = this.getBranchHeight();
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
-    // Рисуем горизонтальный прямоугольник (длина 150, высота = this.width)
+    // Создаем единый контур тройника
     ctx.beginPath();
-    ctx.rect(this.x, centerY - this.width / 2, this.getLength(), this.width);
 
-    // Рисуем отросток (вертикальный прямоугольник высотой 50px, шириной = this.width)
-    ctx.rect(centerX - this.width / 2, centerY + this.width / 2, this.width, 50);
+    // Левая часть горизонтальной трубы
+    const leftX = this.x;
+    const rightX = this.x + this.getLength();
+    const topY = centerY - halfWidth;
+    const bottomY = centerY + halfWidth;
 
-    // Заливка цветом
+    // Верхняя граница горизонтальной трубы
+    ctx.moveTo(leftX, topY);
+    ctx.lineTo(rightX, topY);
+
+    // Правый край и переход к отростку
+    ctx.lineTo(rightX, bottomY);
+
+    // Нижняя граница горизонтальной трубы до отростка
+    const branchLeftX = centerX - halfWidth;
+    const branchRightX = centerX + halfWidth;
+    const branchBottomY = centerY + branchHeight;
+
+    // Обходим отросток
+    ctx.lineTo(branchRightX, bottomY);
+    ctx.lineTo(branchRightX, branchBottomY);
+    ctx.lineTo(branchLeftX, branchBottomY);
+    ctx.lineTo(branchLeftX, bottomY);
+
+    // Замыкаем контур по левому краю
+    ctx.lineTo(leftX, bottomY);
+    ctx.lineTo(leftX, topY);
+
+    ctx.closePath();
+
+    // Заливка
     if (isSelected) {
-      ctx.fillStyle = '#ffeb3b'; // Желтый фон при выделении
+      ctx.fillStyle = '#ffeb3b';
     } else {
       ctx.fillStyle = this.color;
     }
@@ -705,6 +763,7 @@ export class Tee extends BaseElement {
     ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
     ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
     ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
+
     ctx.restore();
   }
 
@@ -725,81 +784,17 @@ export class Tee extends BaseElement {
       localY = dx * Math.sin(angle) + dy * Math.cos(angle) + centerY;
     }
 
-    // Проверяем попадание в горизонтальную трубу
-    const inHorizontal = localX >= this.x &&
-      localX <= this.x + this.getLength() &&
-      localY >= centerY - this.width / 2 &&
-      localY <= centerY + this.width / 2;
-
-    // Проверяем попадание в вертикальный отросток (начинается после горизонтальной трубы)
-    const inBranch = localX >= centerX - this.width / 2 &&
-      localX <= centerX + this.width / 2 &&
-      localY >= centerY + this.width / 2 &&
-      localY <= centerY + this.width / 2 + 50;
-
-    return inHorizontal || inBranch;
+    return this.isPointInTeeShape(localX - this.x, localY - this.y);
   }
 
   toJSON() {
-    return { ...super.toJSON(), width: this.width, length: this.getLength(), height: this.getHeight() };
+    return {
+      ...super.toJSON(),
+      width: this.width
+    };
   }
 }
 
-// ========== КЛАСС ФАБРИКИ ЭЛЕМЕНТОВ ==========
-export class ElementFactory {
-  static createElement(type, id, x, y, params = {}) {
-    switch (type) {
-      case 'duct':
-        return new DuctDirect(id, x, y, params.length || 200, params.width || 100);
-      case 'fan':
-        return new Fan(id, x, y, params.diameter || 120);
-      case 'tee':
-        return new Tee(id, x, y, params.width || 150, params.height || 150);
-      case 'group': {
-        // Для группы нужно восстановить элементы
-        const elements = (params.elements || []).map(elJson => {
-          return this.createFromJSON(elJson);
-        });
-        // Игнорируем старый ID из JSON, генерируем новый для каждой группы
-        const newGroupId = Date.now() + Math.random();
-        const group = new Group(newGroupId, elements);
-        group.name = params.name;
-        group.color = params.color;
-        group.rotation = params.rotation || 0;
-        group._x = params._x || 0;
-        group._y = params._y || 0;
-        group.width = params.width || 0;
-        group.height = params.height || 0;
-        group.callouts = params.callouts?.map(c => {
-          const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
-          return callout;
-        }) || [];
-        return group;
-      }
-      default:
-        throw new Error(`Unknown element type: ${type}`);
-    }
-  }
-
-  static createFromJSON(jsonData) {
-    const element = this.createElement(jsonData.type, jsonData.id, jsonData.x, jsonData.y, jsonData);
-    element.name = jsonData.name;
-    element.color = jsonData.color;
-    element.rotation = jsonData.rotation || 0;
-    element.ports = jsonData.ports?.map(p => new Port(
-      p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
-    )) || [];
-    element.ports.forEach(port => {
-      port.connectedElementId = jsonData.ports?.find(op => op.id === port.id)?.connectedElementId || null;
-      port.connectedPortId = jsonData.ports?.find(op => op.id === port.id)?.connectedPortId || null;
-    });
-    element.callouts = jsonData.callouts?.map(c => {
-      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
-      return callout;
-    }) || [];
-    return element;
-  }
-}
 
 
 // ========== КЛАСС ГРУППЫ ==========
@@ -1042,5 +1037,61 @@ export class Group extends BaseElement {
       _x: this._x,
       _y: this._y
     };
+  }
+}
+
+// ========== КЛАСС ФАБРИКИ ЭЛЕМЕНТОВ ==========
+export class ElementFactory {
+  static createElement(type, id, x, y, params = {}) {
+    switch (type) {
+      case 'duct':
+        return new DuctDirect(id, x, y, params.length || 200, params.width || 100);
+      case 'fan':
+        return new Fan(id, x, y, params.diameter || 120);
+      case 'tee':
+        return new Tee(id, x, y, params.width || 150, params.height || 150);
+      case 'group': {
+        // Для группы нужно восстановить элементы
+        const elements = (params.elements || []).map(elJson => {
+          return this.createFromJSON(elJson);
+        });
+        // Игнорируем старый ID из JSON, генерируем новый для каждой группы
+        const newGroupId = Date.now() + Math.random();
+        const group = new Group(newGroupId, elements);
+        group.name = params.name;
+        group.color = params.color;
+        group.rotation = params.rotation || 0;
+        group._x = params._x || 0;
+        group._y = params._y || 0;
+        group.width = params.width || 0;
+        group.height = params.height || 0;
+        group.callouts = params.callouts?.map(c => {
+          const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
+          return callout;
+        }) || [];
+        return group;
+      }
+      default:
+        throw new Error(`Unknown element type: ${type}`);
+    }
+  }
+
+  static createFromJSON(jsonData) {
+    const element = this.createElement(jsonData.type, jsonData.id, jsonData.x, jsonData.y, jsonData);
+    element.name = jsonData.name;
+    element.color = jsonData.color;
+    element.rotation = jsonData.rotation || 0;
+    element.ports = jsonData.ports?.map(p => new Port(
+      p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
+    )) || [];
+    element.ports.forEach(port => {
+      port.connectedElementId = jsonData.ports?.find(op => op.id === port.id)?.connectedElementId || null;
+      port.connectedPortId = jsonData.ports?.find(op => op.id === port.id)?.connectedPortId || null;
+    });
+    element.callouts = jsonData.callouts?.map(c => {
+      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
+      return callout;
+    }) || [];
+    return element;
   }
 }
