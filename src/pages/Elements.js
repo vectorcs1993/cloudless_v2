@@ -753,7 +753,9 @@ export class ElementFactory {
         const elements = (params.elements || []).map(elJson => {
           return this.createFromJSON(elJson);
         });
-        const group = new Group(id, elements);
+        // Игнорируем старый ID из JSON, генерируем новый для каждой группы
+        const newGroupId = Date.now() + Math.random();
+        const group = new Group(newGroupId, elements);
         group.name = params.name;
         group.color = params.color;
         group.rotation = params.rotation || 0;
@@ -785,8 +787,7 @@ export class ElementFactory {
       port.connectedPortId = jsonData.ports?.find(op => op.id === port.id)?.connectedPortId || null;
     });
     element.callouts = jsonData.callouts?.map(c => {
-      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y,
-        c.relativeAnchorX || 0.5, c.relativeAnchorY || 0.5);
+      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
       return callout;
     }) || [];
     return element;
@@ -797,7 +798,9 @@ export class ElementFactory {
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
   constructor(id, elements) {
-    super(id, 'group', 0, 0, `Группа ${id}`, '#9e9e9e');
+    // Генерируем уникальный ID если не передан или это не число
+    const groupId = (typeof id === 'number' && id !== undefined) ? id : Date.now() + Math.random();
+    super(groupId, 'group', 0, 0, `Группа ${groupId}`, '#9e9e9e');
     this.elements = elements || [];
     this._x = 0;
     this._y = 0;
@@ -805,7 +808,6 @@ export class Group extends BaseElement {
     this.height = 0;
     this.updateBounds();
   }
-
   updateBounds() {
     if (!this.elements || this.elements.length === 0) {
       this._x = 0;
