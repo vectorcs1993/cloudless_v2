@@ -259,7 +259,14 @@ class BaseElement {
       y: centerY + rotatedY
     };
   }
-
+  getPortsAfterMove(deltaX, deltaY) {
+    if (!this.ports) return [];
+    return this.ports.map(port => ({
+      ...port,
+      worldX: port.worldX + deltaX,
+      worldY: port.worldY + deltaY,
+    }));
+  }
   // Вспомогательный метод для получения размеров (должены быть переопределены)
   getWidth() { return 100; }
   getHeight() { return 100; }
@@ -842,7 +849,14 @@ export class Group extends BaseElement {
   getElements() {
     return [...(this.elements || [])];
   }
-
+  getPortsAfterMove(deltaX, deltaY) {
+    const allPorts = [];
+    this.elements.forEach(element => {
+      const portsAfter = element.getPortsAfterMove(deltaX, deltaY);
+      allPorts.push(...portsAfter);
+    });
+    return allPorts;
+  }
   getWidth() {
     return this.width || 0;
   }

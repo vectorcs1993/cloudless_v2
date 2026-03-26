@@ -1,12 +1,14 @@
-import { Tee, DuctDirect, Fan } from './Elements.js';
+// InteractionManager.js
+import { ConnectionManager } from './ConnectionManager.js';
+import { DuctDirect, Fan, Tee } from './Elements.js';
 
 export class InteractionManager {
   constructor(canvas, elements, renderer, connectionManager, options) {
     this.canvas = canvas;
-    this.elements = elements;
+    this.elements = elements;           // ref массив элементов
     this.renderer = renderer;
     this.connectionManager = connectionManager;
-    this.options = options;
+    this.options = options;              // содержит snapToPorts, panX, panY, scale и др.
     this.onElementMoveCallback = null;
 
     // Состояния взаимодействия
@@ -17,18 +19,18 @@ export class InteractionManager {
     this.draggingCallout = null;
     this.draggingCalloutElement = null;
     this.dragStartCalloutsPositions = null;
-    this.dragStartMouseScreen = { x: 0, y: 0 }; // Экранные координаты
+    this.dragStartMouseScreen = { x: 0, y: 0 };
     this.dragStartPan = { x: 0, y: 0 };
     this.dragStartElementPos = { x: 0, y: 0 };
     this.selectionStart = null;
-    this.wasSnapped = false;
-    this.currentSnappedPorts = null;
+    this.currentSnappedPorts = null;   // запоминаем текущее соединение при перетаскивании
   }
 
   setOnElementMoveCallback(callback) {
     this.onElementMoveCallback = callback;
   }
 
+  // Найти элемент под курсором (мировые координаты)
   findElementAt(x, y) {
     for (let i = this.elements.value.length - 1; i >= 0; i--) {
       const element = this.elements.value[i];
@@ -39,6 +41,7 @@ export class InteractionManager {
     return null;
   }
 
+  // Найти выноску под курсором
   findCalloutAt(x, y) {
     for (const element of this.elements.value) {
       for (const callout of element.callouts) {
@@ -51,6 +54,7 @@ export class InteractionManager {
     return null;
   }
 
+  // Найти порт под курсором
   findPortAtPosition(worldX, worldY, maxDistance = 15) {
     const allPorts = this.connectionManager.getAllPorts();
     for (const port of allPorts) {
@@ -60,6 +64,7 @@ export class InteractionManager {
     return null;
   }
 
+  // Добавить выноску элементу
   addCalloutToElement(element, worldPos) {
     const calloutX = worldPos.x + 50 / this.options.scale.value;
     const calloutY = worldPos.y - 30 / this.options.scale.value;
@@ -68,6 +73,7 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
+  // Перетаскивание выноски
   startDragCallout(calloutHit, e) {
     this.isDragging = true;
     this.draggingCallout = calloutHit;
@@ -78,46 +84,41 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
+  // Начать перетаскивание элемента
   startDrag(element, e) {
     this.isDragging = true;
     this.draggingElement = element;
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
-
-    // Сохраняем начальную позицию элемента в мировых координатах
     this.dragStartElementPos = { x: element.x, y: element.y };
 
-    // Сохраняем начальные позиции выносок
+    // Сохраняем начальные позиции выносок элемента
     this.dragStartCalloutsPositions = (element.callouts || []).map(callout => ({
       callout,
       x: callout.x,
       y: callout.y
     }));
 
-    // Для группы не проверяем привязку к портам
-    if (element.type === 'group') {
-      this.wasSnapped = false;
-      this.currentSnappedPorts = null;
-    } else {
-      this.wasSnapped = element.ports?.some(p => p.isConnected()) || false;
-
-      if (this.wasSnapped) {
-        const connectedPort = element.ports.find(p => p.isConnected());
-        if (connectedPort) {
-          const targetElement = this.elements.value.find(el => el.id === connectedPort.connectedElementId);
-          if (targetElement) {
-            const targetPort = targetElement.ports.find(p => p.id === connectedPort.connectedPortId);
-            if (targetPort) {
-              this.currentSnappedPorts = { movingPort: connectedPort, targetPort };
-            }
+    // Запоминаем текущее соединение, если элемент не группа
+    if (element.type !== 'group') {
+      const connectedPort = element.ports?.find(p => p.isConnected());
+      if (connectedPort) {
+        const targetElement = this.elements.value.find(el => el.id === connectedPort.connectedElementId);
+        if (targetElement) {
+          const targetPort = targetElement.ports?.find(p => p.id === connectedPort.connectedPortId);
+          if (targetPort) {
+            this.currentSnappedPorts = { movingPort: connectedPort, targetPort };
           }
         }
       }
+    } else {
+      this.currentSnappedPorts = null;
     }
 
     this.canvas.style.cursor = 'grabbing';
     this.renderer.draw();
   }
 
+  // Панорамирование
   startPan(e) {
     this.isPanning = true;
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
@@ -125,104 +126,79 @@ export class InteractionManager {
     this.canvas.style.cursor = 'grabbing';
   }
 
-  // Применение привязки к портам при перемещении
-  applyPortSnapping(deltaWorldX, deltaWorldY) {
-    if (!this.options.snapToPorts.value) {
-      // Простое перемещение без привязки
-      this.draggingElement.x = this.dragStartElementPos.x + deltaWorldX;
-      this.draggingElement.y = this.dragStartElementPos.y + deltaWorldY;
-
-      // Перемещаем выноски вместе с элементом
-      if (this.dragStartCalloutsPositions) {
-        this.dragStartCalloutsPositions.forEach(({ callout, x, y }) => {
-          callout.x = x + deltaWorldX;
-          callout.y = y + deltaWorldY;
+  // Универсальное перемещение элемента или группы (относительное смещение)
+  moveElement(element, deltaX, deltaY) {
+    if (element.type === 'group') {
+      element.move(deltaX, deltaY);
+    } else {
+      element.x += deltaX;
+      element.y += deltaY;
+      element.updatePorts();
+      if (element.callouts) {
+        element.callouts.forEach(callout => {
+          callout.x += deltaX;
+          callout.y += deltaY;
         });
       }
+      element.updateCalloutText();
+    }
+    this.updateSelectedElementReactive();
+  }
 
-      this.updateSelectedElementReactive();
+  // Установить абсолютную позицию элемента или группы
+  setElementPosition(element, newX, newY) {
+    const deltaX = newX - element.x;
+    const deltaY = newY - element.y;
+    this.moveElement(element, deltaX, deltaY);
+  }
+
+  // Установить соединение между портами и запомнить его
+  connectPorts(movingPort, targetPort) {
+    // Разрываем старые соединения, если они были
+    if (movingPort.isConnected()) {
+      const oldTarget = this.connectionManager.getPortById(movingPort.connectedPortId);
+      if (oldTarget) this.connectionManager.disconnectPorts(movingPort, oldTarget);
+    }
+    if (targetPort.isConnected()) {
+      const oldMoving = this.connectionManager.getPortById(targetPort.connectedPortId);
+      if (oldMoving) this.connectionManager.disconnectPorts(targetPort, oldMoving);
+    }
+    this.connectionManager.connectPorts(movingPort, targetPort);
+    this.currentSnappedPorts = { movingPort, targetPort };
+  }
+
+  // Применение привязки к портам при перемещении
+  applyPortSnapping(element, deltaWorldX, deltaWorldY) {
+    // Сначала сбрасываем элемент в начальную позицию
+    this.setElementPosition(element, this.dragStartElementPos.x, this.dragStartElementPos.y);
+
+    if (!this.options.snapToPorts.value) {
+      // Без привязки просто перемещаем на дельту
+      this.moveElement(element, deltaWorldX, deltaWorldY);
       return;
     }
 
-    const tempX = this.dragStartElementPos.x + deltaWorldX;
-    const tempY = this.dragStartElementPos.y + deltaWorldY;
-    let tempElement;
+    const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
 
-    // Создаем временный элемент для проверки привязки
-    switch (this.draggingElement.type) {
-      case 'duct':
-        tempElement = new DuctDirect(this.draggingElement.id, tempX, tempY,
-          this.draggingElement.length, this.draggingElement.width);
-        break;
-      case 'fan':
-        tempElement = new Fan(this.draggingElement.id, tempX, tempY, this.draggingElement.diameter);
-        tempElement.flow = this.draggingElement.flow;
-        break;
-      case 'tee':
-        tempElement = new Tee(this.draggingElement.id, tempX, tempY,
-          this.draggingElement.width, this.draggingElement.height);
-        break;
-      default:
-        tempElement = { ...this.draggingElement, x: tempX, y: tempY };
-    }
-    tempElement.rotation = this.draggingElement.rotation || 0;
-
-    const closestPortsPair = this.connectionManager.findClosestPorts(tempElement, 40);
-
-    if (closestPortsPair && closestPortsPair.distance < 40) {
-      if (this.wasSnapped && this.currentSnappedPorts) {
-        this.connectionManager.disconnectPorts(this.currentSnappedPorts.movingPort, this.currentSnappedPorts.targetPort);
-        this.wasSnapped = false;
-        this.currentSnappedPorts = null;
-      }
-
-      const offsetX = closestPortsPair.targetPort.worldX - closestPortsPair.movingPort.worldX;
-      const offsetY = closestPortsPair.targetPort.worldY - closestPortsPair.movingPort.worldY;
-      this.draggingElement.x = this.dragStartElementPos.x + deltaWorldX + offsetX;
-      this.draggingElement.y = this.dragStartElementPos.y + deltaWorldY + offsetY;
-
-      if (this.dragStartCalloutsPositions) {
-        this.dragStartCalloutsPositions.forEach(({ callout, x, y }) => {
-          callout.x = x + deltaWorldX + offsetX;
-          callout.y = y + deltaWorldY + offsetY;
-        });
-      }
-
-      this.draggingElement.updatePorts();
-
-      const updatedMovingPort = this.draggingElement.ports.find(p => p.direction === closestPortsPair.movingPort.direction);
-      const updatedTargetPort = this.elements.value
-        .find(el => el.id === closestPortsPair.targetPort.elementId)
-        ?.ports.find(p => p.id === closestPortsPair.targetPort.id);
-
-      if (updatedMovingPort && updatedTargetPort) {
-        this.connectionManager.connectPorts(updatedMovingPort, updatedTargetPort);
-        this.currentSnappedPorts = { movingPort: updatedMovingPort, targetPort: updatedTargetPort };
-        this.wasSnapped = true;
-      }
-      this.renderer.setHighlightedPort(updatedTargetPort);
+    if (match && match.distance < 40) {
+      // Корректируем смещение, чтобы порт встал на место
+      const adjustedDeltaX = deltaWorldX + match.offsetX;
+      const adjustedDeltaY = deltaWorldY + match.offsetY;
+      this.moveElement(element, adjustedDeltaX, adjustedDeltaY);
+      this.connectPorts(match.movingPort, match.targetPort);
+      this.renderer.setHighlightedPort(match.targetPort);
     } else {
-      if (this.wasSnapped && this.currentSnappedPorts) {
-        this.connectionManager.disconnectPorts(this.currentSnappedPorts.movingPort, this.currentSnappedPorts.targetPort);
-        this.wasSnapped = false;
+      this.moveElement(element, deltaWorldX, deltaWorldY);
+      this.renderer.setHighlightedPort(null);
+      // Если было соединение – разрываем
+      if (this.currentSnappedPorts) {
+        this.connectionManager.disconnectPorts(
+          this.currentSnappedPorts.movingPort,
+          this.currentSnappedPorts.targetPort
+        );
         this.currentSnappedPorts = null;
       }
-      this.draggingElement.x = this.dragStartElementPos.x + deltaWorldX;
-      this.draggingElement.y = this.dragStartElementPos.y + deltaWorldY;
-
-      if (this.dragStartCalloutsPositions) {
-        this.dragStartCalloutsPositions.forEach(({ callout, x, y }) => {
-          callout.x = x + deltaWorldX;
-          callout.y = y + deltaWorldY;
-        });
-      }
-
-      this.draggingElement.updatePorts();
-      this.renderer.setHighlightedPort(null);
     }
-
-    this.draggingElement.updateCalloutText();
-    this.updateSelectedElementReactive();
   }
 
   updateSelectedElementReactive() {
@@ -235,12 +211,14 @@ export class InteractionManager {
     }
   }
 
+  // ========== Обработчики событий canvas ==========
   onMouseDown(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (e.button === 0) {
       const isCtrlPressed = e.ctrlKey || e.metaKey;
 
+      // Проверяем выноску
       const calloutHit = this.findCalloutAt(worldPos.x, worldPos.y);
       if (calloutHit) {
         this.startDragCallout(calloutHit, e);
@@ -321,44 +299,13 @@ export class InteractionManager {
     }
     // Перетаскивание элемента
     else if (this.isDragging && this.draggingElement) {
-      // Вычисляем дельту в мировых координатах
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
-      const deltaWorldX = worldPos.x - startWorldPos.x;
-      const deltaWorldY = worldPos.y - startWorldPos.y;
+      const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
+      const deltaWorldX = currentWorldPos.x - startWorldPos.x;
+      const deltaWorldY = currentWorldPos.y - startWorldPos.y;
 
-      if (this.draggingElement.type === 'group') {
-        // Для группы: новая позиция = начальная позиция группы + дельта
-        // Но начальная позиция группы - это dragStartElementPos, который мы сохранили при старте
-        const newGroupX = this.dragStartElementPos.x + deltaWorldX;
-        const newGroupY = this.dragStartElementPos.y + deltaWorldY;
-
-        // Вычисляем разницу между новой и текущей позицией группы
-        const currentGroupX = this.draggingElement.x;
-        const currentGroupY = this.draggingElement.y;
-        const moveDeltaX = newGroupX - currentGroupX;
-        const moveDeltaY = newGroupY - currentGroupY;
-
-        // Перемещаем группу на вычисленную дельту
-        if (Math.abs(moveDeltaX) > 0.001 || Math.abs(moveDeltaY) > 0.001) {
-          this.draggingElement.move(moveDeltaX, moveDeltaY);
-
-          // Перемещаем выноски группы
-          if (this.dragStartCalloutsPositions && this.dragStartCalloutsPositions.length > 0) {
-            this.dragStartCalloutsPositions.forEach(({ callout, x, y }) => {
-              if (callout) {
-                callout.x = x + moveDeltaX;
-                callout.y = y + moveDeltaY;
-              }
-            });
-          }
-
-          this.updateSelectedElementReactive();
-          this.renderer.draw();
-        }
-      } else {
-        this.applyPortSnapping(deltaWorldX, deltaWorldY);
-        this.renderer.draw();
-      }
+      this.applyPortSnapping(this.draggingElement, deltaWorldX, deltaWorldY);
+      this.renderer.draw();
     }
     // Панорамирование
     else if (this.isPanning) {
@@ -390,33 +337,10 @@ export class InteractionManager {
     }
 
     if (this.isDragging && this.draggingElement) {
-      if (this.options.snapToPorts && typeof this.options.snapToPorts === 'object' && this.options.snapToPorts.value === true) {
-        try {
-          if (this.draggingElement.updatePortsWorldCoordinates) {
-            this.draggingElement.updatePortsWorldCoordinates();
-          }
-
-          if (this.elements && this.elements.value) {
-            this.elements.value.forEach(element => {
-              if (element !== this.draggingElement && element.updatePortsWorldCoordinates) {
-                element.updatePortsWorldCoordinates();
-              }
-            });
-          }
-
-          const closest = this.connectionManager.findClosestPorts(this.draggingElement);
-          if (closest && closest.distance < 40) {
-            this.connectionManager.connectPorts(closest.movingPort, closest.targetPort);
-          }
-        } catch (error) {
-          console.warn('Error during port snapping:', error);
-        }
-      }
-
+      // Дополнительная финальная привязка, если нужно (можно оставить)
       this.isDragging = false;
       this.draggingElement = null;
       this.dragStartCalloutsPositions = null;
-      this.wasSnapped = false;
       this.currentSnappedPorts = null;
       if (this.canvas) this.canvas.style.cursor = '';
       if (this.renderer) this.renderer.draw();
