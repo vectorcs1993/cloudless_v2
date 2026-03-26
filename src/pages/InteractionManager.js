@@ -235,9 +235,15 @@ export class InteractionManager {
             this.renderer.selectedElements.splice(index, 1);
           }
           this.renderer.draw();
+          if (this.onElementMoveCallback) {
+            this.onElementMoveCallback(this.renderer.selectedElements);
+          }
         } else {
           this.renderer.selectedElements = [clickedElement];
           this.renderer.draw();
+          if (this.onElementMoveCallback) {
+            this.onElementMoveCallback(this.renderer.selectedElements);
+          }
         }
         this.startDrag(clickedElement, e);
       } else {

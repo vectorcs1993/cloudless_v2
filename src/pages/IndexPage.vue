@@ -378,11 +378,16 @@ const onCanvasMouseMove = (e) => {
   interactionManager?.onMouseMove(e);
 
   if (renderer?.selectedElements) {
-    selectedElements.value = renderer.selectedElements;
+    selectedElements.value = [...renderer.selectedElements];
   }
 };
 
-const onCanvasMouseUp = (e) => interactionManager?.onMouseUp(e);
+const onCanvasMouseUp = (e) => {
+  interactionManager?.onMouseUp(e);
+  if (renderer?.selectedElements) {
+    selectedElements.value = [...renderer.selectedElements];
+  }
+};
 const onWheel = (e) => interactionManager?.onWheel(e);
 
 // Инициализация
