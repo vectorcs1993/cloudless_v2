@@ -849,12 +849,24 @@ export class Group extends BaseElement {
   getElements() {
     return [...(this.elements || [])];
   }
+
   getPortsAfterMove(deltaX, deltaY) {
     const allPorts = [];
-    this.elements.forEach(element => {
-      const portsAfter = element.getPortsAfterMove(deltaX, deltaY);
-      allPorts.push(...portsAfter);
-    });
+    const collect = (element) => {
+      if (element.ports) {
+        element.ports.forEach(port => {
+          allPorts.push({
+            ...port,
+            worldX: port.worldX + deltaX,
+            worldY: port.worldY + deltaY,
+          });
+        });
+      }
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(collect);
+      }
+    };
+    collect(this);
     return allPorts;
   }
   getWidth() {

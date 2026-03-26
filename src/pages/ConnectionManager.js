@@ -20,16 +20,15 @@ export class ConnectionManager {
   // Получить порты элемента (для группы – все порты вложенных элементов)
   getElementPorts(element) {
     if (!element) return [];
-    if (element.type === 'group' && element.elements) {
-      const ports = [];
-      const collect = (el) => {
-        if (el.ports) ports.push(...el.ports);
-        if (el.type === 'group' && el.elements) el.elements.forEach(collect);
-      };
-      collect(element);
-      return ports;
-    }
-    return element.ports || [];
+    const ports = [];
+    const collect = (el) => {
+      if (el.ports) ports.push(...el.ports);
+      if (el.type === 'group' && el.elements) {
+        el.elements.forEach(collect);
+      }
+    };
+    collect(element);
+    return ports;
   }
 
   // Получить порт по его ID
@@ -64,49 +63,61 @@ export class ConnectionManager {
     });
   }
 
+  // Рекурсивный сбор всех ID элементов внутри группы (включая вложенные группы)
+  collectElementIds(element, idsSet) {
+    idsSet.add(element.id);
+    if (element.type === 'group' && element.elements) {
+      element.elements.forEach(child => {
+        this.collectElementIds(child, idsSet);
+      });
+    }
+  }
+
+  // Рекурсивный сбор всех портов элемента (включая вложенные группы)
+  collectPorts(element, portsArray) {
+    if (element.ports) {
+      portsArray.push(...element.ports);
+    }
+    if (element.type === 'group' && element.elements) {
+      element.elements.forEach(child => {
+        this.collectPorts(child, portsArray);
+      });
+    }
+  }
+
+  // Рекурсивный сбор портов с их новыми позициями после смещения
+  collectMovingPortsWithPositions(element, deltaX, deltaY, portsArray) {
+    if (element.ports) {
+      element.ports.forEach(port => {
+        portsArray.push({
+          port: port,
+          worldX: port.worldX + deltaX,
+          worldY: port.worldY + deltaY,
+          element: element
+        });
+      });
+    }
+    if (element.type === 'group' && element.elements) {
+      element.elements.forEach(child => {
+        this.collectMovingPortsWithPositions(child, deltaX, deltaY, portsArray);
+      });
+    }
+  }
+
   // Поиск ближайшей пары портов для перемещаемого элемента после смещения deltaX, deltaY
   findClosestPortsForMoving(movingElement, deltaX, deltaY, maxDistance = 40) {
     const allPorts = this.getAllPorts();
 
-    // Собираем ID всех элементов, входящих в перемещаемый объект (включая группу и её содержимое)
+    // Собираем ID всех элементов, входящих в перемещаемый объект (включая группу и всё её содержимое)
     const movingElementIds = new Set();
-    const collectIds = (el) => {
-      movingElementIds.add(el.id);
-      if (el.type === 'group' && el.elements) el.elements.forEach(collectIds);
-    };
-    collectIds(movingElement);
+    this.collectElementIds(movingElement, movingElementIds);
 
     // Фильтруем порты, не принадлежащие перемещаемому объекту
     const staticPorts = allPorts.filter(port => !movingElementIds.has(port.elementId));
 
-    // Получаем порты перемещаемого элемента (реальные объекты Port)
-    let movingPortsData = [];
-
-    if (movingElement.type === 'group' && movingElement.elements) {
-      // Для группы собираем порты всех вложенных элементов
-      movingElement.elements.forEach(element => {
-        if (element.ports && element.ports.length > 0) {
-          element.ports.forEach(port => {
-            movingPortsData.push({
-              port: port,
-              worldX: port.worldX + deltaX,
-              worldY: port.worldY + deltaY
-            });
-          });
-        }
-      });
-    } else {
-      // Для обычного элемента используем его порты
-      if (movingElement.ports && movingElement.ports.length > 0) {
-        movingElement.ports.forEach(port => {
-          movingPortsData.push({
-            port: port,
-            worldX: port.worldX + deltaX,
-            worldY: port.worldY + deltaY
-          });
-        });
-      }
-    }
+    // Получаем порты перемещаемого элемента с учётом вложенности и сдвига
+    const movingPortsData = [];
+    this.collectMovingPortsWithPositions(movingElement, deltaX, deltaY, movingPortsData);
 
     if (movingPortsData.length === 0) return null;
 
