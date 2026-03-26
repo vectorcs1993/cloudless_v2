@@ -742,10 +742,33 @@ export class Tee extends BaseElement {
 export class ElementFactory {
   static createElement(type, id, x, y, params = {}) {
     switch (type) {
-      case 'duct': return new DuctDirect(id, x, y, params.length || 200, params.width || 100);
-      case 'fan': return new Fan(id, x, y, params.diameter || 120);
-      case 'tee': return new Tee(id, x, y, params.width || 150, params.height || 150);
-      default: throw new Error(`Unknown element type: ${type}`);
+      case 'duct':
+        return new DuctDirect(id, x, y, params.length || 200, params.width || 100);
+      case 'fan':
+        return new Fan(id, x, y, params.diameter || 120);
+      case 'tee':
+        return new Tee(id, x, y, params.width || 150, params.height || 150);
+      case 'group': {
+        // Для группы нужно восстановить элементы
+        const elements = (params.elements || []).map(elJson => {
+          return this.createFromJSON(elJson);
+        });
+        const group = new Group(id, elements);
+        group.name = params.name;
+        group.color = params.color;
+        group.rotation = params.rotation || 0;
+        group._x = params._x || 0;
+        group._y = params._y || 0;
+        group.width = params.width || 0;
+        group.height = params.height || 0;
+        group.callouts = params.callouts?.map(c => {
+          const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
+          return callout;
+        }) || [];
+        return group;
+      }
+      default:
+        throw new Error(`Unknown element type: ${type}`);
     }
   }
 
