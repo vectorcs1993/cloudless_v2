@@ -238,7 +238,7 @@ const addElement = (ElementClass, params = []) => {
 const addDuctDirect = () => addElement(DuctDirect, [200, 50]);
 const addFan = () => addElement(Fan, [50]);
 const addTee = () => addElement(Tee, [50]);
-const addElbow = () => addElement(Elbow, [100, 50]);
+const addElbow = () => addElement(Elbow, [50]);
 
 const onParameterChange = () => {
   if (selectedElements.value.length === 1) {

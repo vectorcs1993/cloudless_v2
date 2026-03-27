@@ -580,12 +580,10 @@ export class Tee extends BaseElement {
     this.width = width; // ширина воздуховода (толщина всех труб)
   }
 
-  // Специфичный текст выноски для тройника
   getCalloutText() {
     return `${this.name}\nШирина: ${this.width} мм\nТип: тройник\nСечение: ${(150 * this.width / 1000000).toFixed(2)} м²`;
   }
 
-  // Фиксированная длина горизонтальной части
   getLength() {
     return 150;
   }
@@ -812,70 +810,84 @@ export class Tee extends BaseElement {
 
 // ========== КЛАСС ОТВОДА ==========
 export class Elbow extends BaseElement {
-  constructor(id, x, y, width = 50, bendRadius = 50) {
+  constructor(id, x, y, width = 50) {
     super(id, 'elbow', x, y, `Отвод ${id}`, '#4caf50');
-    this.width = width; // ширина/диаметр воздуховода
-    this.bendRadius = bendRadius; // радиус изгиба (по центральной линии)
-    this.angle = 90; // фиксированный угол 90 градусов
+    this.width = width;    // диаметр/ширина воздуховода
+    this.radius = 50;      // радиус изгиба (до центральной линии)
   }
 
-  // Специфичный текст выноски для отвода
   getCalloutText() {
-    const arcLength = (Math.PI / 2) * (this.bendRadius + this.width / 2);
-    return `${this.name}\nДиаметр: ${this.width} мм\nРадиус изгиба: ${this.bendRadius} мм\nУгол: 90°\nДлина дуги: ${arcLength.toFixed(1)} мм`;
-  }
-
-  // Полные габариты отвода
-  getWidth() {
-    return this.bendRadius + this.width;
+    return `${this.name}\nДиаметр: ${this.width} мм\nРадиус изгиба: ${this.radius} мм\nУгол: 90°`;
   }
 
   getHeight() {
-    return this.bendRadius + this.width;
+    return this.radius + this.width;
+  }
+
+  getWidth() {
+    return this.radius + this.width;
+  }
+
+  // Точка привязки выноски - на внешней стороне изгиба
+  getRelativeCalloutEntryPoint() {
+    const centerRadius = this.radius + this.width / 2; // Радиус до осевой линии
+    const angle = 315 * Math.PI / 180; // 315° (середина между 270 и 360)
+    const centerX = 0;
+    const centerY = this.getHeight();
+
+    // Точка на осевой линии
+    const x = centerX + centerRadius * Math.cos(angle);
+    const y = centerY + centerRadius * Math.sin(angle);
+
+    return { x, y };
   }
 
   getParameters() {
     return [
-      { name: 'width', label: 'Диаметр', type: 'number', step: 10, min: 20, value: this.width, unit: 'мм' },
-      { name: 'bendRadius', label: 'Радиус изгиба', type: 'number', step: 10, min: 30, value: this.bendRadius, unit: 'мм' }
+      { name: 'width', label: 'Диаметр', type: 'number', step: 1, min: 20, value: this.width, unit: 'мм' },
+      { name: 'radius', label: 'Радиус изгиба', type: 'number', step: 5, min: 30, value: this.radius, unit: 'мм' },
     ];
-  }
-
-  getRelativeCalloutEntryPoint() {
-    return { x: this.getWidth() * 0.7, y: this.getHeight() * 0.3 };
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
-    const centerX = this.x + this.getWidth() / 2;
-    const centerY = this.y + this.getHeight() / 2;
+    const elemCenterX = this.x + this.getWidth() / 2;
+    const elemCenterY = this.y + this.getHeight() / 2;
 
-    // Входной порт (горизонтальный, слева) - на уровне центра изгиба
+    const R = this.radius;
+    const w = this.width;
+    const centerRadius = R + w / 2; // Радиус до осевой линии
+
+    // Входной порт (на левом торце) - по осевой линии
+    const inletOffsetFromCenter = R + w / 2;
     const inletX = this.x;
-    const inletY = this.y + this.bendRadius;
-    const inletPos = this.rotatePoint(inletX, inletY, centerX, centerY, rotation);
+    const inletY = this.y + this.getHeight() - inletOffsetFromCenter;
+
+    const inletPos = this.rotatePoint(inletX, inletY, elemCenterX, elemCenterY, rotation);
     ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
       this.id,
       'inlet',
       'left',
       0,
-      this.bendRadius,
+      this.getHeight() - inletOffsetFromCenter,
       inletPos.x,
       inletPos.y
     ));
 
-    // Выходной порт (вертикальный, снизу) - на уровне центра изгиба
-    const outletX = this.x + this.bendRadius;
+    // Выходной порт (на нижнем торце) - по осевой линии
+    const outletOffsetFromCenter = R + w / 2;
+    const outletX = this.x + outletOffsetFromCenter;
     const outletY = this.y + this.getHeight();
-    const outletPos = this.rotatePoint(outletX, outletY, centerX, centerY, rotation);
+
+    const outletPos = this.rotatePoint(outletX, outletY, elemCenterX, elemCenterY, rotation);
     ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
       this.id,
       'outlet',
       'bottom',
-      this.bendRadius,
+      outletOffsetFromCenter,
       this.getHeight(),
       outletPos.x,
       outletPos.y
@@ -884,129 +896,80 @@ export class Elbow extends BaseElement {
     return ports;
   }
 
-  // Проверка, находится ли точка внутри отвода
+  // Реалистичная проверка попадания точки в отвод
   isPointInElbow(localX, localY) {
-    const halfWidth = this.width / 2;
-    const radius = this.bendRadius;
+    const w = this.width;
+    const R = this.radius;
+    const outerRadius = R + w;
+    const innerRadius = R;
 
-    // Центр дуги (внутренний угол)
-    const arcCenterX = radius;
-    const arcCenterY = radius;
+    // Центр изгиба в точке (0, getHeight())
+    const centerX = 0;
+    const centerY = this.getHeight();
 
-    // Расстояние от точки до центра дуги
-    const dx = localX - arcCenterX;
-    const dy = localY - arcCenterY;
+    // Расстояние от центра изгиба
+    const dx = localX - centerX;
+    const dy = localY - centerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Угол точки относительно центра дуги
-    let pointAngle = Math.atan2(dy, dx);
-    if (pointAngle < 0) pointAngle += Math.PI * 2;
+    // Угол точки относительно центра изгиба
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * Math.PI;
 
-    // Проверяем, находится ли точка внутри дуговой части (90°)
-    const isInArc = distance >= radius - halfWidth &&
-      distance <= radius + halfWidth &&
-      pointAngle >= 0 &&
-      pointAngle <= Math.PI / 2;
+    // Основная часть отвода - четверть кольца от 270° до 360°
+    const isInArcRegion = angle >= 3 * Math.PI / 2 - 0.01 && angle <= 2 * Math.PI + 0.01;
+    const isBetweenRadii = distance >= innerRadius - 0.01 && distance <= outerRadius + 0.01;
 
-    // Проверяем входной прямой участок (горизонтальный)
-    const isInInlet = localX >= 0 &&
-      localX <= radius - halfWidth &&
-      localY >= radius - halfWidth &&
-      localY <= radius + halfWidth;
+    // Патрубки - прямоугольные области на торцах
 
-    // Проверяем выходной прямой участок (вертикальный)
-    const isInOutlet = localY >= radius + halfWidth &&
-      localY <= this.getHeight() &&
-      localX >= radius - halfWidth &&
-      localX <= radius + halfWidth;
+    // Центральная линия патрубков
+    const centerRadius = R + w / 2;
 
-    return isInArc || isInInlet || isInOutlet;
-  }
+    // Область входного патрубка (левая сторона) - прямоугольник на левом торце
+    const inletRect = {
+      xMin: -2,  // Небольшой запас для учета погрешностей
+      xMax: 0,
+      yMin: centerRadius - w / 2,
+      yMax: centerRadius + w / 2
+    };
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this.getWidth() / 2;
-    const centerY = this.y + this.getHeight() / 2;
-    const halfWidth = this.width / 2;
-    const radius = this.bendRadius;
+    const inInlet = localX >= inletRect.xMin && localX <= inletRect.xMax &&
+                    localY >= inletRect.yMin && localY <= inletRect.yMax;
 
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
+    // Область выходного патрубка (нижняя сторона) - прямоугольник на нижнем торце
+    const outletRect = {
+      xMin: centerRadius - w / 2,
+      xMax: centerRadius + w / 2,
+      yMin: this.getHeight(),
+      yMax: this.getHeight() + 2  // Небольшой запас
+    };
 
-    // Координаты центра дуги
-    const arcCenterX = this.x + radius;
-    const arcCenterY = this.y + radius;
+    const inOutlet = localX >= outletRect.xMin && localX <= outletRect.xMax &&
+                     localY >= outletRect.yMin && localY <= outletRect.yMax;
 
-    // Рисуем основную дугу (внешняя и внутренняя)
-    ctx.beginPath();
+    // Области соединения патрубков с изгибом (для плавного перехода)
+    const inletJointRect = {
+      xMin: 0,
+      xMax: 5,  // Небольшая область внутрь от левого края
+      yMin: centerRadius - w / 2,
+      yMax: centerRadius + w / 2
+    };
 
-    const startAngle = 0;
-    const endAngle = Math.PI / 2; // 90 градусов
+    const inInletJoint = localX >= inletJointRect.xMin && localX <= inletJointRect.xMax &&
+                         localY >= inletJointRect.yMin && localY <= inletJointRect.yMax;
 
-    // Внешний радиус (дальний от центра изгиба)
-    const outerRadius = radius + halfWidth;
-    // Внутренний радиус (ближний к центру изгиба)
-    const innerRadius = Math.max(0, radius - halfWidth);
+    const outletJointRect = {
+      xMin: centerRadius - w / 2,
+      xMax: centerRadius + w / 2,
+      yMin: this.getHeight() - 5,
+      yMax: this.getHeight()
+    };
 
-    // Рисуем внешнюю дугу
-    ctx.arc(arcCenterX, arcCenterY, outerRadius, startAngle, endAngle);
+    const inOutletJoint = localX >= outletJointRect.xMin && localX <= outletJointRect.xMax &&
+                          localY >= outletJointRect.yMin && localY <= outletJointRect.yMax;
 
-    // Линия от конца внешней дуги к концу внутренней дуги
-    const endX = arcCenterX + outerRadius * Math.cos(endAngle);
-    const endY = arcCenterY + outerRadius * Math.sin(endAngle);
-    ctx.lineTo(endX, endY);
-
-    // Рисуем внутреннюю дугу (в обратном направлении)
-    if (innerRadius > 0) {
-      ctx.arc(arcCenterX, arcCenterY, innerRadius, endAngle, startAngle, true);
-    } else {
-      // Если внутренний радиус 0, просто соединяем с центром
-      ctx.lineTo(arcCenterX, arcCenterY);
-    }
-
-    ctx.closePath();
-
-    // Заливка
-    if (isSelected) {
-      ctx.fillStyle = '#ffeb3b';
-    } else {
-      ctx.fillStyle = this.color;
-    }
-    ctx.fill();
-
-    // Обводка
-    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
-    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : (1 / scale);
-    ctx.stroke();
-
-    // Рисуем входной прямой участок (горизонтальный)
-    const inletLength = Math.max(0, radius - halfWidth);
-    if (inletLength > 0) {
-      ctx.beginPath();
-      ctx.rect(this.x, arcCenterY - halfWidth, inletLength, this.width);
-      ctx.fillStyle = this.color;
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Рисуем выходной прямой участок (вертикальный)
-    const outletLength = Math.max(0, radius - halfWidth);
-    if (outletLength > 0) {
-      ctx.beginPath();
-      ctx.rect(arcCenterX - halfWidth, arcCenterY + halfWidth, this.width, outletLength);
-      ctx.fillStyle = this.color;
-      ctx.fill();
-      ctx.stroke();
-    }
-
-    // Текст элемента
-    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
-    ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
-
-    ctx.restore();
+    // Возвращаем true, если точка попадает в любую часть отвода
+    return (isInArcRegion && isBetweenRadii) || inInlet || inOutlet || inInletJoint || inOutletJoint;
   }
 
   hitTest(worldX, worldY) {
@@ -1028,15 +991,72 @@ export class Elbow extends BaseElement {
     return this.isPointInElbow(localX - this.x, localY - this.y);
   }
 
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const w = this.width;
+    const R = this.radius;
+    const outerRadius = R + w;
+    const innerRadius = R;
+
+    // Центр элемента (для вращения)
+    const elemCenterX = this.x + this.getWidth() / 2;
+    const elemCenterY = this.y + this.getHeight() / 2;
+
+    // Центр изгиба в левом верхнем углу элемента
+    const bendCenterX = this.x;
+    const bendCenterY = this.y + this.getHeight();
+
+    ctx.save();
+    ctx.translate(elemCenterX, elemCenterY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-elemCenterX, -elemCenterY);
+
+    // Настройка стилей
+    if (isSelected) {
+      ctx.fillStyle = '#ffeb3b';
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = Math.max(1, 2 / scale);
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1 / scale;
+    }
+
+    // Рисуем четверть кольца от 270° до 360° (нижний правый квадрант)
+    ctx.beginPath();
+
+    // Внешняя дуга от 270° до 360°
+    ctx.arc(bendCenterX, bendCenterY, outerRadius, 3 * Math.PI / 2, 2 * Math.PI);
+
+    // Линия от конца внешней дуги к началу внутренней дуги
+    ctx.lineTo(
+      bendCenterX + innerRadius * Math.cos(2 * Math.PI),
+      bendCenterY + innerRadius * Math.sin(2 * Math.PI)
+    );
+
+    // Внутренняя дуга от 360° до 270° (обратное направление)
+    ctx.arc(bendCenterX, bendCenterY, innerRadius, 2 * Math.PI, 3 * Math.PI / 2, true);
+
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Рисуем текст элемента
+    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
+    ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
+    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
+
+    ctx.restore();
+  }
+
   toJSON() {
     return {
       ...super.toJSON(),
       width: this.width,
-      bendRadius: this.bendRadius
+      radius: this.radius
     };
   }
 }
-
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
   constructor(id, elements) {
@@ -1291,7 +1311,7 @@ export class ElementFactory {
       case 'tee':
         return new Tee(id, x, y, params.width || 150, params.height || 150);
       case 'elbow':
-        return new Elbow(id, x, y, params.width || 100, params.bendRadius || 50);
+        return new Elbow(id, x, y, params.width || 50);
       case 'group': {
         // Для группы нужно восстановить элементы
         const elements = (params.elements || []).map(elJson => {

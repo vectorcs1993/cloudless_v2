@@ -130,6 +130,8 @@ export class CanvasRenderer {
       this.drawCallouts(ctx);
     }
 
+    this.drawInfo(ctx);
+
     // Восстанавливаем состояние контекста (убираем трансформации)
     ctx.restore();
 
@@ -288,5 +290,19 @@ export class CanvasRenderer {
         }
       }
     }
+  }
+
+  drawInfo(ctx) {
+    ctx.save();
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const isDark = this.options.isDarkTheme.value;
+    ctx.fillStyle = isDark ? '#fff' : '#000';
+    ctx.font = '14px Arial';
+    ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
+
+
+    ctx.restore();
   }
 }
