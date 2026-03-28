@@ -59,26 +59,26 @@ h3 {
     padding-right: 40px;
 }
 
-.scale-settings {
+.tab-settings {
     padding: 15px;
     background: white;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
 }
 
-.dark-theme .scale-settings {
+.dark-theme .tab-settings {
     background: #3d3d3d;
     border-color: #555;
 }
 
-.scale-settings label {
+.tab-settings label {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 15px;
 }
 
-.scale-settings input {
+.tab-settings input {
     width: 80px;
     padding: 6px;
     border-radius: 4px;
@@ -86,7 +86,7 @@ h3 {
     background: white;
 }
 
-.dark-theme .scale-settings input {
+.dark-theme .tab-settings input {
     background: #2d2d2d;
     border-color: #555;
     color: #e0e0e0;
@@ -269,6 +269,35 @@ h3 {
     }
 }
 
+.param-select {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: white;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-sizing: border-box;
+
+    &:focus {
+        outline: none;
+        border-color: #4caf50;
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+    }
+
+    .dark-theme & {
+        background: #2d2d2d;
+        border-color: #555;
+        color: #e0e0e0;
+
+        &:focus {
+            border-color: #66bb6a;
+            box-shadow: 0 0 0 2px rgba(102, 187, 106, 0.2);
+        }
+    }
+}
+
 .delete-btn {
     margin-top: 10px;
     padding: 5px 10px;
@@ -299,6 +328,10 @@ h3 {
 
 .main-canvas:active {
     cursor: grabbing;
+}
+
+.group-controls {
+    margin: 10px 0;
 }
 
 .rotation-controls {
@@ -364,7 +397,7 @@ h3 {
 
 .save-controls {
     display: flex;
-    gap: 10px;
+
     margin-left: auto;
 }
 

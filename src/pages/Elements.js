@@ -1,211 +1,5 @@
-
-// ========== КЛАСС ВЫНОСКИ ==========
-export class Callout {
-  constructor(id, elementId, text, x, y) {
-    this.id = id;
-    this.elementId = elementId;
-    this.text = text;
-    this.x = x;
-    this.y = y;
-    this.isDragging = false;
-    this.dragOffset = { x: 0, y: 0 };
-    this.anchorPoint = { x: 0, y: 0 };
-  }
-
-  // Обновить точку привязки на основе элемента
-  updateAnchorPoint(element) {
-    const absolutePoint = element.getAbsoluteCalloutPoint();
-    this.anchorPoint = { x: absolutePoint.x, y: absolutePoint.y };
-  }
-
-  updatePosition(newX, newY) {
-    this.x = newX;
-    this.y = newY;
-  }
-
-  hitTest(worldX, worldY, scale, element) {
-    // Фиксированные размеры в пикселях (не зависят от scale для hit test)
-    const padding = 8;
-    const fontSize = 14;
-    const lineHeight = 20;
-
-    // Временный контекст для измерения текста
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.font = `${fontSize}px Arial`;
-
-    const lines = this.text.split('\n');
-    const maxWidth = Math.max(...lines.map(l => tempCtx.measureText(l).width));
-    const boxWidth = maxWidth + padding * 2;
-    const boxHeight = lines.length * lineHeight + padding * 2;
-
-    const handleRadius = 8;
-
-    const relativePoint = element.getRelativeCalloutEntryPoint();
-
-    let handleX = this.x;
-    let handleY = this.y + boxHeight / 2;
-
-    if (relativePoint.x <= 0.33) {
-      handleX = this.x;
-    } else if (relativePoint.x >= 0.67) {
-      handleX = this.x + boxWidth;
-    } else {
-      handleX = this.x + boxWidth / 2;
-    }
-
-    if (relativePoint.y <= 0.33) {
-      handleY = this.y;
-    } else if (relativePoint.y >= 0.67) {
-      handleY = this.y + boxHeight;
-    } else {
-      handleY = this.y + boxHeight / 2;
-    }
-
-    const inDragHandle = Math.hypot(worldX - handleX, worldY - handleY) < handleRadius;
-    const inTextArea = worldX >= this.x && worldX <= this.x + boxWidth &&
-      worldY >= this.y && worldY <= this.y + boxHeight;
-
-    return { hit: inTextArea || inDragHandle, isHandle: inDragHandle };
-  }
-
-  draw(ctx, scale, isDarkTheme, element) {
-    // Обновляем точку привязки из элемента
-    this.updateAnchorPoint(element);
-
-    // Фиксированные размеры в пикселях (не зависят от scale!)
-    // Потому что canvas уже масштабирован через ctx.scale()
-    const padding = 8;
-    const fontSize = 14;
-    const lineHeight = 20;
-    const lineWidth = 2;
-
-    ctx.save();
-
-    ctx.font = `${fontSize}px Arial`;
-
-    const lines = this.text.split('\n');
-    const maxWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
-    const boxWidth = maxWidth + padding * 2;
-    const boxHeight = lines.length * lineHeight + padding * 2;
-
-    const calloutCenterX = this.x + boxWidth / 2;
-    const calloutCenterY = this.y + boxHeight / 2;
-
-    let calloutEdgePoint = { x: this.x, y: this.y + boxHeight / 2 };
-    const dx = this.anchorPoint.x - calloutCenterX;
-    const dy = this.anchorPoint.y - calloutCenterY;
-
-    // Определяем точку на границе выноски
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (dx > 0) {
-        calloutEdgePoint = { x: this.x + boxWidth, y: calloutCenterY };
-      } else {
-        calloutEdgePoint = { x: this.x, y: calloutCenterY };
-      }
-    } else {
-      if (dy > 0) {
-        calloutEdgePoint = { x: calloutCenterX, y: this.y + boxHeight };
-      } else {
-        calloutEdgePoint = { x: calloutCenterX, y: this.y };
-      }
-    }
-
-    // Рисуем линию от внутренней точки элемента до выноски
-    ctx.beginPath();
-    ctx.moveTo(this.anchorPoint.x, this.anchorPoint.y);
-    ctx.lineTo(calloutEdgePoint.x, calloutEdgePoint.y);
-    ctx.strokeStyle = '#ff6600';
-    ctx.lineWidth = lineWidth;
-    ctx.stroke();
-
-    // Рисуем фон и рамку
-    ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
-    ctx.lineWidth = lineWidth / 2;
-    ctx.strokeRect(this.x, this.y, boxWidth, boxHeight);
-
-    // Рисуем текст
-    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
-    ctx.font = `${fontSize}px Arial`;
-    ctx.textBaseline = 'top';
-    lines.forEach((line, i) => {
-      ctx.fillText(line, this.x + padding, this.y + padding + i * lineHeight);
-    });
-
-    ctx.restore();
-  }
-
-  toJSON() {
-    return {
-      id: this.id,
-      elementId: this.elementId,
-      text: this.text,
-      x: this.x,
-      y: this.y
-    };
-  }
-}
-
-// ========== КЛАСС ПОРТА ==========
-export class Port {
-  constructor(id, elementId, direction, side, localX, localY, worldX, worldY) {
-    this.id = id;
-    this.elementId = elementId;
-    this.direction = direction;
-    this.side = side;
-    this.localX = localX;
-    this.localY = localY;
-    this.worldX = worldX;
-    this.worldY = worldY;
-    this.connectedElementId = null;
-    this.connectedPortId = null;
-    // Фиксированный радиус порта в пикселях
-    this.radius = 5;
-  }
-
-  isConnected() {
-    return this.connectedElementId !== null;
-  }
-
-  disconnect() {
-    this.connectedElementId = null;
-    this.connectedPortId = null;
-  }
-
-  connectTo(port) {
-    this.connectedElementId = port.elementId;
-    this.connectedPortId = port.id;
-  }
-
-  getDirectionName() {
-    const directions = { 'inlet': 'Вход', 'outlet': 'Выход', 'branch': 'Ответвление' };
-    return directions[this.direction] || this.direction;
-  }
-
-  updateWorldPosition(centerX, centerY, rotation, pointX, pointY) {
-    const angleRad = rotation * Math.PI / 180;
-    const dx = pointX - centerX;
-    const dy = pointY - centerY;
-    this.worldX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
-    this.worldY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
-  }
-
-  toJSON() {
-    return {
-      id: this.id,
-      elementId: this.elementId,
-      direction: this.direction,
-      side: this.side,
-      localX: this.localX,
-      localY: this.localY,
-      worldX: this.worldX,
-      worldY: this.worldY,
-      connectedElementId: this.connectedElementId,
-      connectedPortId: this.connectedPortId,
-      radius: this.radius
-    };
-  }
-}
+import { Port } from './Port.js';
+import { Callout } from './Callout.js';
 
 // ========== БАЗОВЫЙ КЛАСС ЭЛЕМЕНТА ==========
 class BaseElement {
@@ -227,7 +21,8 @@ class BaseElement {
       'fan': 'Вентилятор',
       'tee': 'Тройник',
       'elbow': 'Отвод',
-      'cross': 'Крестовина'
+      'cross': 'Крестовина',
+      'group': 'Группа элементов'
     };
   }
 
@@ -241,11 +36,16 @@ class BaseElement {
   setStrokeStyle(ctx, scale, isSelected, isDarkTheme) {
     ctx.lineWidth = Math.max(1, 2 / scale);
     if (isSelected) {
-      ctx.strokeStyle = '#ff0000';
+      ctx.strokeStyle = '#e5ff00';
     } else {
       ctx.strokeStyle = '#666';
     }
     ctx.stroke();
+  }
+
+  setFillStyle(ctx, isSelected, isDarkTheme) {
+    ctx.fillStyle = this.color;
+    ctx.fill();
   }
 
   getTypeName() {
@@ -261,7 +61,26 @@ class BaseElement {
   }
 
   getParameters() {
-    return [];
+    return [
+      { name: 'name', label: 'Имя', type: 'text', value: this.name },
+      { name: 'x', label: 'X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
+      { name: 'y', label: 'Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
+      { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
+      {
+        name: 'color', label: 'Цвет', type: 'select', options: [
+          { value: '#ff0000', label: 'Красный' },
+          { value: '#00ff00', label: 'Зеленый' },
+          { value: '#0000ff', label: 'Синий' },
+          { value: '#ffff00', label: 'Желтый' },
+          { value: '#9c27b0', label: 'Фиолетовый' },
+          { value: '#2196f3', label: 'Голубой' },
+          { value: '#ff6600', label: 'Оранжевый' },
+          { value: '#ff3399', label: 'Розовый' },
+          { value: '#663399', label: 'Пурпурный' },
+          { value: '#0099ff', label: 'Лазурный' }
+        ], value: this.color
+      },
+    ];
   }
 
   getRelativeCalloutEntryPoint() {
@@ -389,11 +208,12 @@ class BaseElement {
   }
 }
 
-// ========== АБСТРАКТНЫЙ КЛАСС ВОЗДУХОВОДА ==========
+// ========== БАЗОВЫЙ КЛАСС ВОЗДУХОВОДА ==========
 class DuctBase extends BaseElement {
-  constructor(id, type, x, y, name, color, size) {
+  constructor(id, type, x, y, name, color, sectionType = 'rectangular', size) {
     super(id, type, x, y, name, color);
     this._size = size;
+    this._sectionType = sectionType;
     this._originalX = x;
     this._originalY = y;
   }
@@ -413,15 +233,32 @@ class DuctBase extends BaseElement {
     this.updatePorts();
   }
 
+  get sectionType() {
+    return this._sectionType;
+  }
+
+  set sectionType(newType) {
+    if (this._sectionType === newType) return;
+    this._sectionType = newType;
+    this.updateCalloutText();
+  }
+
   getParameters() {
     return [
-      { name: 'size', label: 'Ширина/Диаметр', type: 'number', step: 1, min: 20, value: this.size, unit: 'мм' }
+      ...super.getParameters(),
+      {
+        name: 'sectionType', label: 'Тип сечения', type: 'select', options: [
+          { value: 'rectangular', label: 'Прямоугольное' },
+          { value: 'round', label: 'Круглое' }
+        ], value: this.sectionType
+      },
+      { name: 'size', label: this._sectionType === 'round' ? 'Диаметр' : 'Ширина', type: 'number', step: 1, min: 20, value: this.size, unit: 'мм' },
     ];
   }
 
-  // Добавляем метод для восстановления из JSON
   fromJSON(jsonData) {
     this._size = jsonData.size;
+    if (jsonData.sectionType !== undefined) this._sectionType = jsonData.sectionType;
     if (jsonData.length !== undefined) this._length = jsonData.length;
     if (jsonData.radius !== undefined) this._radius = jsonData.radius;
     if (jsonData.branchHeight !== undefined) this._branchHeight = jsonData.branchHeight;
@@ -449,7 +286,7 @@ class DuctBase extends BaseElement {
     return ports;
   }
 
-  drawRectangular(ctx, width, height, isSelected, scale) {
+  drawRectangular(ctx, width, height, isSelected, scale, showColors) {
     const rotation = this.rotation || 0;
     const centerX = this.x + width / 2;
     const centerY = this.y + height / 2;
@@ -458,8 +295,14 @@ class DuctBase extends BaseElement {
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
+    ctx.beginPath();
 
+    ctx.rect(this.x, this.y, width, height);
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, false);
+    }
     this.setStrokeStyle(ctx, scale, isSelected, false);
+
     ctx.restore();
   }
 
@@ -470,162 +313,73 @@ class DuctBase extends BaseElement {
   }
 
   toJSON() {
-    return { ...super.toJSON(), size: this._size };
-  }
-}
-
-// ========== БАЗОВЫЙ КЛАСС ДЛЯ ЭЛЕМЕНТОВ С ЛИНЕЙНЫМИ ПОРТАМИ ==========
-class LinearPortsElement extends BaseElement {
-  constructor(id, type, x, y, name, color, width, height) {
-    super(id, type, x, y, name, color);
-    this._width = width;
-    this._height = height;
-  }
-
-  get width() { return this._width; }
-  get height() { return this._height; }
-  getWidth() { return this._width; }
-  getHeight() { return this._height; }
-
-  set width(value) {
-    if (this._width === value) return;
-    const centerX = this.x + this._width / 2;
-    this._width = value;
-    this.x = centerX - this._width / 2;
-    this.updatePorts();
-  }
-
-  set height(value) {
-    if (this._height === value) return;
-    const centerY = this.y + this._height / 2;
-    this._height = value;
-    this.y = centerY - this._height / 2;
-    this.updatePorts();
-  }
-
-  getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this._width / 2;
-    const centerY = this.y + this._height / 2;
-
-    const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, this._height / 2, inletPos.x, inletPos.y
-    ));
-
-    const outletPos = this.rotatePoint(this.x + this._width, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', this._width, this._height / 2, outletPos.x, outletPos.y
-    ));
-
-    return ports;
-  }
-
-  createRectPath(ctx) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this._width / 2;
-    const centerY = this.y + this._height / 2;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-    ctx.beginPath();
-    ctx.rect(this.x, this.y, this._width, this._height);
-    ctx.restore();
-  }
-
-  drawRect(ctx, scale, isSelected, color) {
-    this.createRectPath(ctx);
-
-    this.setStrokeStyle(ctx, scale, isSelected, false);
-  }
-
-  hitTestRect(worldX, worldY, ctx) {
-    if (ctx) {
-      this.createRectPath(ctx);
-      return ctx.isPointInPath(worldX, worldY);
-    }
-    const local = this.transformToLocalCoords(worldX, worldY);
-    return local.x >= this.x && local.x <= this.x + this._width &&
-      local.y >= this.y && local.y <= this.y + this._height;
-  }
-
-  toJSON() {
-    return { ...super.toJSON(), width: this._width, height: this._height };
+    return { ...super.toJSON(), size: this._size, sectionType: this._sectionType };
   }
 }
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
-export class DuctDirect extends LinearPortsElement {
-  constructor(id, x, y, length = 200, size = 100) {
-    super(id, 'duct', x, y, `Воздуховод ${id}`, '#2196f3', length, size);
+export class DuctDirect extends DuctBase {
+  constructor(id, x, y, length = 1250, sectionType = 'rectangular', size = 100) {
+    super(id, 'duct', x, y, `Воздуховод ${id}`, '#2196f3', sectionType, size);
+    this._length = length;
   }
 
-  get length() { return this._width; }
-  set length(value) { this.width = value; }
-  get size() { return this._height; }
-  set size(value) { this.height = value; }
+  get length() { return this._length; }
+  set length(value) {
+    if (this._length === value) return;
+    const centerX = this.x + this._length / 2;
+    this._length = value;
+    this.x = centerX - this._length / 2;
+    this.updatePorts();
+  }
+
+  getWidth() { return this._length; }
+  getHeight() { return this._size; }
 
   getCalloutText() {
-    const area = (this._width * this._height / 1000000).toFixed(2);
-    return `${this.name}\nДлина: ${this._width} мм\nШирина: ${this._height} мм\nПлощадь: ${area} м²`;
+    const area = (this._length * this._size / 1000000).toFixed(2);
+    return `${this.name}\nДлина: ${this._length} мм\nШирина: ${this._size} мм\nПлощадь: ${area} м²`;
   }
 
   getParameters() {
     return [
-      { name: 'size', label: 'Ширина/Диаметр', type: 'number', step: 1, min: 20, value: this._height, unit: 'мм' },
-      { name: 'length', label: 'Длина', type: 'number', step: 1, min: 100, value: this._width, unit: 'мм' },
+      ...super.getParameters(),
+      { name: 'length', label: 'Длина', type: 'number', step: 1, min: 100, value: this._length, unit: 'мм' },
     ];
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    this.drawRect(ctx, scale, isSelected, this.color);
+  getPorts() {
+    return this.createLinearPorts(this._length, this._size);
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
+    this.drawRectangular(ctx, this._length, this._size, isSelected, scale, showColors);
   }
 
   hitTest(worldX, worldY, ctx) {
-    return this.hitTestRect(worldX, worldY, ctx);
+    return this.hitTestRectangular(worldX, worldY, this._length, this._size);
   }
 
   toJSON() {
-    // Сохраняем как size и length для единообразия
     return {
       ...super.toJSON(),
-      size: this._height,
-      length: this._width
+      length: this._length
     };
   }
 }
 
 // ========== ТРОЙНИК ==========
-export class Tee extends BaseElement {
-  constructor(id, x, y, size = 50) {
-    super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0');
-    this._size = size;
-    this._length = 150;
-    this._branchHeight = 75;
-    this._centerY = 50;
+export class Tee extends DuctBase {
+  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
+    super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0', sectionType, size);
+    this._length = 300;
+    this._branchHeight = 150;
+    this._centerY = 100;
   }
 
-  // Геттеры
-  get size() { return this._size; }
   get length() { return this._length; }
   get branchHeight() { return this._branchHeight; }
   get centerY() { return this._centerY; }
-
-  // Сеттеры с сохранением оси
-  set size(newSize) {
-    if (this._size === newSize) return;
-    const oldCenterX = this.x + this._length / 2;
-    const oldCenterY = this.y + this._centerY;
-    this._size = newSize;
-    this.x = oldCenterX - this._length / 2;
-    this.y = oldCenterY - this._centerY;
-    this.updatePorts();
-  }
 
   set length(newLength) {
     if (this._length === newLength) return;
@@ -657,12 +411,6 @@ export class Tee extends BaseElement {
   getCalloutText() {
     const area = (this._length * this._size / 1000000).toFixed(2);
     return `${this.name}\nРазмер: ${this._size} мм\nДлина: ${this._length} мм\nТип: тройник\nСечение: ${area} м²`;
-  }
-
-  getParameters() {
-    return [
-      { name: 'size', label: 'Ширина/Диаметр', type: 'number', step: 1, min: 20, value: this._size, unit: 'мм' }
-    ];
   }
 
   getRelativeCalloutEntryPoint() {
@@ -755,10 +503,13 @@ export class Tee extends BaseElement {
     ctx.restore();
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
     this.createPath(ctx);
-
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, false);
+    }
     this.setStrokeStyle(ctx, scale, isSelected, false);
+
   }
 
   hitTest(worldX, worldY, ctx) {
@@ -775,7 +526,6 @@ export class Tee extends BaseElement {
   toJSON() {
     return {
       ...super.toJSON(),
-      size: this._size,
       length: this._length,
       branchHeight: this._branchHeight,
       centerY: this._centerY
@@ -784,31 +534,17 @@ export class Tee extends BaseElement {
 }
 
 // ========== КРЕСТОВИНА ==========
-export class Cross extends BaseElement {
-  constructor(id, x, y, size = 50) {
-    super(id, 'cross', x, y, `Крестовина ${id}`, '#e91e63');
-    this._size = size;
-    this._length = 150;
-    this._branchHeight = 75;
+export class Cross extends DuctBase {
+  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
+    super(id, 'cross', x, y, `Крестовина ${id}`, '#e91e63', sectionType, size);
+    this._length = 300;
+    this._branchHeight = 150;
     this._centerY = 50;
   }
 
-  // Геттеры
-  get size() { return this._size; }
   get length() { return this._length; }
   get branchHeight() { return this._branchHeight; }
   get centerY() { return this._centerY; }
-
-  // Сеттеры с сохранением оси
-  set size(newSize) {
-    if (this._size === newSize) return;
-    const oldCenterX = this.x + this._length / 2;
-    const oldCenterY = this.y + this._centerY;
-    this._size = newSize;
-    this.x = oldCenterX - this._length / 2;
-    this.y = oldCenterY - this._centerY;
-    this.updatePorts();
-  }
 
   set length(newLength) {
     if (this._length === newLength) return;
@@ -840,12 +576,6 @@ export class Cross extends BaseElement {
   getCalloutText() {
     const area = (this._length * this._size / 1000000).toFixed(2);
     return `${this.name}\nРазмер: ${this._size} мм\nДлина: ${this._length} мм\nТип: крестовина\nСечение: ${area} м²`;
-  }
-
-  getParameters() {
-    return [
-      { name: 'size', label: 'Ширина/Диаметр', type: 'number', step: 1, min: 20, value: this._size, unit: 'мм' }
-    ];
   }
 
   getRelativeCalloutEntryPoint() {
@@ -935,41 +665,31 @@ export class Cross extends BaseElement {
     const branchRightX = centerX + halfSize;
 
     // Начинаем с верхнего отростка
-    // Левая верхняя точка верхнего отростка
     ctx.moveTo(branchLeftX, branchTopY);
-    // Идём вправо по верхней границе верхнего отростка
     ctx.lineTo(branchRightX, branchTopY);
-    // Идём вниз по правой границе верхнего отростка
     ctx.lineTo(branchRightX, topY);
-    // Идём вправо по верхней границе горизонтального канала
     ctx.lineTo(rightX, topY);
-    // Идём вниз по правой границе горизонтального канала
     ctx.lineTo(rightX, bottomY);
-    // Идём влево к началу нижнего отростка
     ctx.lineTo(branchRightX, bottomY);
-    // Идём вниз по правой границе нижнего отростка
     ctx.lineTo(branchRightX, branchBottomY);
-    // Идём влево по нижней границе нижнего отростка
     ctx.lineTo(branchLeftX, branchBottomY);
-    // Идём вверх по левой границе нижнего отростка
     ctx.lineTo(branchLeftX, bottomY);
-    // Идём влево по нижней границе горизонтального канала
     ctx.lineTo(leftX, bottomY);
-    // Идём вверх по левой границе горизонтального канала
     ctx.lineTo(leftX, topY);
-    // Идём вправо по верхней границе горизонтального канала к левой границе верхнего отростка
     ctx.lineTo(branchLeftX, topY);
-    // Идём вверх по левой границе верхнего отростка
     ctx.lineTo(branchLeftX, branchTopY);
     ctx.closePath();
 
     ctx.restore();
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
     this.createPath(ctx);
-
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, false);
+    }
     this.setStrokeStyle(ctx, scale, isSelected, false);
+
   }
 
   hitTest(worldX, worldY, ctx) {
@@ -986,18 +706,18 @@ export class Cross extends BaseElement {
   toJSON() {
     return {
       ...super.toJSON(),
-      size: this._size,
       length: this._length,
       branchHeight: this._branchHeight,
       centerY: this._centerY
     };
   }
 }
+
 // ========== ОТВОД ==========
 export class Elbow extends DuctBase {
-  constructor(id, x, y, size = 50) {
-    super(id, 'elbow', x, y, `Отвод ${id}`, '#4caf50', size);
-    this._radius = 50;
+  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
+    super(id, 'elbow', x, y, `Отвод ${id}`, '#00ff00', sectionType, size);
+    this._radius = 100;
   }
 
   get radius() {
@@ -1015,11 +735,16 @@ export class Elbow extends DuctBase {
     this.updatePorts();
   }
 
-  getWidth() { return this._radius + this.size; }
-  getHeight() { return this._radius + this.size; }
+  getWidth() {
+    return (this._radius || 50) + (this._size || 50);
+  }
+
+  getHeight() {
+    return (this._radius || 50) + (this._size || 50);
+  }
 
   getCalloutText() {
-    return `${this.name}\nДиаметр: ${this.size} мм\nРадиус изгиба: ${this._radius} мм\nУгол: 90°`;
+    return `${this.name}\nДиаметр: ${this._size} мм\nРадиус изгиба: ${this._radius} мм\nУгол: 90°`;
   }
 
   getParameters() {
@@ -1029,48 +754,45 @@ export class Elbow extends DuctBase {
     ];
   }
 
-  getRelativeCalloutEntryPoint() {
-    const centerRadius = this._radius + this.size / 2;
-    const angle = 315 * Math.PI / 180;
-    const x = centerRadius * Math.cos(angle);
-    const y = this.getHeight() + centerRadius * Math.sin(angle);
-    return { x, y };
-  }
-
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
-    const centerX = this.x + this.getWidth() / 2;
-    const centerY = this.y + this.getHeight() / 2;
-    const centerRadius = this._radius + this.size / 2;
+    const width = this.getWidth();
+    const height = this.getHeight();
+    const centerX = this.x + width / 2;
+    const centerY = this.y + height / 2;
+    const centerRadius = this._radius + this._size / 2;
 
+    // Inlet порт (слева)
     const inletX = this.x;
-    const inletY = this.y + this.getHeight() - centerRadius;
+    const inletY = this.y + height - centerRadius;
     const inletPos = this.rotatePoint(inletX, inletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
-      this.id, 'inlet', 'left', 0, this.getHeight() - centerRadius, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', 0, height - centerRadius, inletPos.x, inletPos.y
     ));
 
+    // Outlet порт (снизу)
     const outletX = this.x + centerRadius;
-    const outletY = this.y + this.getHeight();
+    const outletY = this.y + height;
     const outletPos = this.rotatePoint(outletX, outletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
-      this.id, 'outlet', 'bottom', centerRadius, this.getHeight(), outletPos.x, outletPos.y
+      this.id, 'outlet', 'bottom', centerRadius, height, outletPos.x, outletPos.y
     ));
 
     return ports;
   }
 
-  // Создание пути для отвода
   createPath(ctx) {
     const rotation = this.rotation || 0;
-    const elemCenterX = this.x + this.getWidth() / 2;
-    const elemCenterY = this.y + this.getHeight() / 2;
+    const width = this.getWidth();
+    const height = this.getHeight();
+    const elemCenterX = this.x + width / 2;
+    const elemCenterY = this.y + height / 2;
     const bendCenterX = this.x;
-    const bendCenterY = this.y + this.getHeight();
-    const outerRadius = this._radius + this.size;
+    const bendCenterY = this.y + height;
+    const outerRadius = this._radius + this._size;
     const innerRadius = this._radius;
 
     ctx.save();
@@ -1079,31 +801,44 @@ export class Elbow extends DuctBase {
     ctx.translate(-elemCenterX, -elemCenterY);
 
     ctx.beginPath();
-    ctx.arc(bendCenterX, bendCenterY, outerRadius, 3 * Math.PI / 2, 2 * Math.PI);
+
+    // Внешняя дуга от 270° до 360°
+    ctx.arc(bendCenterX, bendCenterY, outerRadius, Math.PI * 1.5, Math.PI * 2);
+
+    // Прямая линия от конца внешней дуги к началу внутренней
     ctx.lineTo(
-      bendCenterX + innerRadius * Math.cos(2 * Math.PI),
-      bendCenterY + innerRadius * Math.sin(2 * Math.PI)
+      bendCenterX + innerRadius * Math.cos(Math.PI * 2),
+      bendCenterY + innerRadius * Math.sin(Math.PI * 2)
     );
-    ctx.arc(bendCenterX, bendCenterY, innerRadius, 2 * Math.PI, 3 * Math.PI / 2, true);
+
+    // Внутренняя дуга от 360° до 270° (против часовой стрелки)
+    ctx.arc(bendCenterX, bendCenterY, innerRadius, Math.PI * 2, Math.PI * 1.5, true);
+
     ctx.closePath();
 
     ctx.restore();
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
     this.createPath(ctx);
-
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, false);
+    }
     this.setStrokeStyle(ctx, scale, isSelected, false);
+
   }
 
   hitTest(worldX, worldY, ctx) {
-    // Если передан контекст, используем его
+    // Проверяем валидность размеров
+    if (!this._size || !this._radius || this._size <= 0 || this._radius <= 0) {
+      return false;
+    }
+
     if (ctx) {
       this.createPath(ctx);
       return ctx.isPointInPath(worldX, worldY);
     }
 
-    // Fallback: создаём временный canvas
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
     this.createPath(tempCtx);
@@ -1111,37 +846,87 @@ export class Elbow extends DuctBase {
   }
 
   toJSON() {
-    return { ...super.toJSON(), radius: this._radius };
+    return {
+      ...super.toJSON(),
+      radius: this._radius
+    };
   }
 }
 
 // ========== ВЕНТИЛЯТОР ==========
-export class Fan extends LinearPortsElement {
+export class Fan extends BaseElement {
   constructor(id, x, y, size = 100) {
-    super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800', size, size);
+    super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800', size);
+    this._size = size;
     this.flow = 1000;
   }
 
-  get size() { return this._width; }
-  set size(value) { this.height = this.width = value; }
+  get size() { return this._size; }
+  set size(value) {
+    if (this._size === value) return;
+    const centerX = this.x + this.getWidth() / 2;
+    const centerY = this.y + this.getHeight() / 2;
+    this._size = value;
+    this.x = centerX - this.getWidth() / 2;
+    this.y = centerY - this.getHeight() / 2;
+    this.updatePorts();
+  }
+
+  getWidth() { return this._size; }
+  getHeight() { return this._size; }
 
   getCalloutText() {
-    const area = (this._width * this._height / 1000000).toFixed(2);
-    return `${this.name}\nРазмер: ${this._width}×${this._height} мм\nПроизводительность: ${this.flow} м³/ч\nМощность: ${(this.flow * 0.3).toFixed(1)} Вт`;
+    return `${this.name}\nРазмер: ${this._size}×${this._size} мм\nПроизводительность: ${this.flow} м³/ч`;
   }
 
   getParameters() {
     return [
-      { name: 'size', label: 'Размер', type: 'number', step: 10, min: 50, value: this._width, unit: 'мм' },
+      ...super.getParameters(),
+      { name: 'size', label: 'Размер', type: 'number', step: 10, min: 50, value: this._size, unit: 'мм' },
       { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' }
     ];
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  getPorts() {
+    const ports = [];
     const rotation = this.rotation || 0;
-    const centerX = this.x + this._width / 2;
-    const centerY = this.y + this._height / 2;
-    const radius = Math.min(this._width, this._height) * 0.35;
+    const centerX = this.x + this._size / 2;
+    const centerY = this.y + this._size / 2;
+
+    const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.id, 'inlet', 'left', 0, this._size / 2, inletPos.x, inletPos.y
+    ));
+
+    const outletPos = this.rotatePoint(this.x + this._size, centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.id, 'outlet', 'right', this._size, this._size / 2, outletPos.x, outletPos.y
+    ));
+
+    return ports;
+  }
+
+  createRectPath(ctx) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this._size / 2;
+    const centerY = this.y + this._size / 2;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+    ctx.beginPath();
+    ctx.rect(this.x, this.y, this._size, this._size);
+    ctx.restore();
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this._size / 2;
+    const centerY = this.y + this._size / 2;
+    const radius = this._size * 0.35;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -1150,8 +935,10 @@ export class Fan extends LinearPortsElement {
 
     // Корпус
     ctx.beginPath();
-    ctx.rect(this.x, this.y, this._width, this._height);
-
+    ctx.rect(this.x, this.y, this._size, this._size);
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, false);
+    }
     this.setStrokeStyle(ctx, scale, isSelected, false);
 
     // Круг
@@ -1175,131 +962,129 @@ export class Fan extends LinearPortsElement {
   }
 
   hitTest(worldX, worldY, ctx) {
-    return this.hitTestRect(worldX, worldY, ctx);
+    if (ctx) {
+      this.createRectPath(ctx);
+      return ctx.isPointInPath(worldX, worldY);
+    }
+    const local = this.transformToLocalCoords(worldX, worldY);
+    return local.x >= this.x && local.x <= this.x + this._size &&
+      local.y >= this.y && local.y <= this.y + this._size;
   }
 
   toJSON() {
-    // Сохраняем как size для единообразия
     return {
       ...super.toJSON(),
-      flow: this.flow,
-      size: this._width
+      size: this._size,
+      flow: this.flow
     };
   }
 }
+
 // ========== ФАБРИКА ==========
 export class ElementFactory {
   static createElement(type, id, x, y, params = {}) {
-    let element;
+    const name = params.name || `Элемент ${id}`;
+    const sectionType = params.sectionType || 'rectangular';
+    const size = params.size || 50;
+
     switch (type) {
       case 'duct':
-        const ductSize = params.size || params.width || 100;
-        const ductLength = params.length || 200;
-        element = new DuctDirect(id, x, y, ductLength, ductSize);
-        break;
+        const duct = new DuctDirect(id, x, y, params.length || 1250, sectionType, size);
+        if (params.rotation !== undefined) duct.rotation = params.rotation;
+        if (params.name) duct.name = params.name;
+        return duct;
       case 'tee':
-        element = new Tee(id, x, y, params.size || 50);
-        break;
+        const tee = new Tee(id, x, y, sectionType, size);
+        if (params.length !== undefined) tee._length = params.length;
+        if (params.branchHeight !== undefined) tee._branchHeight = params.branchHeight;
+        if (params.centerY !== undefined) tee._centerY = params.centerY;
+        if (params.rotation !== undefined) tee.rotation = params.rotation;
+        if (params.name) tee.name = params.name;
+        return tee;
       case 'cross':
-        element = new Cross(id, x, y, params.size || 50);
-        break;
+        const cross = new Cross(id, x, y, sectionType, size);
+        if (params.length !== undefined) cross._length = params.length;
+        if (params.branchHeight !== undefined) cross._branchHeight = params.branchHeight;
+        if (params.centerY !== undefined) cross._centerY = params.centerY;
+        if (params.rotation !== undefined) cross.rotation = params.rotation;
+        if (params.name) cross.name = params.name;
+        return cross;
       case 'elbow':
-        element = new Elbow(id, x, y, params.size || 50);
-        break;
+        const elbow = new Elbow(id, x, y, sectionType, size);
+        if (params.radius !== undefined) elbow._radius = params.radius;
+        if (params.rotation !== undefined) elbow.rotation = params.rotation;
+        if (params.name) elbow.name = params.name;
+        return elbow;
       case 'fan':
-        // Унифицируем: используем size, диаметр или size
-        const fanSize = params.size || params.diameter || 100;
-        element = new Fan(id, x, y, fanSize);
-        break;
-      case 'group': {
+        const fan = new Fan(id, x, y, size);
+        if (params.flow !== undefined) fan.flow = params.flow;
+        if (params.rotation !== undefined) fan.rotation = params.rotation;
+        if (params.name) fan.name = params.name;
+        return fan;
+      case 'group':
         const elements = (params.elements || []).map(elJson => this.createFromJSON(elJson));
-        const newGroupId = Date.now() + Math.random();
-        element = new Group(newGroupId, elements);
-        element.name = params.name;
-        element.color = params.color;
-        element.rotation = params.rotation || 0;
-        element._x = params._x || 0;
-        element._y = params._y || 0;
-        element.width = params.width || 0;
-        element.height = params.height || 0;
-        element.callouts = params.callouts?.map(c => {
-          const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
-          return callout;
-        }) || [];
-        return element;
-      }
+        const group = new Group(params.id || Date.now() + Math.random(), elements);
+        group.name = params.name || group.name;
+        group.color = params.color || group.color;
+        group.rotation = params.rotation || 0;
+        group._x = params._x || 0;
+        group._y = params._y || 0;
+        group.width = params.width || 0;
+        group.height = params.height || 0;
+        // Восстанавливаем выноски группы
+        group.callouts = (params.callouts || []).map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+        return group;
       default:
         throw new Error(`Unknown element type: ${type}`);
     }
-
-    return element;
   }
 
   static createFromJSON(jsonData) {
-    let element;
-
-    if (jsonData.type === 'duct') {
-      const ductSize = jsonData.size || jsonData.width || 100;
-      const ductLength = jsonData.length || 200;
-      element = new DuctDirect(jsonData.id, jsonData.x, jsonData.y, ductLength, ductSize);
-    } else if (jsonData.type === 'fan') {
-      element = new Fan(jsonData.id, jsonData.x, jsonData.y, jsonData.size || jsonData.diameter || 100);
-    } else if (jsonData.type === 'tee') {
-      element = new Tee(jsonData.id, jsonData.x, jsonData.y, jsonData.size);
-      if (jsonData.length !== undefined) element._length = jsonData.length;
-      if (jsonData.branchHeight !== undefined) element._branchHeight = jsonData.branchHeight;
-      if (jsonData.centerY !== undefined) element._centerY = jsonData.centerY;
-    } else if (jsonData.type === 'cross') {
-      element = new Cross(jsonData.id, jsonData.x, jsonData.y, jsonData.size);
-      if (jsonData.length !== undefined) element._length = jsonData.length;
-      if (jsonData.branchHeight !== undefined) element._branchHeight = jsonData.branchHeight;
-      if (jsonData.centerY !== undefined) element._centerY = jsonData.centerY;
-    } else if (jsonData.type === 'elbow') {
-      element = new Elbow(jsonData.id, jsonData.x, jsonData.y, jsonData.size);
-      if (jsonData.radius !== undefined) element._radius = jsonData.radius;
-    } else if (jsonData.type === 'group') {
-      const elements = (jsonData.elements || []).map(elJson => this.createFromJSON(elJson));
-      const group = new Group(jsonData.id, elements);
-      group.name = jsonData.name;
-      group.color = jsonData.color;
-      group.rotation = jsonData.rotation || 0;
-      group._x = jsonData._x || 0;
-      group._y = jsonData._y || 0;
-      group.width = jsonData.width || 0;
-      group.height = jsonData.height || 0;
-      group.callouts = jsonData.callouts?.map(c => {
-        const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
-        return callout;
-      }) || [];
-      return group;
-    } else {
-      throw new Error(`Unknown element type: ${jsonData.type}`);
-    }
-
-    // Общие поля для всех элементов
-    element.name = jsonData.name;
-    element.color = jsonData.color;
-    element.rotation = jsonData.rotation || 0;
-    element.flow = jsonData.flow || element.flow;
+    // Создаем элемент с базовыми параметрами
+    let element = this.createElement(
+      jsonData.type,
+      jsonData.id,
+      jsonData.x,
+      jsonData.y,
+      {
+        sectionType: jsonData.sectionType,
+        size: jsonData.size,
+        length: jsonData.length,
+        branchHeight: jsonData.branchHeight,
+        centerY: jsonData.centerY,
+        radius: jsonData.radius,
+        flow: jsonData.flow,
+        rotation: jsonData.rotation,  // Добавляем rotation
+        elements: jsonData.elements,
+        name: jsonData.name,
+        color: jsonData.color,
+        _x: jsonData._x,
+        _y: jsonData._y,
+        width: jsonData.width,
+        height: jsonData.height,
+        callouts: jsonData.callouts
+      }
+    );
 
     // Восстанавливаем порты
-    element.ports = jsonData.ports?.map(p => new Port(
-      p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
-    )) || [];
+    if (jsonData.ports) {
+      element.ports = jsonData.ports.map(p => new Port(
+        p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
+      ));
 
-    element.ports.forEach(port => {
-      const foundPort = jsonData.ports?.find(op => op.id === port.id);
-      if (foundPort) {
-        port.connectedElementId = foundPort.connectedElementId || null;
-        port.connectedPortId = foundPort.connectedPortId || null;
-      }
-    });
+      element.ports.forEach(port => {
+        const foundPort = jsonData.ports.find(op => op.id === port.id);
+        if (foundPort) {
+          port.connectedElementId = foundPort.connectedElementId || null;
+          port.connectedPortId = foundPort.connectedPortId || null;
+        }
+      });
+    }
 
-    // Восстанавливаем выноски
-    element.callouts = jsonData.callouts?.map(c => {
-      const callout = new Callout(c.id, c.elementId, c.text, c.x, c.y);
-      return callout;
-    }) || [];
+    // Восстанавливаем выноски для НЕ-групп (для групп уже восстановили выше)
+    if (jsonData.callouts && element.type !== 'group') {
+      element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+    }
 
     return element;
   }
@@ -1308,7 +1093,6 @@ export class ElementFactory {
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
   constructor(id, elements) {
-    // Генерируем уникальный ID если не передан или это не число
     const groupId = (typeof id === 'number' && id !== undefined) ? id : Date.now() + Math.random();
     super(groupId, 'group', 0, 0, `Группа ${groupId}`, '#9e9e9e');
     this.elements = elements || [];
@@ -1409,12 +1193,10 @@ export class Group extends BaseElement {
   }
 
   getParameters() {
-    return [];
+    return [{ name: 'name', label: 'Имя', type: 'text', value: this.name },];
   }
 
-  // Реализуем метод getPorts для группы
   getPorts() {
-    // Группа сама по себе не имеет портов, возвращаем пустой массив
     return [];
   }
 
@@ -1434,25 +1216,19 @@ export class Group extends BaseElement {
     return allPorts;
   }
 
-  // Метод для перемещения всех элементов группы
   move(deltaX, deltaY) {
     if (!this.elements || this.elements.length === 0) return;
 
-    // Проверяем, что дельта корректна
     if (isNaN(deltaX) || isNaN(deltaY) || !isFinite(deltaX) || !isFinite(deltaY)) {
       console.warn('Invalid delta in group move:', deltaX, deltaY);
       return;
     }
 
-    console.log('Group move - delta:', deltaX, deltaY, 'current pos:', this._x, this._y);
-
-    // Перемещаем каждый элемент
     this.elements.forEach(element => {
       if (element) {
         element.x += deltaX;
         element.y += deltaY;
 
-        // Перемещаем выноски элемента вместе с ним
         if (element.callouts && element.callouts.length > 0) {
           element.callouts.forEach(callout => {
             callout.x += deltaX;
@@ -1465,29 +1241,20 @@ export class Group extends BaseElement {
       }
     });
 
-    // Обновляем границы группы
     this.updateBounds();
-
-    console.log('Group move - new pos:', this._x, this._y);
   }
 
-  // Создание пути для группы (для hitTest)
-  createPath(ctx) {
-    // Группа не имеет собственного пути, так как состоит из других элементов
-    // Этот метод не должен вызываться для группы
-  }
+  createPath(ctx) { }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    // Рисуем все элементы группы
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
     if (this.elements) {
       this.elements.forEach(element => {
         if (element && element.draw) {
-          element.draw(ctx, scale, isSelected, isDarkTheme);
+          element.draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors);
         }
       });
     }
 
-    // Рисуем выноски всех элементов группы
     if (this.elements) {
       this.elements.forEach(element => {
         if (element && element.callouts && element.callouts.length > 0) {
@@ -1497,23 +1264,25 @@ export class Group extends BaseElement {
         }
       });
     }
-
-    // Если группа выбрана, рисуем рамку вокруг всей группы
+    ctx.save();
+    ctx.lineWidth = Math.max(2, 3 / scale);
     if (isSelected && this.width > 0 && this.height > 0) {
-      ctx.save();
       ctx.strokeStyle = '#ff6600';
-      ctx.lineWidth = Math.max(2, 3 / scale);
-      ctx.setLineDash([5 / scale, 5 / scale]);
-      ctx.strokeRect(this._x, this._y, this.width, this.height);
-      ctx.setLineDash([]);
-      ctx.restore();
+    } else {
+      ctx.strokeStyle = '#444444';
     }
+    ctx.setLineDash([5 / scale, 5 / scale]);
+    ctx.strokeRect(this._x, this._y, this.width, this.height);
+    ctx.setLineDash([]);
+    ctx.fillStyle = isDarkTheme ? '#444444' : '#000';
+    ctx.font = `26px Arial`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(this.name, this._x + 10, this._y + 16 / scale);
+    ctx.restore();
   }
 
   hitTest(worldX, worldY, ctx) {
     if (!this.elements) return false;
-
-    // Проверяем попадание в любой элемент группы
     for (const element of this.elements) {
       if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
         return true;

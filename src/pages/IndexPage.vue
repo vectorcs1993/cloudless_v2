@@ -2,23 +2,20 @@
   <div class="app" :class="{ 'dark-theme': isDarkTheme }">
     <!-- Тулбар -->
     <div class="toolbar">
-      <button class="theme-toggle" @click="toggleTheme">
-        {{ isDarkTheme ? '☀️' : '🌙' }}
-      </button>
-      <h3>Редактор воздуховодов</h3>
-
-      <div class="scale-settings">
+      <h3>Безоблачный</h3>
+      <div class="tab-settings">
         <label>Масштаб:
           <input type="number" v-model.number="pixelsPerMeter" step="10" min="20" max="200" />
           px/м
         </label>
-
         <div>
+          <label><input type="checkbox" v-model="isDarkTheme" /> Темная тема</label>
           <label><input type="checkbox" v-model="showGrid" /> Сетка</label>
           <label><input type="checkbox" v-model="showPorts" /> Показать порты</label>
-          <label><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
+          <label v-if="showPorts"><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
           <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
           <label><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
+          <label><input type="checkbox" v-model="showColors" /> Показывать цвета</label>
         </div>
       </div>
 
@@ -33,11 +30,10 @@
 
       <!-- Кнопки управления сохранением -->
       <div class="save-controls">
-        <button @click="saveToLocalStorage" class="save-btn">💾 Сохранить</button>
-        <button @click="resetToDefault" class="reset-btn">↺ Сброс</button>
-        <button @click="updateAllPortsAndConnections" class="update-ports-btn" style="background: #ff9800;">🔄 Обновить все порты и связи</button>
+        <button @click="saveToLocalStorage" class="add-btn">💾 Сохранить</button>
+        <button @click="resetToDefault" class="add-btn">↺ Сброс</button>
+        <button @click="updateAllPortsAndConnections" class="add-btn">🔄 Обновить все порты и связи</button>
       </div>
-
 
     </div>
 
@@ -48,22 +44,12 @@
     <div v-if="selectedElements.length > 0" class="selected-info">
       <h4>Выбрано элементов: {{ selectedElements.length }}</h4>
 
-      <div v-if="!(selectedElements.length < 2 && !isGroupSelected)" class="group-controls">
-        <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
-          📦 Сгруппировать ({{ selectedElements.length }})
-        </button>
-        <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
-          🔓 Разгруппировать
-        </button>
-      </div>
-
       <div v-if="selectedElements.length === 1" class="single-element-info">
-        <p>{{ selectedElements[0].name }}</p>
+        <p>ID: {{ selectedElements[0].id }}</p>
         <p>Тип: {{ selectedElements[0].getTypeName() }}</p>
-        <p>Позиция: ({{ Math.round(selectedElements[0].x) }}, {{ Math.round(selectedElements[0].y) }})</p>
-        <p>Поворот: {{ selectedElements[0].rotation || 0 }}°</p>
+        <p v-if="!isGroupSelected">Поворот: {{ selectedElements[0].rotation || 0 }}°</p>
 
-        <div v-if="selectedElements[0].getParameters().length > 0" class="element-params">
+        <div class="element-params">
           <table class="params-table">
             <thead>
               <tr>
@@ -76,7 +62,14 @@
               <tr v-for="param in selectedElements[0].getParameters()" :key="param.name">
                 <td class="param-label">{{ param.label }}:</td>
                 <td class="param-input">
-                  <input :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
+                  <!-- Для select -->
+                  <select v-if="param.type === 'select'" v-model="selectedElements[0][param.name]" @change="onParameterChange" class="param-select">
+                    <option v-for="option in param.options" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <!-- Для ввода строки/числа -->
+                  <input v-else :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
                     @change="onParameterChange" />
                 </td>
                 <td class="param-unit">
@@ -88,16 +81,27 @@
           </table>
         </div>
 
+
         <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
           <h5>Порты и связи:</h5>
           <div v-for="port in selectedElements[0].ports" :key="port.id"
             :class="['connection-info', { 'connected': port.isConnected(), 'disconnected': !port.isConnected() }]">
             <div v-if="port.isConnected()">
-              🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → Элемент {{ getElementName(port.connectedElementId) }}
+              🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → ID {{ port.connectedElementId }}
             </div>
             <div v-else>
               ⭕ Порт {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
             </div>
+          </div>
+        </div>
+        <div class="group-controls">
+          <div v-if="!(selectedElements.length < 2 && !isGroupSelected)" class="group-controls">
+            <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
+              📦 Сгруппировать ({{ selectedElements.length }})
+            </button>
+            <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
+              🔓 Разгруппировать
+            </button>
           </div>
         </div>
 
@@ -131,7 +135,7 @@ import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, Group, Elbow, Cross } from './Elements.js';
+import { Tee, DuctDirect, Fan, ElementFactory, Elbow, Cross, Group } from './Elements.js';
 
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
@@ -141,6 +145,7 @@ const pixelsPerMeter = ref(50);
 const showGrid = ref(true);
 const showPorts = ref(true);
 const showCallouts = ref(true);
+const showColors = ref(true);
 const snapToPorts = ref(true);
 const gridStepM = ref(1);
 const autoUpdateConnections = ref(true);
@@ -167,6 +172,7 @@ const renderOptions = {
   panY: ref(0),
   showGrid,
   showPorts,
+  showColors,
   showCallouts,
   pixelsPerMeter,
   gridStepM,
@@ -272,11 +278,11 @@ const addElement = (ElementClass, params = []) => {
   renderer?.draw();
 };
 
-const addDuctDirect = () => addElement(DuctDirect, [200, 50]);
-const addFan = () => addElement(Fan, [50]);
-const addTee = () => addElement(Tee, [50]);
-const addElbow = () => addElement(Elbow, [50]);
-const addCross = () => addElement(Cross, [50]);
+const addDuctDirect = () => addElement(DuctDirect);
+const addFan = () => addElement(Fan);
+const addTee = () => addElement(Tee);
+const addElbow = () => addElement(Elbow);
+const addCross = () => addElement(Cross);
 
 const onParameterChange = () => {
   if (selectedElements.value.length === 1) {
@@ -462,5 +468,34 @@ onMounted(() => {
   resizeObserver.observe(mainCanvas.value);
 
   renderer.draw();
+});
+
+watch(showGrid, () => {
+  renderer?.draw();
+});
+
+watch(showPorts, () => {
+  renderer?.draw();
+});
+
+watch(showCallouts, () => {
+  renderer?.draw();
+});
+
+watch(showColors, () => {
+  renderer?.draw();
+});
+
+watch(isDarkTheme, () => {
+  renderer?.draw();
+});
+
+watch(pixelsPerMeter, () => {
+  renderer?.draw();
+});
+
+// Также добавьте watch для gridStepM, если он используется
+watch(gridStepM, () => {
+  renderer?.draw();
 });
 </script>
