@@ -301,8 +301,7 @@ export class CanvasRenderer {
     ctx.fillStyle = isDark ? '#fff' : '#000';
     ctx.font = '14px Arial';
     ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
-
-
+    ctx.fillText('Панорама: ' + 'x: ' + this.panX.value.toFixed(2) + ' y: ' + this.panY.value.toFixed(2), 10, 50);
     ctx.restore();
   }
 }

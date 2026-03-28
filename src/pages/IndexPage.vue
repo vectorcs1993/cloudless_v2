@@ -156,7 +156,7 @@ const isGroupSelected = computed(() => {
 
 // ========== Функции ==========
 const saveToLocalStorage = () => {
-  storageManager.save(elements.value, nextElementId, nextPortId, nextGroupId);
+  storageManager.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
   const saveBtn = document.querySelector('.save-btn');
   if (saveBtn) {
     const originalText = saveBtn.textContent;
@@ -180,21 +180,21 @@ const loadFromLocalStorage = () => {
   try {
     console.log('Загружены данные:', data);
     console.log('Количество элементов:', data.elements.length);
-
     elements.value = data.elements.map(json => {
       const element = ElementFactory.createFromJSON(json);
       console.log('Создан элемент:', element.type, element.id);
       return element;
     });
-
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
     nextGroupId = data.nextGroupId || 1000;
+    renderOptions.panX.value = data.panX || 0;
+    renderOptions.panY.value = data.panY || 0;
+    renderOptions.scale.value = data.scale || 1;
     elements.value.forEach(el => el.updatePorts());
     selectedElements.value = [];
     renderer?.setSelectedElements([]);
     renderer?.draw();
-
     console.log('Элементы после загрузки:', elements.value.length);
   } catch (error) {
     console.error('Error loading data:', error);
