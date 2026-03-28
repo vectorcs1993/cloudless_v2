@@ -271,16 +271,12 @@ export class InteractionManager {
   }
 
   onMouseMove(e) {
-    const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
+    // Получаем правильные экранные координаты относительно canvas
+    const rect = this.canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
 
-    // Подсветка портов
-    if (this.options.showPorts.value && !this.isDragging && !this.draggingCallout && !this.isSelecting) {
-      const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
-      this.renderer.setHighlightedPort(portUnderCursor);
-      this.canvas.style.cursor = portUnderCursor ? 'pointer' : 'default';
-    } else if (!this.isDragging && !this.draggingCallout && !this.isSelecting) {
-      this.renderer.setHighlightedPort(null);
-    }
+    const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     // Перетаскивание выноски
     if (this.draggingCallout) {
@@ -297,9 +293,11 @@ export class InteractionManager {
       }
 
       this.renderer.draw();
+      return; // Важно: выходим, чтобы не проверять порты во время перетаскивания
     }
+
     // Перетаскивание элемента
-    else if (this.isDragging && this.draggingElement) {
+    if (this.isDragging && this.draggingElement) {
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
       const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const deltaWorldX = currentWorldPos.x - startWorldPos.x;
@@ -307,22 +305,54 @@ export class InteractionManager {
 
       this.applyPortSnapping(this.draggingElement, deltaWorldX, deltaWorldY);
       this.renderer.draw();
+      return;
     }
+
     // Панорамирование
-    else if (this.isPanning) {
+    if (this.isPanning) {
       this.options.panX.value = this.dragStartPan.x + (e.clientX - this.dragStartMouseScreen.x);
       this.options.panY.value = this.dragStartPan.y + (e.clientY - this.dragStartMouseScreen.y);
       this.renderer.draw();
+      return;
     }
+
     // Выделение прямоугольником
-    else if (this.isSelecting && this.selectionStart) {
+    if (this.isSelecting && this.selectionStart) {
       const currentScreenPos = {
         x: e.clientX - this.canvas.getBoundingClientRect().left,
         y: e.clientY - this.canvas.getBoundingClientRect().top
       };
       this.renderer.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.draw();
+      return;
     }
+
+    // Обычное состояние - проверяем порты и элементы
+    let cursorStyle = 'default';
+
+    if (this.options.showPorts.value) {
+      const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
+      this.renderer.setHighlightedPort(portUnderCursor);
+
+      if (portUnderCursor) {
+        this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
+        cursorStyle = 'pointer';
+      } else {
+        this.renderer.clearTooltip();
+        const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
+        if (elementUnderCursor) {
+          cursorStyle = 'pointer';
+        }
+      }
+    } else {
+      const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
+      cursorStyle = elementUnderCursor ? 'pointer' : 'default';
+      this.renderer.setHighlightedPort(null);
+      this.renderer.clearTooltip();
+    }
+
+    this.canvas.style.cursor = cursorStyle;
+    this.renderer.draw();
   }
 
   onMouseUp(e) {
@@ -347,9 +377,7 @@ export class InteractionManager {
 
       if (this.canvas) this.canvas.style.cursor = '';
 
-      // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ СВЯЗЕЙ ПОСЛЕ ПЕРЕТАСКИВАНИЯ
       if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElement) {
-        // Небольшая задержка для завершения всех вычислений
         setTimeout(() => {
           console.log('Автоматическое обновление связей после перемещения элемента');
           const restored = this.connectionManager.updateAllPortsAndConnections(5);
@@ -367,6 +395,27 @@ export class InteractionManager {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
       if (this.canvas) this.canvas.style.cursor = '';
+
+      // ПРИНУДИТЕЛЬНО ПРОВЕРЯЕМ ПОРТ ПОСЛЕ ЗАВЕРШЕНИЯ ПЕРЕТАСКИВАНИЯ ВЫНОСКИ
+      const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
+      const rect = this.canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
+      // Проверяем порт под курсором
+      const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
+      if (portUnderCursor && this.options.showPorts.value) {
+        this.renderer.setHighlightedPort(portUnderCursor);
+        this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
+        this.canvas.style.cursor = 'pointer';
+      } else {
+        // Проверяем элемент под курсором
+        const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
+        this.canvas.style.cursor = elementUnderCursor ? 'pointer' : 'default';
+        this.renderer.setHighlightedPort(null);
+        this.renderer.clearTooltip();
+      }
+
       this.renderer.draw();
     }
 

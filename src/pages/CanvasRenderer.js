@@ -10,8 +10,23 @@ export class CanvasRenderer {
     this.selectedElements = [];
     this.highlightedPort = null;
     this.selectionRect = null;
+    this.tooltipPort = null; // порт для которого показываем тултип
+    this.tooltipPos = { x: 0, y: 0 }; // позиция тултипа в экранных координатах
   }
-
+  setTooltipPort(port, screenX, screenY) {
+    this.tooltipPort = port;
+    if (port) {
+      this.tooltipPos = { x: screenX, y: screenY };
+    }
+  }
+  clearTooltip() {
+    this.tooltipPort = null;
+  }
+  updateTooltipPosition(screenX, screenY) {
+    if (this.tooltipPort) {
+      this.tooltipPos = { x: screenX, y: screenY };
+    }
+  }
   setSelectedElements(elements) {
     this.selectedElements = Array.isArray(elements) ? elements : [elements];
   }
@@ -127,7 +142,6 @@ export class CanvasRenderer {
       element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value);
     });
 
-
     this.drawAxes(ctx);
 
     // Рисуем порты (в мировых координатах, без дополнительных трансформаций)
@@ -144,6 +158,11 @@ export class CanvasRenderer {
 
     // Восстанавливаем состояние контекста (убираем трансформации)
     ctx.restore();
+
+    // Рисуем тултип (в экранных координатах, ПОСЛЕ восстановления контекста)
+    if (this.tooltipPort) {
+      this.drawTooltip(ctx);
+    }
 
     // Рисуем прямоугольник выделения (в экранных координатах)
     if (this.selectionRect) {
@@ -289,6 +308,88 @@ export class CanvasRenderer {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  drawTooltip(ctx) {
+    if (!this.tooltipPort) return;
+
+    const port = this.tooltipPort;
+
+    // Получаем элемент по ID
+    const element = this.elements.value.find(el => el.id === port.elementId);
+    if (!element) return;
+
+    // Формируем текст тултипа
+    const lines = [
+      `Порт: ${port.getDirectionName()} (${port.side})`,
+      `Статус: ${port.isConnected() ? '✓ Подключен' : '○ Не подключен'}`,
+    ];
+
+    if (port.isConnected()) {
+      const connectedElement = this.elements.value.find(el => el.id === port.connectedElementId);
+      if (connectedElement) {
+        lines.push(`Связан с: ${connectedElement.name}`);
+      }
+    }
+
+    // Параметры тултипа
+    const padding = 8;
+    const fontSize = 12;
+    const lineHeight = 16;
+    const backgroundColor = this.options.isDarkTheme.value ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    const textColor = this.options.isDarkTheme.value ? '#fff' : '#333';
+    const borderColor = this.options.isDarkTheme.value ? '#666' : '#ccc';
+
+    ctx.save();
+    ctx.font = `${fontSize}px Arial`;
+
+    // Вычисляем размеры тултипа
+    const maxWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const boxWidth = maxWidth + padding * 2;
+    const boxHeight = lines.length * lineHeight + padding * 2;
+
+    // Позиция тултипа (смещаем, чтобы не перекрывать курсор)
+    let tooltipX = this.tooltipPos.x + 15;
+    let tooltipY = this.tooltipPos.y + 15;
+
+    // Получаем размеры canvas
+    const canvasWidth = this.canvas.width;
+    const canvasHeight = this.canvas.height;
+
+    // Корректируем, чтобы не выходил за границы canvas
+    if (tooltipX + boxWidth > canvasWidth) {
+      tooltipX = this.tooltipPos.x - boxWidth - 15;
+    }
+    if (tooltipY + boxHeight > canvasHeight) {
+      tooltipY = this.tooltipPos.y - boxHeight - 15;
+    }
+
+    // Ограничиваем, чтобы тултип не уходил за границы
+    tooltipX = Math.max(5, Math.min(tooltipX, canvasWidth - boxWidth - 5));
+    tooltipY = Math.max(5, Math.min(tooltipY, canvasHeight - boxHeight - 5));
+
+    // Рисуем фон с тенью
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(tooltipX, tooltipY, boxWidth, boxHeight);
+    ctx.shadowBlur = 0;
+
+    // Рисуем рамку
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tooltipX, tooltipY, boxWidth, boxHeight);
+
+    // Рисуем текст
+    ctx.fillStyle = textColor;
+    ctx.font = `${fontSize}px Arial`;
+    ctx.textBaseline = 'top';
+
+    lines.forEach((line, i) => {
+      ctx.fillText(line, tooltipX + padding, tooltipY + padding + i * lineHeight);
+    });
+
+    ctx.restore();
   }
 
   drawCallouts(ctx) {
