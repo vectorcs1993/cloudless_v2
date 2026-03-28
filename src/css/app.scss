@@ -116,14 +116,21 @@ h3 {
 }
 
 .selected-info {
-    padding: 15px;
-    background: white;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 10px;
     border-radius: 8px;
+    color: black;
+
+    background: white;
     border: 1px solid #e0e0e0;
     margin-top: 20px;
+    z-index: 99;
 }
 
 .dark-theme .selected-info {
+    color: white;
     background: #3d3d3d;
     border-color: #555;
 }
@@ -136,6 +143,130 @@ h3 {
 .selected-info p {
     margin: 5px 0;
     font-size: 13px;
+}
+
+.element-params {
+    margin-top: 15px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    overflow-x: auto;
+
+    .dark-theme & {
+        background: #3d3d3d;
+        border-color: #555;
+    }
+}
+
+.params-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    thead {
+        th {
+            text-align: left;
+            padding: 8px 12px;
+            background: #f8f8f8;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            color: #333;
+
+            .dark-theme & {
+                background: #2d2d2d;
+                border-bottom-color: #555;
+                color: #e0e0e0;
+            }
+        }
+    }
+
+    tbody {
+        tr {
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+
+            .dark-theme & {
+                border-bottom-color: #444;
+            }
+
+            &:hover {
+                background: #fafafa;
+
+                .dark-theme & {
+                    background: #454545;
+                }
+            }
+
+            &:last-child {
+                border-bottom: none;
+            }
+        }
+
+        td {
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+    }
+
+    .param-label {
+        font-weight: 500;
+        color: #555;
+        width: 33.333%;
+
+        .dark-theme & {
+            color: #ccc;
+        }
+    }
+
+    .param-input {
+        width: 33.333%;
+
+        input {
+            width: 100%;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 13px;
+            transition: all 0.2s;
+            box-sizing: border-box;
+
+            &:focus {
+                outline: none;
+                border-color: #4caf50;
+                box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+            }
+
+            .dark-theme & {
+                background: #2d2d2d;
+                border-color: #555;
+                color: #e0e0e0;
+
+                &:focus {
+                    border-color: #66bb6a;
+                    box-shadow: 0 0 0 2px rgba(102, 187, 106, 0.2);
+                }
+            }
+        }
+    }
+
+    .param-unit {
+        width: 33.333%;
+        color: #888;
+        font-size: 12px;
+
+        .dark-theme & {
+            color: #aaa;
+        }
+
+        .empty-unit {
+            color: #ccc;
+
+            .dark-theme & {
+                color: #666;
+            }
+        }
+    }
 }
 
 .delete-btn {

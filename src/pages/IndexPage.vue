@@ -27,6 +27,7 @@
         <button @click="addDuctDirect" class="add-btn">➕ Прямой воздуховод</button>
         <button @click="addFan" class="add-btn">🌀 Вентилятор</button>
         <button @click="addTee" class="add-btn">🔀 Тройник</button>
+        <button @click="addCross" class="add-btn">❌ Крестовина</button>
         <button @click="addElbow" class="add-btn">↪️ Отвод</button>
       </div>
 
@@ -37,73 +38,89 @@
         <button @click="updateAllPortsAndConnections" class="update-ports-btn" style="background: #ff9800;">🔄 Обновить все порты и связи</button>
       </div>
 
-      <!-- Информация о выбранных элементах -->
-      <div v-if="selectedElements.length > 0" class="selected-info">
-        <h4>Выбрано элементов: {{ selectedElements.length }}</h4>
 
-        <div class="group-controls">
-          <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
-            📦 Сгруппировать ({{ selectedElements.length }})
-          </button>
-          <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
-            🔓 Разгруппировать
-          </button>
-        </div>
-
-        <div v-if="selectedElements.length === 1" class="single-element-info">
-          <p>{{ selectedElements[0].name }}</p>
-          <p>Тип: {{ selectedElements[0].getTypeName() }}</p>
-          <p>Позиция: ({{ Math.round(selectedElements[0].x) }}, {{ Math.round(selectedElements[0].y) }})</p>
-          <p>Поворот: {{ selectedElements[0].rotation || 0 }}°</p>
-
-          <div v-if="selectedElements[0].getParameters().length > 0" class="element-params">
-            <div v-for="param in selectedElements[0].getParameters()" :key="param.name" class="param-field">
-              <label>{{ param.label }}:
-                <input :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
-                  @change="onParameterChange" />
-                <span v-if="param.unit">{{ param.unit }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
-            <h5>Порты и связи:</h5>
-            <div v-for="port in selectedElements[0].ports" :key="port.id"
-              :class="['connection-info', { 'connected': port.isConnected(), 'disconnected': !port.isConnected() }]">
-              <div v-if="port.isConnected()">
-                🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → Элемент {{ getElementName(port.connectedElementId) }}
-              </div>
-              <div v-else>
-                ⭕ Порт {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
-              </div>
-            </div>
-          </div>
-
-          <div class="rotation-controls">
-            <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
-            <button @click="rotateRight" class="rotate-btn">↻ 90°</button>
-          </div>
-
-          <div class="layer-controls">
-            <button @click="moveToTop" class="layer-btn">⬆️ Вверх</button>
-            <button @click="moveToBottom" class="layer-btn">⬇️ Вниз</button>
-            <button @click="moveUp" class="layer-btn">⬆️ Выше</button>
-            <button @click="moveDown" class="layer-btn">⬇️ Ниже</button>
-          </div>
-        </div>
-
-        <div v-if="selectedElements.length > 1" class="multi-selection-info">
-          <p>Выбрано {{ selectedElements.length }} элементов</p>
-          <button @click="deleteSelected" class="delete-btn">Удалить выбранные ({{ selectedElements.length }})</button>
-        </div>
-
-        <button v-if="selectedElements.length === 1" @click="deleteSelected" class="delete-btn">Удалить</button>
-      </div>
     </div>
 
     <canvas ref="mainCanvas" class="main-canvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
       @wheel.prevent="onWheel" @contextmenu.prevent>
     </canvas>
+    <!-- Информация о выбранных элементах -->
+    <div v-if="selectedElements.length > 0" class="selected-info">
+      <h4>Выбрано элементов: {{ selectedElements.length }}</h4>
+
+      <div v-if="!(selectedElements.length < 2 && !isGroupSelected)" class="group-controls">
+        <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
+          📦 Сгруппировать ({{ selectedElements.length }})
+        </button>
+        <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
+          🔓 Разгруппировать
+        </button>
+      </div>
+
+      <div v-if="selectedElements.length === 1" class="single-element-info">
+        <p>{{ selectedElements[0].name }}</p>
+        <p>Тип: {{ selectedElements[0].getTypeName() }}</p>
+        <p>Позиция: ({{ Math.round(selectedElements[0].x) }}, {{ Math.round(selectedElements[0].y) }})</p>
+        <p>Поворот: {{ selectedElements[0].rotation || 0 }}°</p>
+
+        <div v-if="selectedElements[0].getParameters().length > 0" class="element-params">
+          <table class="params-table">
+            <thead>
+              <tr>
+                <th>Параметр</th>
+                <th>Значение</th>
+                <th>Ед. изм.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="param in selectedElements[0].getParameters()" :key="param.name">
+                <td class="param-label">{{ param.label }}:</td>
+                <td class="param-input">
+                  <input :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
+                    @change="onParameterChange" />
+                </td>
+                <td class="param-unit">
+                  <span v-if="param.unit">{{ param.unit }}</span>
+                  <span v-else class="empty-unit">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
+          <h5>Порты и связи:</h5>
+          <div v-for="port in selectedElements[0].ports" :key="port.id"
+            :class="['connection-info', { 'connected': port.isConnected(), 'disconnected': !port.isConnected() }]">
+            <div v-if="port.isConnected()">
+              🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → Элемент {{ getElementName(port.connectedElementId) }}
+            </div>
+            <div v-else>
+              ⭕ Порт {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
+            </div>
+          </div>
+        </div>
+
+        <div class="rotation-controls">
+          <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
+          <button @click="rotateRight" class="rotate-btn">↻ 90°</button>
+        </div>
+
+        <div class="layer-controls">
+          <button @click="moveToTop" class="layer-btn">⬆️ Вверх</button>
+          <button @click="moveToBottom" class="layer-btn">⬇️ Вниз</button>
+          <button @click="moveUp" class="layer-btn">⬆️ Выше</button>
+          <button @click="moveDown" class="layer-btn">⬇️ Ниже</button>
+        </div>
+      </div>
+
+      <div v-if="selectedElements.length > 1" class="multi-selection-info">
+        <p>Выбрано {{ selectedElements.length }} элементов</p>
+        <button @click="deleteSelected" class="delete-btn">Удалить выбранные ({{ selectedElements.length }})</button>
+      </div>
+
+      <button v-if="selectedElements.length === 1" @click="deleteSelected" class="delete-btn">Удалить</button>
+    </div>
   </div>
 </template>
 
@@ -114,7 +131,7 @@ import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, Group, Elbow } from './Elements.js';
+import { Tee, DuctDirect, Fan, ElementFactory, Group, Elbow, Cross } from './Elements.js';
 
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
@@ -259,6 +276,7 @@ const addDuctDirect = () => addElement(DuctDirect, [200, 50]);
 const addFan = () => addElement(Fan, [50]);
 const addTee = () => addElement(Tee, [50]);
 const addElbow = () => addElement(Elbow, [50]);
+const addCross = () => addElement(Cross, [50]);
 
 const onParameterChange = () => {
   if (selectedElements.value.length === 1) {
