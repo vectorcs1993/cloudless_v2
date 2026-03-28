@@ -30,9 +30,19 @@ export class CanvasRenderer {
       this.selectionRect.endY = y;
     }
   }
-
   endSelectionRect() {
     if (this.selectionRect) {
+      // Вычисляем размеры прямоугольника
+      const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
+      const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
+
+      // Если прямоугольник слишком маленький (просто клик), не выделяем элементы
+      const minSelectionSize = 5; // минимальный размер в пикселях
+      if (width < minSelectionSize && height < minSelectionSize) {
+        this.selectionRect = null;
+        return;
+      }
+
       const rect = {
         minX: Math.min(this.selectionRect.startX, this.selectionRect.endX),
         minY: Math.min(this.selectionRect.startY, this.selectionRect.endY),

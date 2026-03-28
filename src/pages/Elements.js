@@ -516,12 +516,53 @@ export class DuctDirect extends DuctBase {
     return this.createLinearPorts(this._length, this.size);
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    this.drawRectangular(ctx, this._length, this.size, isSelected, scale);
+  // Создание пути для прямоугольника
+  createPath(ctx) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this._length / 2;
+    const centerY = this.y + this.size / 2;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+    ctx.rect(this.x, this.y, this._length, this.size);
+
+    ctx.restore();
   }
 
-  hitTest(worldX, worldY) {
-    return this.hitTestRectangular(worldX, worldY, this._length, this.size);
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    this.createPath(ctx);
+
+    if (isSelected) {
+      ctx.fillStyle = '#ffeb3b';
+      ctx.fill();
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = Math.max(1, 2 / scale);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1 / scale;
+      ctx.stroke();
+    }
+  }
+
+  hitTest(worldX, worldY, ctx) {
+    // Если передан контекст, используем его
+    if (ctx) {
+      this.createPath(ctx);
+      return ctx.isPointInPath(worldX, worldY);
+    }
+
+    // Fallback: создаём временный canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    this.createPath(tempCtx);
+    return tempCtx.isPointInPath(worldX, worldY);
   }
 
   toJSON() {
@@ -577,15 +618,21 @@ export class Tee extends DuctBase {
     this.updatePorts();
   }
 
-  getWidth() { return this._length; }
-  getHeight() { return this._centerY + this.size / 2 + this._branchHeight; }
+  getWidth() {
+    return this._length;
+  }
+
+  getHeight() {
+    return this._centerY + this.size / 2 + this._branchHeight;
+  }
 
   getHeightCenter() {
     return this._centerY;
   }
 
   getCalloutText() {
-    return `${this.name}\nШирина: ${this.size} мм\nТип: тройник\nСечение: ${(150 * this.size / 1000000).toFixed(2)} м²`;
+    const area = (this._length * this.size / 1000000).toFixed(2);
+    return `${this.name}\nРазмер: ${this.size} мм\nДлина: ${this._length} мм\nТип: тройник\nСечение: ${area} м²`;
   }
 
   getRelativeCalloutEntryPoint() {
@@ -620,81 +667,41 @@ export class Tee extends DuctBase {
     };
   }
 
+  // ========== ВАЖНО: метод getPorts ДОЛЖЕН быть определён ==========
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
     const centerX = this.x + this._length / 2;
     const centerY = this.y + this._centerY;
 
+    // Inlet порт (слева)
     const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
     ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.ports?.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
       this.id, 'inlet', 'left', 0, this._centerY, inletPos.x, inletPos.y
     ));
 
+    // Outlet порт (справа)
     const outletPos = this.rotatePoint(this.x + this._length, centerY, centerX, centerY, rotation);
     ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.ports?.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
       this.id, 'outlet', 'right', this._length, this._centerY, outletPos.x, outletPos.y
     ));
 
+    // Branch порт (снизу)
     const branchBottomY = centerY + this._branchHeight;
     const branchCenterX = this.x + this._length / 2;
     const branchPos = this.rotatePoint(branchCenterX, branchBottomY, centerX, centerY, rotation);
     ports.push(new Port(
-      this.ports.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
+      this.ports?.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
       this.id, 'branch', 'bottom', this._length / 2, this._centerY + this._branchHeight, branchPos.x, branchPos.y
     ));
 
     return ports;
   }
 
-  // Метод для преобразования мировых координат в локальные относительно верхнего левого угла элемента
-  worldToLocal(x, y) {
-    // Получаем центр вращения
-    const centerX = this.x + this._length / 2;
-    const centerY = this.y + this._centerY;
-    const rotation = this.rotation || 0;
-
-    // Смещение относительно центра вращения
-    let dx = x - centerX;
-    let dy = y - centerY;
-
-    // Поворачиваем обратно
-    if (rotation !== 0) {
-      const angle = -rotation * Math.PI / 180;
-      const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
-      const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
-      dx = rotatedX;
-      dy = rotatedY;
-    }
-
-    // Получаем локальные координаты относительно верхнего левого угла
-    const localX = centerX + dx - this.x;
-    const localY = centerY + dy - this.y;
-
-    return { x: localX, y: localY };
-  }
-
-  // Проверка попадания в форму тройника (в локальных координатах)
-  isPointInTeeShape(localX, localY) {
-    const halfSize = this.size / 2;
-    const centerX = this._length / 2;
-    const centerY = this._centerY;
-    const branchBottomY = centerY + this._branchHeight;
-
-    // Проверка попадания в горизонтальную трубу
-    const inHorizontal = localX >= 0 && localX <= this._length &&
-      localY >= centerY - halfSize && localY <= centerY + halfSize;
-
-    // Проверка попадания в вертикальный отросток
-    const inBranch = localX >= centerX - halfSize && localX <= centerX + halfSize &&
-      localY >= centerY && localY <= branchBottomY;
-
-    return inHorizontal || inBranch;
-  }
-
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  // Создание пути для тройника (используется и для отрисовки, и для hitTest)
+  createPath(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x + this._length / 2;
     const centerY = this.y + this._centerY;
@@ -723,28 +730,44 @@ export class Tee extends DuctBase {
     ctx.lineTo(branchLeftX, branchBottomY);
     ctx.lineTo(branchLeftX, bottomY);
     ctx.lineTo(leftX, bottomY);
-    ctx.lineTo(leftX, topY);
     ctx.closePath();
+
+    ctx.restore();
+  }
+
+  // Отрисовка тройника
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    this.createPath(ctx);
 
     ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
     ctx.fill();
     ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
     ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : (1 / scale);
     ctx.stroke();
-
-    ctx.restore();
   }
 
-  hitTest(worldX, worldY) {
-    // Преобразуем мировые координаты в локальные относительно верхнего левого угла
-    const local = this.worldToLocal(worldX, worldY);
+  // Точная проверка попадания
+  hitTest(worldX, worldY, ctx) {
+    // Если передан контекст, используем его
+    if (ctx) {
+      this.createPath(ctx);
+      return ctx.isPointInPath(worldX, worldY);
+    }
 
-    // Проверяем попадание в форму тройника
-    return this.isPointInTeeShape(local.x, local.y);
+    // Fallback: создаём временный canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    this.createPath(tempCtx);
+    return tempCtx.isPointInPath(worldX, worldY);
   }
 
   toJSON() {
-    return { ...super.toJSON(), length: this._length, branchHeight: this._branchHeight, centerY: this._centerY };
+    return {
+      ...super.toJSON(),
+      length: this._length,
+      branchHeight: this._branchHeight,
+      centerY: this._centerY
+    };
   }
 }
 
@@ -818,37 +841,8 @@ export class Elbow extends DuctBase {
     return ports;
   }
 
-  isPointInElbow(localX, localY) {
-    const outerRadius = this._radius + this.size;
-    const innerRadius = this._radius;
-    const bendCenterX = 0;
-    const bendCenterY = this.getHeight();
-
-    const dx = localX - bendCenterX;
-    const dy = localY - bendCenterY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    let angle = Math.atan2(dy, dx);
-    if (angle < 0) angle += 2 * Math.PI;
-
-    const isInArc = angle >= 3 * Math.PI / 2 - 0.01 && angle <= 2 * Math.PI + 0.01;
-    const isBetweenRadii = distance >= innerRadius - 0.01 && distance <= outerRadius + 0.01;
-
-    const centerRadius = this._radius + this.size / 2;
-
-    const inInlet = localX >= -2 && localX <= 0 &&
-      localY >= centerRadius - this.size / 2 &&
-      localY <= centerRadius + this.size / 2;
-
-    const inOutlet = localX >= centerRadius - this.size / 2 &&
-      localX <= centerRadius + this.size / 2 &&
-      localY >= this.getHeight() &&
-      localY <= this.getHeight() + 2;
-
-    return (isInArc && isBetweenRadii) || inInlet || inOutlet;
-  }
-
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  // Создание пути для отвода
+  createPath(ctx) {
     const rotation = this.rotation || 0;
     const elemCenterX = this.x + this.getWidth() / 2;
     const elemCenterY = this.y + this.getHeight() / 2;
@@ -864,23 +858,38 @@ export class Elbow extends DuctBase {
 
     ctx.beginPath();
     ctx.arc(bendCenterX, bendCenterY, outerRadius, 3 * Math.PI / 2, 2 * Math.PI);
-    ctx.lineTo(bendCenterX + innerRadius * Math.cos(2 * Math.PI),
-      bendCenterY + innerRadius * Math.sin(2 * Math.PI));
+    ctx.lineTo(
+      bendCenterX + innerRadius * Math.cos(2 * Math.PI),
+      bendCenterY + innerRadius * Math.sin(2 * Math.PI)
+    );
     ctx.arc(bendCenterX, bendCenterY, innerRadius, 2 * Math.PI, 3 * Math.PI / 2, true);
     ctx.closePath();
+
+    ctx.restore();
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    this.createPath(ctx);
 
     ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
     ctx.fill();
     ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
     ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : 1 / scale;
     ctx.stroke();
-
-    ctx.restore();
   }
 
-  hitTest(worldX, worldY) {
-    const local = this.transformToLocalCoords(worldX, worldY);
-    return this.isPointInElbow(local.x - this.x, local.y - this.y);
+  hitTest(worldX, worldY, ctx) {
+    // Если передан контекст, используем его
+    if (ctx) {
+      this.createPath(ctx);
+      return ctx.isPointInPath(worldX, worldY);
+    }
+
+    // Fallback: создаём временный canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    this.createPath(tempCtx);
+    return tempCtx.isPointInPath(worldX, worldY);
   }
 
   toJSON() {
@@ -946,7 +955,8 @@ export class Fan extends BaseElement {
     return ports;
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  // Создание пути для вентилятора (круг)
+  createPath(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x + this._diameter / 2;
     const centerY = this.y + this._diameter / 2;
@@ -959,12 +969,31 @@ export class Fan extends BaseElement {
 
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+
+    ctx.restore();
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this._diameter / 2;
+    const centerY = this.y + this._diameter / 2;
+    const radius = this._diameter / 2;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    // Рисуем круг
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
     ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
     ctx.fill();
     ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
     ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : 1 / scale;
     ctx.stroke();
 
+    // Рисуем лопасти
     for (let i = 0; i < 3; i++) {
       const angle = (i * 120) * Math.PI / 180;
       const x1 = centerX + Math.cos(angle) * radius * 0.3;
@@ -984,7 +1013,14 @@ export class Fan extends BaseElement {
     ctx.restore();
   }
 
-  hitTest(worldX, worldY) {
+  hitTest(worldX, worldY, ctx) {
+    // Если передан контекст, используем его
+    if (ctx) {
+      this.createPath(ctx);
+      return ctx.isPointInPath(worldX, worldY);
+    }
+
+    // Fallback: математическая проверка (быстрее для круга)
     const centerX = this.x + this._diameter / 2;
     const centerY = this.y + this._diameter / 2;
     const dx = worldX - centerX;
@@ -1103,7 +1139,6 @@ export class ElementFactory {
   }
 }
 
-
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
   constructor(id, elements) {
@@ -1117,6 +1152,7 @@ export class Group extends BaseElement {
     this.height = 0;
     this.updateBounds();
   }
+
   updateBounds() {
     if (!this.elements || this.elements.length === 0) {
       this._x = 0;
@@ -1171,6 +1207,7 @@ export class Group extends BaseElement {
     collect(this);
     return allPorts;
   }
+
   getWidth() {
     return this.width || 0;
   }
@@ -1209,7 +1246,9 @@ export class Group extends BaseElement {
     return [];
   }
 
+  // Реализуем метод getPorts для группы
   getPorts() {
+    // Группа сама по себе не имеет портов, возвращаем пустой массив
     return [];
   }
 
@@ -1228,7 +1267,8 @@ export class Group extends BaseElement {
     collectPorts(this);
     return allPorts;
   }
-  // Метод для перемещения всех элементов группыe
+
+  // Метод для перемещения всех элементов группы
   move(deltaX, deltaY) {
     if (!this.elements || this.elements.length === 0) return;
 
@@ -1265,6 +1305,12 @@ export class Group extends BaseElement {
     console.log('Group move - new pos:', this._x, this._y);
   }
 
+  // Создание пути для группы (для hitTest)
+  createPath(ctx) {
+    // Группа не имеет собственного пути, так как состоит из других элементов
+    // Этот метод не должен вызываться для группы
+  }
+
   draw(ctx, scale, isSelected, isDarkTheme) {
     // Рисуем все элементы группы
     if (this.elements) {
@@ -1298,12 +1344,12 @@ export class Group extends BaseElement {
     }
   }
 
-  hitTest(worldX, worldY) {
+  hitTest(worldX, worldY, ctx) {
     if (!this.elements) return false;
 
     // Проверяем попадание в любой элемент группы
     for (const element of this.elements) {
-      if (element && element.hitTest && element.hitTest(worldX, worldY)) {
+      if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
         return true;
       }
     }

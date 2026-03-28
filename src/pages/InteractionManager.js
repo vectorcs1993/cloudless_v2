@@ -32,9 +32,13 @@ export class InteractionManager {
 
   // Найти элемент под курсором (мировые координаты)
   findElementAt(x, y) {
+    // Получаем контекст canvas для hitTest
+    const ctx = this.canvas.getContext('2d');
+
     for (let i = this.elements.value.length - 1; i >= 0; i--) {
       const element = this.elements.value[i];
-      if (element.hitTest(x, y)) {
+      // Передаём контекст в hitTest
+      if (element.hitTest(x, y, ctx)) {
         return element;
       }
     }
