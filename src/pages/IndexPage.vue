@@ -13,11 +13,12 @@
           px/м
         </label>
 
-        <div class="view-controls">
+        <div>
           <label><input type="checkbox" v-model="showGrid" /> Сетка</label>
           <label><input type="checkbox" v-model="showPorts" /> Показать порты</label>
           <label><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
           <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
+          <label><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
         </div>
       </div>
 
@@ -101,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
@@ -119,7 +120,7 @@ const showPorts = ref(true);
 const showCallouts = ref(true);
 const snapToPorts = ref(true);
 const gridStepM = ref(1);
-
+const autoUpdateConnections = ref(true);
 // Canvas
 const mainCanvas = ref(null);
 let renderer = null;
@@ -410,13 +411,20 @@ onMounted(() => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') isDarkTheme.value = true;
 
+
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
   interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, {
     snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
   });
+  // Настройка автоматического обновления связей
+  interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
 
+  // Следим за изменением чекбокса
+  watch(autoUpdateConnections, (newVal) => {
+    interactionManager?.setAutoUpdateConnections(newVal);
+  });
   // Устанавливаем callback для обновления selectedElements
   interactionManager.setOnElementMoveCallback((elements) => {
     selectedElements.value = elements;

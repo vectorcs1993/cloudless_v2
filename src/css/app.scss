@@ -12,7 +12,7 @@
 }
 
 .toolbar {
-    width: 280px;
+    width: 380px;
     padding: 20px;
     background: #f5f5f5;
     border-right: 1px solid #ddd;
@@ -232,35 +232,35 @@ h3 {
 }
 
 .save-controls {
-  display: flex;
-  gap: 10px;
-  margin-left: auto;
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
 }
 
 .save-btn {
-  background: #4caf50;
-  color: white;
-  border: none;
-  padding: 5px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    padding: 5px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
 }
 
 .save-btn:hover {
-  background: #45a049;
+    background: #45a049;
 }
 
 .reset-btn {
-  background: #ff9800;
-  color: white;
-  border: none;
-  padding: 5px 15px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
+    background: #ff9800;
+    color: white;
+    border: none;
+    padding: 5px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
 }
 
 .reset-btn:hover {
-  background: #f57c00;
+    background: #f57c00;
 }

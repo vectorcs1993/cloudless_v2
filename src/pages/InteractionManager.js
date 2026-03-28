@@ -1,7 +1,3 @@
-// InteractionManager.js
-import { ConnectionManager } from './ConnectionManager.js';
-import { DuctDirect, Fan, Tee } from './Elements.js';
-
 export class InteractionManager {
   constructor(canvas, elements, renderer, connectionManager, options) {
     this.canvas = canvas;
@@ -24,8 +20,11 @@ export class InteractionManager {
     this.dragStartElementPos = { x: 0, y: 0 };
     this.selectionStart = null;
     this.currentSnappedPorts = null;   // запоминаем текущее соединение при перетаскивании
+    this.autoUpdateConnections = true; // флаг автоматического обновления связей
   }
-
+  setAutoUpdateConnections(enabled) {
+    this.autoUpdateConnections = enabled;
+  }
   setOnElementMoveCallback(callback) {
     this.onElementMoveCallback = callback;
   }
@@ -339,26 +338,42 @@ export class InteractionManager {
     }
 
     if (this.isDragging && this.draggingElement) {
-      // Дополнительная финальная привязка, если нужно (можно оставить)
+      const movedElement = this.draggingElement;
+
       this.isDragging = false;
       this.draggingElement = null;
       this.dragStartCalloutsPositions = null;
       this.currentSnappedPorts = null;
+
       if (this.canvas) this.canvas.style.cursor = '';
-      if (this.renderer) this.renderer.draw();
+
+      // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ СВЯЗЕЙ ПОСЛЕ ПЕРЕТАСКИВАНИЯ
+      if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElement) {
+        // Небольшая задержка для завершения всех вычислений
+        setTimeout(() => {
+          console.log('Автоматическое обновление связей после перемещения элемента');
+          const restored = this.connectionManager.updateAllPortsAndConnections(5);
+          if (restored > 0) {
+            console.log(`Автоматически восстановлено ${restored} связей`);
+          }
+          this.renderer.draw();
+        }, 50);
+      } else {
+        this.renderer.draw();
+      }
     }
 
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
       if (this.canvas) this.canvas.style.cursor = '';
-      if (this.renderer) this.renderer.draw();
+      this.renderer.draw();
     }
 
     if (this.isPanning) {
       this.isPanning = false;
       if (this.canvas) this.canvas.style.cursor = '';
-      if (this.renderer) this.renderer.draw();
+      this.renderer.draw();
     }
 
     setTimeout(() => {
