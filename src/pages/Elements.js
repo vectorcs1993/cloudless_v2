@@ -219,7 +219,7 @@ class BaseElement {
     this.name = name;
     this.color = color;
     this.rotation = 0;
-    this.ports = [];
+    this.ports = []; // Массив портов элемента
     this.callouts = []; // Массив выносок элемента
   }
 
@@ -233,7 +233,7 @@ class BaseElement {
   }
 
   getRelativeCalloutEntryPoint() {
-    return { x: this.getWidth() / 2 + this.getWidth() * 0.35, y: this.getHeight() / 2 - this.getHeight() * 0.2 };
+    return { x: this.getWidth() / 2, y: this.getHeight() / 2 };
   }
   // Метод для получения абсолютных координат точки привязки с учетом поворота
   getAbsoluteCalloutPoint() {
@@ -612,8 +612,37 @@ export class Tee extends BaseElement {
     return 75; // общая высота от центра до конца отростка
   }
 
+  // Переопределяем метод получения точки привязки выноски
   getRelativeCalloutEntryPoint() {
-    return { x: this.getWidth() * 0.7, y: this.getHeight() * 0.3 };
+    // Возвращаем точку в центре горизонтальной трубы (на оси прямого участка)
+    return {
+      x: this.getLength() / 2,  // центр по ширине
+      y: this.getHeightCenter()  // ось горизонтальной трубы
+    };
+  }
+
+  // Переопределяем метод для получения абсолютных координат точки привязки с учетом поворота
+  getAbsoluteCalloutPoint() {
+    const relativePoint = this.getRelativeCalloutEntryPoint();
+
+    // Получаем центр вращения тройника (центр горизонтальной трубы)
+    const centerX = this.x + this.getLength() / 2;
+    const centerY = this.y + this.getHeightCenter();
+
+    // Смещение от центра вращения
+    const dx = relativePoint.x - this.getLength() / 2;
+    const dy = relativePoint.y - this.getHeightCenter();
+
+    // Применяем поворот
+    const angleRad = (this.rotation || 0) * Math.PI / 180;
+    const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+    const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+
+    // Возвращаем абсолютные координаты
+    return {
+      x: centerX + rotatedX,
+      y: centerY + rotatedY
+    };
   }
 
   getParameters() {
@@ -934,7 +963,7 @@ export class Elbow extends BaseElement {
     };
 
     const inInlet = localX >= inletRect.xMin && localX <= inletRect.xMax &&
-                    localY >= inletRect.yMin && localY <= inletRect.yMax;
+      localY >= inletRect.yMin && localY <= inletRect.yMax;
 
     // Область выходного патрубка (нижняя сторона) - прямоугольник на нижнем торце
     const outletRect = {
@@ -945,7 +974,7 @@ export class Elbow extends BaseElement {
     };
 
     const inOutlet = localX >= outletRect.xMin && localX <= outletRect.xMax &&
-                     localY >= outletRect.yMin && localY <= outletRect.yMax;
+      localY >= outletRect.yMin && localY <= outletRect.yMax;
 
     // Области соединения патрубков с изгибом (для плавного перехода)
     const inletJointRect = {
@@ -956,7 +985,7 @@ export class Elbow extends BaseElement {
     };
 
     const inInletJoint = localX >= inletJointRect.xMin && localX <= inletJointRect.xMax &&
-                         localY >= inletJointRect.yMin && localY <= inletJointRect.yMax;
+      localY >= inletJointRect.yMin && localY <= inletJointRect.yMax;
 
     const outletJointRect = {
       xMin: centerRadius - w / 2,
@@ -966,7 +995,7 @@ export class Elbow extends BaseElement {
     };
 
     const inOutletJoint = localX >= outletJointRect.xMin && localX <= outletJointRect.xMax &&
-                          localY >= outletJointRect.yMin && localY <= outletJointRect.yMax;
+      localY >= outletJointRect.yMin && localY <= outletJointRect.yMax;
 
     // Возвращаем true, если точка попадает в любую часть отвода
     return (isInArcRegion && isBetweenRadii) || inInlet || inOutlet || inInletJoint || inOutletJoint;
