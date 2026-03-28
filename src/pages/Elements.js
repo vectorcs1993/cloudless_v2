@@ -898,118 +898,138 @@ export class Elbow extends DuctBase {
 }
 
 // ========== ВЕНТИЛЯТОР ==========
-export class Fan extends BaseElement {
-  constructor(id, x, y, diameter = 120) {
-    super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800');
-    this._diameter = diameter;
+// ========== ВЕНТИЛЯТОР ==========
+export class Fan extends DuctBase {
+  constructor(id, x, y, size = 100) {
+    super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800', size);
+    this._length = size; // Длина равна ширине для квадратной формы
     this.flow = 1000;
   }
 
-  get diameter() {
-    return this._diameter;
+  get length() {
+    return this._length;
   }
 
-  set diameter(newDiameter) {
-    if (this._diameter === newDiameter) return;
+  set length(newLength) {
+    if (this._length === newLength) return;
 
-    const centerX = this.x + this._diameter / 2;
-    const centerY = this.y + this._diameter / 2;
-    this._diameter = newDiameter;
-    this.x = centerX - this._diameter / 2;
-    this.y = centerY - this._diameter / 2;
+    const centerX = this.x + this._length / 2;
+    this._length = newLength;
+    this.x = centerX - this._length / 2;
     this.updatePorts();
   }
 
-  getWidth() { return this._diameter; }
-  getHeight() { return this._diameter; }
+  getWidth() {
+    return this._length;
+  }
+
+  getHeight() {
+    return this.size;
+  }
 
   getCalloutText() {
-    return `${this.name}\nДиаметр: ${this._diameter} мм\nПроизводительность: ${this.flow} м³/ч\nМощность: ${(this.flow * 0.3).toFixed(1)} Вт`;
+    const area = (this._length * this.size / 1000000).toFixed(2);
+    return `${this.name}\nРазмер: ${this.size}×${this._length} мм\nПроизводительность: ${this.flow} м³/ч\nМощность: ${(this.flow * 0.3).toFixed(1)} Вт`;
   }
 
   getParameters() {
     return [
-      { name: 'diameter', label: 'Диаметр', type: 'number', step: 50, min: 100, value: this._diameter, unit: 'мм' },
+      { name: 'size', label: 'Высота', type: 'number', step: 10, min: 50, value: this.size, unit: 'мм' },
+      { name: 'length', label: 'Ширина', type: 'number', step: 10, min: 50, value: this._length, unit: 'мм' },
       { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' }
     ];
   }
 
   getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this._diameter / 2;
-    const centerY = this.y + this._diameter / 2;
-
-    const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, this._diameter / 2, inletPos.x, inletPos.y
-    ));
-
-    const outletPos = this.rotatePoint(this.x + this._diameter, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', this._diameter, this._diameter / 2, outletPos.x, outletPos.y
-    ));
-
-    return ports;
+    return this.createLinearPorts(this._length, this.size);
   }
 
-  // Создание пути для вентилятора (круг)
+  // Создание пути для вентилятора (прямоугольник с кругом и треугольником)
   createPath(ctx) {
     const rotation = this.rotation || 0;
-    const centerX = this.x + this._diameter / 2;
-    const centerY = this.y + this._diameter / 2;
-    const radius = this._diameter / 2;
+    const centerX = this.x + this._length / 2;
+    const centerY = this.y + this.size / 2;
+    const width = this._length;
+    const height = this.size;
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
+    // Рисуем прямоугольник (корпус вентилятора)
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.rect(this.x, this.y, width, height);
 
     ctx.restore();
   }
 
   draw(ctx, scale, isSelected, isDarkTheme) {
     const rotation = this.rotation || 0;
-    const centerX = this.x + this._diameter / 2;
-    const centerY = this.y + this._diameter / 2;
-    const radius = this._diameter / 2;
+    const centerX = this.x + this._length / 2;
+    const centerY = this.y + this.size / 2;
+    const width = this._length;
+    const height = this.size;
+    const radius = Math.min(width, height) * 0.35; // Радиус круга
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
-    // Рисуем круг
+    // прямоугольник (корпус)
+    ctx.beginPath();
+    ctx.rect(this.x, this.y, width, height);
+
+    if (isSelected) {
+      ctx.fillStyle = '#ffeb3b';
+      ctx.fill();
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = Math.max(1, 2 / scale);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1 / scale;
+      ctx.stroke();
+    }
+
+    // круг в центре
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
+    ctx.fillStyle = isDarkTheme ? '#444' : '#fff';
     ctx.fill();
-    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
-    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : 1 / scale;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1 / scale;
     ctx.stroke();
 
-    // Рисуем лопасти
-    for (let i = 0; i < 3; i++) {
-      const angle = (i * 120) * Math.PI / 180;
-      const x1 = centerX + Math.cos(angle) * radius * 0.3;
-      const y1 = centerY + Math.sin(angle) * radius * 0.3;
-      const x2 = centerX + Math.cos(angle + 0.5) * radius;
-      const y2 = centerY + Math.sin(angle + 0.5) * radius;
-      const x3 = centerX + Math.cos(angle - 0.5) * radius;
-      const y3 = centerY + Math.sin(angle - 0.5) * radius;
+    // стрелка направления потока
+    const triangleSize = radius * 0.7;
+    const arrowDirection = this.flow > 0 ? 1 : -1; // направление в зависимости от производительности
 
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.lineTo(x3, y3);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-    }
+    ctx.beginPath();
+    // Вершина треугольника (по направлению потока)
+    const tipX = centerX + triangleSize * arrowDirection;
+    const tipY = centerY;
+    // Левая точка основания
+    const leftX = centerX - triangleSize * 0.8 * arrowDirection;
+    const leftY = centerY - triangleSize * 0.8;
+    // Правая точка основания
+    const rightX = centerX - triangleSize * 0.8 * arrowDirection;
+    const rightY = centerY + triangleSize * 0.8;
+
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(leftX, leftY);
+    ctx.lineTo(rightX, rightY);
+    ctx.closePath();
+
+    ctx.fillStyle = '#ff6600';
+    ctx.fill();
+    ctx.strokeStyle = '#cc5500';
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+
     ctx.restore();
   }
 
@@ -1020,20 +1040,17 @@ export class Fan extends BaseElement {
       return ctx.isPointInPath(worldX, worldY);
     }
 
-    // Fallback: математическая проверка (быстрее для круга)
-    const centerX = this.x + this._diameter / 2;
-    const centerY = this.y + this._diameter / 2;
-    const dx = worldX - centerX;
-    const dy = worldY - centerY;
-    return Math.sqrt(dx * dx + dy * dy) <= this._diameter / 2;
+    // Fallback: проверка попадания в прямоугольник
+    const local = this.transformToLocalCoords(worldX, worldY);
+    return local.x >= this.x && local.x <= this.x + this._length &&
+      local.y >= this.y && local.y <= this.y + this.size;
   }
 
   toJSON() {
-    return { ...super.toJSON(), diameter: this._diameter, flow: this.flow };
+    return { ...super.toJSON(), length: this._length, flow: this.flow };
   }
 }
-
-// ========== ИСПРАВЛЕННАЯ ФАБРИКА ==========
+// ========== ФАБРИКА ==========
 export class ElementFactory {
   static createElement(type, id, x, y, params = {}) {
     let element;
