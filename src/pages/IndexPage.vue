@@ -66,10 +66,16 @@
             </div>
           </div>
 
-          <div v-if="selectedElements[0].ports && selectedElements[0].ports.some(p => p.isConnected())">
-            <h5>Связи:</h5>
-            <div v-for="port in selectedElements[0].ports.filter(p => p.isConnected())" :key="port.id" class="connection-info">
-              Порт {{ port.side }} ({{ port.getDirectionName() }}) → Элемент {{ getElementName(port.connectedElementId) }}
+          <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
+            <h5>Порты и связи:</h5>
+            <div v-for="port in selectedElements[0].ports" :key="port.id"
+              :class="['connection-info', { 'connected': port.isConnected(), 'disconnected': !port.isConnected() }]">
+              <div v-if="port.isConnected()">
+                🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → Элемент {{ getElementName(port.connectedElementId) }}
+              </div>
+              <div v-else>
+                ⭕ Порт {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
+              </div>
             </div>
           </div>
 
