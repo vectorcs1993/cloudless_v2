@@ -94,16 +94,7 @@
             </div>
           </div>
         </div>
-        <div class="group-controls">
-          <div v-if="!(selectedElements.length < 2 && !isGroupSelected)" class="group-controls">
-            <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
-              📦 Сгруппировать ({{ selectedElements.length }})
-            </button>
-            <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
-              🔓 Разгруппировать
-            </button>
-          </div>
-        </div>
+
 
         <div class="rotation-controls">
           <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
@@ -118,11 +109,20 @@
         </div>
       </div>
 
+
+
+
+      <div class="group-controls">
+        <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
+          📦 Сгруппировать ({{ selectedElements.length }})
+        </button>
+        <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
+          🔓 Разгруппировать
+        </button>
+      </div>
       <div v-if="selectedElements.length > 1" class="multi-selection-info">
-        <p>Выбрано {{ selectedElements.length }} элементов</p>
         <button @click="deleteSelected" class="delete-btn">Удалить выбранные ({{ selectedElements.length }})</button>
       </div>
-
       <button v-if="selectedElements.length === 1" @click="deleteSelected" class="delete-btn">Удалить</button>
     </div>
   </div>
