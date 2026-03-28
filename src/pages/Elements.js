@@ -148,7 +148,7 @@ export class Callout {
   }
 }
 
-// Port.js
+// ========== КЛАСС ПОРТА ==========
 export class Port {
   constructor(id, elementId, direction, side, localX, localY, worldX, worldY) {
     this.id = id;
@@ -219,8 +219,8 @@ class BaseElement {
     this.name = name;
     this.color = color;
     this.rotation = 0;
-    this.ports = []; // Массив портов элемента
-    this.callouts = []; // Массив выносок элемента
+    this.ports = [];
+    this.callouts = [];
   }
 
   static getAvailableTypes() {
@@ -232,54 +232,86 @@ class BaseElement {
     };
   }
 
+  // Абстрактные методы (должны быть переопределены)
+  getWidth() { throw new Error('Метод getWidth должен быть переопределен'); }
+  getHeight() { throw new Error('Метод getHeight должен быть переопределен'); }
+  getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
+  draw(ctx, scale, isSelected, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
+  hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
+
+  getTypeName() {
+    return BaseElement.getAvailableTypes()[this.type] || this.type;
+  }
+
+  getCalloutText() {
+    return `${this.name}\n${this.getTypeName()}`;
+  }
+
+  getElementText() {
+    return '';
+  }
+
+  getParameters() {
+    return [];
+  }
+
   getRelativeCalloutEntryPoint() {
     return { x: this.getWidth() / 2, y: this.getHeight() / 2 };
   }
-  // Метод для получения абсолютных координат точки привязки с учетом поворота
+
   getAbsoluteCalloutPoint() {
     const relativePoint = this.getRelativeCalloutEntryPoint();
     const width = this.getWidth();
     const height = this.getHeight();
-
-    // Точка в локальных координатах элемента (относительно его верхнего левого угла)
-    const localX = relativePoint.x;
-    const localY = relativePoint.y;
-
-    // Центр элемента
     const centerX = this.x + width / 2;
     const centerY = this.y + height / 2;
-
-    // Смещение от центра
-    const dx = localX - width / 2;
-    const dy = localY - height / 2;
-
-    // Применяем поворот
+    const dx = relativePoint.x - width / 2;
+    const dy = relativePoint.y - height / 2;
     const angleRad = (this.rotation || 0) * Math.PI / 180;
     const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
     const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
 
-    // Возвращаем абсолютные координаты
     return {
       x: centerX + rotatedX,
       y: centerY + rotatedY
     };
   }
-  getPortsAfterMove(deltaX, deltaY) {
-    if (!this.ports) return [];
-    return this.ports.map(port => ({
-      ...port,
-      worldX: port.worldX + deltaX,
-      worldY: port.worldY + deltaY,
-    }));
-  }
-  // Вспомогательный метод для получения размеров (должены быть переопределены)
-  getWidth() { return 100; }
-  getHeight() { return 100; }
 
-  getTypeName() {
-    const types = BaseElement.getAvailableTypes();
-    return types[this.type] || this.type;
+  getRotationCenter() {
+    return {
+      x: this.x + this.getWidth() / 2,
+      y: this.y + this.getHeight() / 2
+    };
   }
+
+  rotatePoint(x, y, centerX, centerY, angleDeg) {
+    const angleRad = angleDeg * Math.PI / 180;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    return {
+      x: dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX,
+      y: dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY
+    };
+  }
+
+  transformToLocalCoords(worldX, worldY) {
+    const centerX = this.x + this.getWidth() / 2;
+    const centerY = this.y + this.getHeight() / 2;
+    const rotation = this.rotation || 0;
+
+    if (rotation === 0) {
+      return { x: worldX, y: worldY };
+    }
+
+    const dx = worldX - centerX;
+    const dy = worldY - centerY;
+    const angle = -rotation * Math.PI / 180;
+    return {
+      x: dx * Math.cos(angle) - dy * Math.sin(angle) + centerX,
+      y: dx * Math.sin(angle) + dy * Math.cos(angle) + centerY
+    };
+  }
+
   updatePortsWorldCoordinates() {
     if (!this.ports || this.ports.length === 0) return;
 
@@ -294,44 +326,6 @@ class BaseElement {
       }
     });
   }
-  // Метод для получения текста выноски - должен быть переопределен в дочерних классах
-  getCalloutText() {
-    return `${this.name}\n${this.getTypeName()}`;
-  }
-
-  getElementText() {
-    return '';
-  }
-
-  // Обновить текст выноски
-  updateCalloutText() {
-    if (this.callouts.length > 0) {
-      this.callouts[0].text = this.getCalloutText();
-    }
-  }
-
-  // Добавить выноску
-  // Добавляем параметры для относительной точки привязки
-  // Упрощаем - теперь не нужно передавать относительные координаты
-  addCallout(x, y) {
-    const calloutId = Date.now() + Math.random();
-    const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
-    this.callouts.push(callout);
-    return callout;
-  }
-
-  // Удалить выноску
-  removeCallout(calloutId) {
-    const index = this.callouts.findIndex(c => c.id === calloutId);
-    if (index !== -1) {
-      this.callouts.splice(index, 1);
-    }
-  }
-
-  getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
-  draw(ctx, scale, isSelected, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
-  hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
-  getParameters() { return []; }
 
   updatePorts() {
     const oldPorts = this.ports;
@@ -347,6 +341,35 @@ class BaseElement {
     this.ports = newPorts;
   }
 
+  getPortsAfterMove(deltaX, deltaY) {
+    if (!this.ports) return [];
+    return this.ports.map(port => ({
+      ...port,
+      worldX: port.worldX + deltaX,
+      worldY: port.worldY + deltaY,
+    }));
+  }
+
+  addCallout(x, y) {
+    const calloutId = Date.now() + Math.random();
+    const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
+    this.callouts.push(callout);
+    return callout;
+  }
+
+  removeCallout(calloutId) {
+    const index = this.callouts.findIndex(c => c.id === calloutId);
+    if (index !== -1) {
+      this.callouts.splice(index, 1);
+    }
+  }
+
+  updateCalloutText() {
+    if (this.callouts.length > 0) {
+      this.callouts[0].text = this.getCalloutText();
+    }
+  }
+
   toJSON() {
     return {
       id: this.id, type: this.type, x: this.x, y: this.y, name: this.name,
@@ -355,73 +378,50 @@ class BaseElement {
       callouts: this.callouts.map(c => c.toJSON())
     };
   }
-  // Геттер для точки поворота (центр элемента)
-  getRotationCenter() {
-    return {
-      x: this.x + this.getWidth() / 2,
-      y: this.y + this.getHeight() / 2
-    };
-  }
-  rotatePoint(x, y, centerX, centerY, angleDeg) {
-    const angleRad = angleDeg * Math.PI / 180;
-    const dx = x - centerX;
-    const dy = y - centerY;
-    return {
-      x: dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX,
-      y: dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY
-    };
-  }
 }
 
-// ========== КЛАСС ВОЗДУХОВОДА ==========
-export class DuctDirect extends BaseElement {
-  constructor(id, x, y, length = 200, width = 100) {
-    super(id, 'duct', x, y, `Воздуховод ${id}`, '#2196f3');
-    this.length = length;
-    this.width = width;
+// ========== АБСТРАКТНЫЙ КЛАСС ВОЗДУХОВОДА ==========
+class DuctBase extends BaseElement {
+  constructor(id, type, x, y, name, color, size) {
+    super(id, type, x, y, name, color);
+    this.size = size; // ширина/диаметр
   }
 
-  // Специфичный текст выноски для воздуховода
-  getCalloutText() {
-    return `${this.name}\nДлина: ${this.length} мм\nШирина: ${this.width} мм\nПлощадь: ${(this.length * this.width / 1000000).toFixed(2)} м²`;
-  }
   getParameters() {
     return [
-      { name: 'length', label: 'Длина', type: 'number', step: 50, min: 100, value: this.length, unit: 'мм' },
-      { name: 'width', label: 'Ширина', type: 'number', step: 50, min: 50, value: this.width, unit: 'мм' }
+      { name: 'size', label: 'Ширина/Диаметр', type: 'number', step: 1, min: 20, value: this.size, unit: 'мм' }
     ];
   }
-  getWidth() {
-    return this.length;
-  }
-  getHeight() {
-    return this.width;
-  }
-  getPorts() {
+
+  // Создание портов для элементов с линейным потоком (вход слева, выход справа)
+  createLinearPorts(width, height, offsetX = 0, offsetY = 0) {
     const ports = [];
     const rotation = this.rotation || 0;
-    const centerX = this.x + this.length / 2;
-    const centerY = this.y + this.width / 2;
+    const centerX = this.x + width / 2;
+    const centerY = this.y + height / 2;
 
-    const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
+    // Левый порт (вход)
+    const inletPos = this.rotatePoint(this.x + offsetX, centerY + offsetY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, this.width / 2, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', offsetX, height / 2 + offsetY, inletPos.x, inletPos.y
     ));
 
-    const outletPos = this.rotatePoint(this.x + this.length, centerY, centerX, centerY, rotation);
+    // Правый порт (выход)
+    const outletPos = this.rotatePoint(this.x + width - offsetX, centerY + offsetY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', this.length, this.width / 2, outletPos.x, outletPos.y
+      this.id, 'outlet', 'right', width - offsetX, height / 2 + offsetY, outletPos.x, outletPos.y
     ));
 
     return ports;
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme) {
+  // Стандартная отрисовка прямоугольного элемента
+  drawRectangular(ctx, width, height, isSelected, scale) {
     const rotation = this.rotation || 0;
-    const centerX = this.x + this.length / 2;
-    const centerY = this.y + this.width / 2;
+    const centerX = this.x + width / 2;
+    const centerY = this.y + height / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -430,43 +430,369 @@ export class DuctDirect extends BaseElement {
 
     if (isSelected) {
       ctx.fillStyle = '#ffeb3b';
-      ctx.fillRect(this.x, this.y, this.length, this.width);
+      ctx.fillRect(this.x, this.y, width, height);
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = Math.max(1, 2 / scale);
-      ctx.strokeRect(this.x, this.y, this.length, this.width);
+      ctx.strokeRect(this.x, this.y, width, height);
     } else {
       ctx.fillStyle = this.color;
-      ctx.fillRect(this.x, this.y, this.length, this.width);
+      ctx.fillRect(this.x, this.y, width, height);
       ctx.strokeStyle = '#666';
       ctx.lineWidth = 1 / scale;
-      ctx.strokeRect(this.x, this.y, this.length, this.width);
+      ctx.strokeRect(this.x, this.y, width, height);
     }
     ctx.restore();
   }
 
-  hitTest(worldX, worldY) {
-    const rotation = this.rotation || 0;
-    if (rotation === 0 || rotation === 180) {
-      return worldX >= this.x && worldX <= this.x + this.length &&
-        worldY >= this.y && worldY <= this.y + this.width;
-    }
-    const centerX = this.x + this.length / 2;
-    const centerY = this.y + this.width / 2;
-    let dx = worldX - centerX;
-    let dy = worldY - centerY;
-    const angle = -rotation * Math.PI / 180;
-    const localX = dx * Math.cos(angle) - dy * Math.sin(angle) + centerX;
-    const localY = dx * Math.sin(angle) + dy * Math.cos(angle) + centerY;
-    return localX >= this.x && localX <= this.x + this.length &&
-      localY >= this.y && localY <= this.y + this.width;
+  // Стандартная проверка попадания для прямоугольного элемента
+  hitTestRectangular(worldX, worldY, width, height) {
+    const local = this.transformToLocalCoords(worldX, worldY);
+    return local.x >= this.x && local.x <= this.x + width &&
+      local.y >= this.y && local.y <= this.y + height;
   }
 
   toJSON() {
-    return { ...super.toJSON(), length: this.length, width: this.width };
+    return { ...super.toJSON(), size: this.size };
   }
 }
 
-// ========== КЛАСС ВЕНТИЛЯТОРА ==========
+// ========== ПРЯМОЙ ВОЗДУХОВОД ==========
+export class DuctDirect extends DuctBase {
+  constructor(id, x, y, length = 200, width = 100) {
+    super(id, 'duct', x, y, `Воздуховод ${id}`, '#2196f3', width);
+    this.length = length;
+  }
+
+  getWidth() { return this.length; }
+  getHeight() { return this.size; }
+
+  getCalloutText() {
+    const area = (this.length * this.size / 1000000).toFixed(2);
+    return `${this.name}\nДлина: ${this.length} мм\nШирина: ${this.size} мм\nПлощадь: ${area} м²`;
+  }
+
+  getParameters() {
+    return [
+      ...super.getParameters(),
+      { name: 'length', label: 'Длина', type: 'number', step: 1, min: 100, value: this.length, unit: 'мм' },
+    ];
+  }
+
+  getPorts() {
+    return this.createLinearPorts(this.length, this.size);
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    this.drawRectangular(ctx, this.length, this.size, isSelected, scale);
+  }
+
+  hitTest(worldX, worldY) {
+    return this.hitTestRectangular(worldX, worldY, this.length, this.size);
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), length: this.length };
+  }
+}
+
+// ========== ТРОЙНИК ==========
+export class Tee extends DuctBase {
+  constructor(id, x, y, width = 50) {
+    super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0', width);
+    this.length = 150;      // длина горизонтальной части
+    this.branchHeight = 75; // высота отростка от центра
+    this.centerY = 50;      // высота центра горизонтальной трубы
+  }
+
+  // Добавьте этот метод для получения длины
+  getLength() {
+    return this.length;
+  }
+
+  getWidth() { return this.getLength(); }
+  getHeight() { return this.centerY + this.size / 2 + this.branchHeight; }
+
+  // Добавьте метод для получения высоты центра
+  getHeightCenter() {
+    return this.centerY;
+  }
+
+  getCalloutText() {
+    return `${this.name}\nШирина: ${this.size} мм\nТип: тройник\nСечение: ${(150 * this.size / 1000000).toFixed(2)} м²`;
+  }
+
+  getRelativeCalloutEntryPoint() {
+    // Возвращаем точку в центре горизонтальной трубы
+    return {
+      x: this.getLength() / 2,  // центр по ширине
+      y: this.getHeightCenter()  // ось горизонтальной трубы
+    };
+  }
+
+  getRotationCenter() {
+    return {
+      x: this.x + this.getLength() / 2,
+      y: this.y + this.getHeightCenter()
+    };
+  }
+
+  getAbsoluteCalloutPoint() {
+    // Получаем относительную точку привязки (относительно верхнего левого угла)
+    const relativePoint = this.getRelativeCalloutEntryPoint();
+
+    // Центр вращения тройника (центр горизонтальной трубы)
+    const rotationCenterX = this.x + this.getLength() / 2;
+    const rotationCenterY = this.y + this.getHeightCenter();
+
+    // Координаты точки привязки в абсолютных координатах (без поворота)
+    const absoluteX = this.x + relativePoint.x;
+    const absoluteY = this.y + relativePoint.y;
+
+    // Смещение от центра вращения
+    const dx = absoluteX - rotationCenterX;
+    const dy = absoluteY - rotationCenterY;
+
+    // Применяем поворот
+    const angleRad = (this.rotation || 0) * Math.PI / 180;
+    const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+    const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+
+    // Возвращаем конечные координаты
+    return {
+      x: rotationCenterX + rotatedX,
+      y: rotationCenterY + rotatedY
+    };
+  }
+
+  getPorts() {
+    const ports = [];
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this.getLength() / 2;
+    const centerY = this.y + this.getHeightCenter();
+
+    // Левый порт
+    const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.id, 'inlet', 'left', 0, this.getHeightCenter(), inletPos.x, inletPos.y
+    ));
+
+    // Правый порт
+    const outletPos = this.rotatePoint(this.x + this.getLength(), centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.id, 'outlet', 'right', this.getLength(), this.getHeightCenter(), outletPos.x, outletPos.y
+    ));
+
+    // Нижний порт (ответвление)
+    const branchBottomY = centerY + this.branchHeight;
+    const branchCenterX = this.x + this.getLength() / 2;
+    const branchPos = this.rotatePoint(branchCenterX, branchBottomY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
+      this.id, 'branch', 'bottom', this.getLength() / 2, this.getHeightCenter() + this.branchHeight, branchPos.x, branchPos.y
+    ));
+
+    return ports;
+  }
+
+  isPointInTeeShape(localX, localY) {
+    const halfSize = this.size / 2;
+    const centerX = this.getLength() / 2;
+    const centerY = this.getHeightCenter();
+
+    // Горизонтальная труба
+    const inHorizontal = localX >= 0 && localX <= this.getLength() &&
+      localY >= centerY - halfSize && localY <= centerY + halfSize;
+
+    // Вертикальный отросток
+    const inBranch = localX >= centerX - halfSize && localX <= centerX + halfSize &&
+      localY >= centerY && localY <= centerY + this.branchHeight;
+
+    return inHorizontal || inBranch;
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this.getLength() / 2;
+    const centerY = this.y + this.getHeightCenter();
+    const halfSize = this.size / 2;
+    const branchBottomY = centerY + this.branchHeight;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+
+    // Рисуем контур тройника
+    const leftX = this.x;
+    const rightX = this.x + this.getLength();
+    const topY = centerY - halfSize;
+    const bottomY = centerY + halfSize;
+    const branchLeftX = centerX - halfSize;
+    const branchRightX = centerX + halfSize;
+
+    ctx.moveTo(leftX, topY);
+    ctx.lineTo(rightX, topY);
+    ctx.lineTo(rightX, bottomY);
+    ctx.lineTo(branchRightX, bottomY);
+    ctx.lineTo(branchRightX, branchBottomY);
+    ctx.lineTo(branchLeftX, branchBottomY);
+    ctx.lineTo(branchLeftX, bottomY);
+    ctx.lineTo(leftX, bottomY);
+    ctx.lineTo(leftX, topY);
+    ctx.closePath();
+
+    ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
+    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : (1 / scale);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  hitTest(worldX, worldY) {
+    const local = this.transformToLocalCoords(worldX, worldY);
+    return this.isPointInTeeShape(local.x - this.x, local.y - this.y);
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), length: this.length, branchHeight: this.branchHeight, centerY: this.centerY };
+  }
+}
+
+// ========== ОТВОД ==========
+export class Elbow extends DuctBase {
+  constructor(id, x, y, size = 50) {
+    super(id, 'elbow', x, y, `Отвод ${id}`, '#4caf50', size);
+    this.radius = 50; // радиус изгиба до внутренней стороны
+  }
+
+  getWidth() { return this.radius + this.size; }
+  getHeight() { return this.radius + this.size; }
+
+  getCalloutText() {
+    return `${this.name}\nДиаметр: ${this.size} мм\nРадиус изгиба: ${this.radius} мм\nУгол: 90°`;
+  }
+
+  getParameters() {
+    return [
+      ...super.getParameters(),
+      { name: 'radius', label: 'Радиус изгиба', type: 'number', step: 5, min: 30, value: this.radius, unit: 'мм' }
+    ];
+  }
+
+  getRelativeCalloutEntryPoint() {
+    const centerRadius = this.radius + this.size / 2;
+    const angle = 315 * Math.PI / 180;
+    const x = centerRadius * Math.cos(angle);
+    const y = this.getHeight() + centerRadius * Math.sin(angle);
+    return { x, y };
+  }
+
+  getPorts() {
+    const ports = [];
+    const rotation = this.rotation || 0;
+    const centerX = this.x + this.getWidth() / 2;
+    const centerY = this.y + this.getHeight() / 2;
+    const centerRadius = this.radius + this.size / 2;
+
+    // Входной порт (слева)
+    const inletX = this.x;
+    const inletY = this.y + this.getHeight() - centerRadius;
+    const inletPos = this.rotatePoint(inletX, inletY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
+      this.id, 'inlet', 'left', 0, this.getHeight() - centerRadius, inletPos.x, inletPos.y
+    ));
+
+    // Выходной порт (снизу)
+    const outletX = this.x + centerRadius;
+    const outletY = this.y + this.getHeight();
+    const outletPos = this.rotatePoint(outletX, outletY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
+      this.id, 'outlet', 'bottom', centerRadius, this.getHeight(), outletPos.x, outletPos.y
+    ));
+
+    return ports;
+  }
+
+  isPointInElbow(localX, localY) {
+    const outerRadius = this.radius + this.size;
+    const innerRadius = this.radius;
+    const bendCenterX = 0;
+    const bendCenterY = this.getHeight();
+
+    const dx = localX - bendCenterX;
+    const dy = localY - bendCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * Math.PI;
+
+    const isInArc = angle >= 3 * Math.PI / 2 - 0.01 && angle <= 2 * Math.PI + 0.01;
+    const isBetweenRadii = distance >= innerRadius - 0.01 && distance <= outerRadius + 0.01;
+
+    const centerRadius = this.radius + this.size / 2;
+
+    // Патрубки
+    const inInlet = localX >= -2 && localX <= 0 &&
+      localY >= centerRadius - this.size / 2 &&
+      localY <= centerRadius + this.size / 2;
+
+    const inOutlet = localX >= centerRadius - this.size / 2 &&
+      localX <= centerRadius + this.size / 2 &&
+      localY >= this.getHeight() &&
+      localY <= this.getHeight() + 2;
+
+    return (isInArc && isBetweenRadii) || inInlet || inOutlet;
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const elemCenterX = this.x + this.getWidth() / 2;
+    const elemCenterY = this.y + this.getHeight() / 2;
+    const bendCenterX = this.x;
+    const bendCenterY = this.y + this.getHeight();
+    const outerRadius = this.radius + this.size;
+    const innerRadius = this.radius;
+
+    ctx.save();
+    ctx.translate(elemCenterX, elemCenterY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-elemCenterX, -elemCenterY);
+
+    ctx.beginPath();
+    ctx.arc(bendCenterX, bendCenterY, outerRadius, 3 * Math.PI / 2, 2 * Math.PI);
+    ctx.lineTo(bendCenterX + innerRadius * Math.cos(2 * Math.PI),
+      bendCenterY + innerRadius * Math.sin(2 * Math.PI));
+    ctx.arc(bendCenterX, bendCenterY, innerRadius, 2 * Math.PI, 3 * Math.PI / 2, true);
+    ctx.closePath();
+
+    ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
+    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : 1 / scale;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  hitTest(worldX, worldY) {
+    const local = this.transformToLocalCoords(worldX, worldY);
+    return this.isPointInElbow(local.x - this.x, local.y - this.y);
+  }
+
+  toJSON() {
+    return { ...super.toJSON(), radius: this.radius };
+  }
+}
+
+// ========== ВЕНТИЛЯТОР ==========
 export class Fan extends BaseElement {
   constructor(id, x, y, diameter = 120) {
     super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800');
@@ -474,22 +800,20 @@ export class Fan extends BaseElement {
     this.flow = 1000;
   }
 
-  // Специфичный текст выноски для вентилятора
+  getWidth() { return this.diameter; }
+  getHeight() { return this.diameter; }
+
   getCalloutText() {
     return `${this.name}\nДиаметр: ${this.diameter} мм\nПроизводительность: ${this.flow} м³/ч\nМощность: ${(this.flow * 0.3).toFixed(1)} Вт`;
   }
-  getWidth() {
-    return this.diameter;
-  }
-  getHeight() {
-    return this.diameter;
-  }
+
   getParameters() {
     return [
       { name: 'diameter', label: 'Диаметр', type: 'number', step: 50, min: 100, value: this.diameter, unit: 'мм' },
       { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' }
     ];
   }
+
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
@@ -524,20 +848,13 @@ export class Fan extends BaseElement {
 
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    if (isSelected) {
-      ctx.fillStyle = '#ffeb3b';
-      ctx.fill();
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = Math.max(1, 2 / scale);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = this.color;
-      ctx.fill();
-      ctx.strokeStyle = '#666';
-      ctx.lineWidth = 1 / scale;
-      ctx.stroke();
-    }
+    ctx.fillStyle = isSelected ? '#ffeb3b' : this.color;
+    ctx.fill();
+    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
+    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : 1 / scale;
+    ctx.stroke();
 
+    // Лопасти вентилятора
     for (let i = 0; i < 3; i++) {
       const angle = (i * 120) * Math.PI / 180;
       const x1 = centerX + Math.cos(angle) * radius * 0.3;
@@ -546,6 +863,7 @@ export class Fan extends BaseElement {
       const y2 = centerY + Math.sin(angle + 0.5) * radius;
       const x3 = centerX + Math.cos(angle - 0.5) * radius;
       const y3 = centerY + Math.sin(angle - 0.5) * radius;
+
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
@@ -554,10 +872,6 @@ export class Fan extends BaseElement {
       ctx.fill();
     }
     ctx.restore();
-
-    ctx.fillStyle = isDarkTheme.value ? '#fff' : '#000';
-    ctx.font = `${Math.max(6, 10 / scale)}px Arial`;
-    ctx.fillText(this.getElementText(), this.x + 5, this.y + 35 / scale);
   }
 
   hitTest(worldX, worldY) {
@@ -573,519 +887,6 @@ export class Fan extends BaseElement {
   }
 }
 
-// ========== КЛАСС ТРОЙНИКА ==========
-export class Tee extends BaseElement {
-  constructor(id, x, y, width = 50) {
-    super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0');
-    this.width = width; // ширина воздуховода (толщина всех труб)
-  }
-
-  getCalloutText() {
-    return `${this.name}\nШирина: ${this.width} мм\nТип: тройник\nСечение: ${(150 * this.width / 1000000).toFixed(2)} м²`;
-  }
-
-  getLength() {
-    return 150;
-  }
-
-  // Полная высота тройника (включая отросток)
-  getHeight() {
-    const centerY = this.getHeightCenter();
-    const halfWidth = this.width / 2;
-    const branchHeight = this.getBranchHeight();
-    // Высота от верхней границы до нижней точки отростка
-    return (centerY + halfWidth + branchHeight);
-  }
-
-  // Полная ширина тройника (горизонтальная часть)
-  getWidth() {
-    return this.getLength();
-  }
-
-  // Центр по высоте для позиционирования (чтобы отросток был внизу)
-  getHeightCenter() {
-    return 50; // Фиксированная точка центра для горизонтальной трубы
-  }
-
-  // Высота отростка (от центра горизонтальной трубы до конца отростка)
-  getBranchHeight() {
-    return 75; // общая высота от центра до конца отростка
-  }
-
-  // Переопределяем метод получения точки привязки выноски
-  getRelativeCalloutEntryPoint() {
-    // Возвращаем точку в центре горизонтальной трубы (на оси прямого участка)
-    return {
-      x: this.getLength() / 2,  // центр по ширине
-      y: this.getHeightCenter()  // ось горизонтальной трубы
-    };
-  }
-
-  // Переопределяем метод для получения абсолютных координат точки привязки с учетом поворота
-  getAbsoluteCalloutPoint() {
-    const relativePoint = this.getRelativeCalloutEntryPoint();
-
-    // Получаем центр вращения тройника (центр горизонтальной трубы)
-    const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeightCenter();
-
-    // Смещение от центра вращения
-    const dx = relativePoint.x - this.getLength() / 2;
-    const dy = relativePoint.y - this.getHeightCenter();
-
-    // Применяем поворот
-    const angleRad = (this.rotation || 0) * Math.PI / 180;
-    const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
-    const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-
-    // Возвращаем абсолютные координаты
-    return {
-      x: centerX + rotatedX,
-      y: centerY + rotatedY
-    };
-  }
-
-  getParameters() {
-    return [
-      { name: 'width', label: 'Ширина воздуховода', type: 'number', step: 10, min: 20, value: this.width, unit: 'мм' },
-    ];
-  }
-
-  getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeightCenter();
-
-    const halfWidth = this.width / 2;
-
-    // Левый порт (вход) - на левом конце горизонтальной трубы
-    const inletPos = this.rotatePoint(
-      this.x,
-      centerY,
-      centerX, centerY,
-      rotation
-    );
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id,
-      'inlet',
-      'left',
-      0,
-      this.getHeightCenter(),
-      inletPos.x,
-      inletPos.y
-    ));
-
-    // Правый порт (выход) - на правом конце горизонтальной трубы
-    const outletPos = this.rotatePoint(
-      this.x + this.getLength(),
-      centerY,
-      centerX, centerY,
-      rotation
-    );
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id,
-      'outlet',
-      'right',
-      this.getLength(),
-      this.getHeightCenter(),
-      outletPos.x,
-      outletPos.y
-    ));
-
-    // Нижний порт (ответвление) - внизу отростка
-    const branchBottomY = centerY + this.getBranchHeight();
-    const branchCenterX = this.x + this.getLength() / 2;
-
-    const branchPos = this.rotatePoint(
-      branchCenterX,
-      branchBottomY,
-      centerX, centerY,
-      rotation
-    );
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
-      this.id,
-      'branch',
-      'bottom',
-      this.getLength() / 2,
-      this.getHeightCenter() + this.getBranchHeight(),
-      branchPos.x,
-      branchPos.y
-    ));
-
-    return ports;
-  }
-
-  // Проверка, находится ли точка внутри контура тройника
-  isPointInTeeShape(localX, localY) {
-    const halfWidth = this.width / 2;
-    const centerX = this.getLength() / 2;
-    const centerY = this.getHeightCenter();
-    const branchHeight = this.getBranchHeight();
-
-    // Горизонтальная труба (от левого края до правого)
-    const inHorizontal = localX >= 0 &&
-      localX <= this.getLength() &&
-      localY >= centerY - halfWidth &&
-      localY <= centerY + halfWidth;
-
-    // Вертикальный отросток (от центра горизонтальной трубы вниз)
-    const branchStartY = centerY;
-    const branchEndY = centerY + branchHeight;
-    const inBranch = localX >= centerX - halfWidth &&
-      localX <= centerX + halfWidth &&
-      localY >= branchStartY &&
-      localY <= branchEndY;
-
-    return inHorizontal || inBranch;
-  }
-
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeightCenter();
-    const halfWidth = this.width / 2;
-    const branchHeight = this.getBranchHeight();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    // Создаем единый контур тройника
-    ctx.beginPath();
-
-    // Левая часть горизонтальной трубы
-    const leftX = this.x;
-    const rightX = this.x + this.getLength();
-    const topY = centerY - halfWidth;
-    const bottomY = centerY + halfWidth;
-
-    // Верхняя граница горизонтальной трубы
-    ctx.moveTo(leftX, topY);
-    ctx.lineTo(rightX, topY);
-
-    // Правый край и переход к отростку
-    ctx.lineTo(rightX, bottomY);
-
-    // Нижняя граница горизонтальной трубы до отростка
-    const branchLeftX = centerX - halfWidth;
-    const branchRightX = centerX + halfWidth;
-    const branchBottomY = centerY + branchHeight;
-
-    // Обходим отросток
-    ctx.lineTo(branchRightX, bottomY);
-    ctx.lineTo(branchRightX, branchBottomY);
-    ctx.lineTo(branchLeftX, branchBottomY);
-    ctx.lineTo(branchLeftX, bottomY);
-
-    // Замыкаем контур по левому краю
-    ctx.lineTo(leftX, bottomY);
-    ctx.lineTo(leftX, topY);
-
-    ctx.closePath();
-
-    // Заливка
-    if (isSelected) {
-      ctx.fillStyle = '#ffeb3b';
-    } else {
-      ctx.fillStyle = this.color;
-    }
-    ctx.fill();
-
-    // Обводка
-    ctx.strokeStyle = isSelected ? '#ff0000' : '#666';
-    ctx.lineWidth = isSelected ? Math.max(1, 2 / scale) : (1 / scale);
-    ctx.stroke();
-
-    // Текст элемента
-    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
-    ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
-
-    ctx.restore();
-  }
-
-  hitTest(worldX, worldY) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this.getLength() / 2;
-    const centerY = this.y + this.getHeightCenter();
-
-    // Преобразуем координаты в локальную систему координат элемента (без поворота)
-    let localX = worldX;
-    let localY = worldY;
-
-    if (rotation !== 0) {
-      const dx = worldX - centerX;
-      const dy = worldY - centerY;
-      const angle = -rotation * Math.PI / 180;
-      localX = dx * Math.cos(angle) - dy * Math.sin(angle) + centerX;
-      localY = dx * Math.sin(angle) + dy * Math.cos(angle) + centerY;
-    }
-
-    return this.isPointInTeeShape(localX - this.x, localY - this.y);
-  }
-
-  toJSON() {
-    return {
-      ...super.toJSON(),
-      width: this.width
-    };
-  }
-}
-
-// ========== КЛАСС ОТВОДА ==========
-export class Elbow extends BaseElement {
-  constructor(id, x, y, width = 50) {
-    super(id, 'elbow', x, y, `Отвод ${id}`, '#4caf50');
-    this.width = width;    // диаметр/ширина воздуховода
-    this.radius = 50;      // радиус изгиба (до центральной линии)
-  }
-
-  getCalloutText() {
-    return `${this.name}\nДиаметр: ${this.width} мм\nРадиус изгиба: ${this.radius} мм\nУгол: 90°`;
-  }
-
-  getHeight() {
-    return this.radius + this.width;
-  }
-
-  getWidth() {
-    return this.radius + this.width;
-  }
-
-  // Точка привязки выноски - на внешней стороне изгиба
-  getRelativeCalloutEntryPoint() {
-    const centerRadius = this.radius + this.width / 2; // Радиус до осевой линии
-    const angle = 315 * Math.PI / 180; // 315° (середина между 270 и 360)
-    const centerX = 0;
-    const centerY = this.getHeight();
-
-    // Точка на осевой линии
-    const x = centerX + centerRadius * Math.cos(angle);
-    const y = centerY + centerRadius * Math.sin(angle);
-
-    return { x, y };
-  }
-
-  getParameters() {
-    return [
-      { name: 'width', label: 'Диаметр', type: 'number', step: 1, min: 20, value: this.width, unit: 'мм' },
-      { name: 'radius', label: 'Радиус изгиба', type: 'number', step: 5, min: 30, value: this.radius, unit: 'мм' },
-    ];
-  }
-
-  getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const elemCenterX = this.x + this.getWidth() / 2;
-    const elemCenterY = this.y + this.getHeight() / 2;
-
-    const R = this.radius;
-    const w = this.width;
-    const centerRadius = R + w / 2; // Радиус до осевой линии
-
-    // Входной порт (на левом торце) - по осевой линии
-    const inletOffsetFromCenter = R + w / 2;
-    const inletX = this.x;
-    const inletY = this.y + this.getHeight() - inletOffsetFromCenter;
-
-    const inletPos = this.rotatePoint(inletX, inletY, elemCenterX, elemCenterY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
-      this.id,
-      'inlet',
-      'left',
-      0,
-      this.getHeight() - inletOffsetFromCenter,
-      inletPos.x,
-      inletPos.y
-    ));
-
-    // Выходной порт (на нижнем торце) - по осевой линии
-    const outletOffsetFromCenter = R + w / 2;
-    const outletX = this.x + outletOffsetFromCenter;
-    const outletY = this.y + this.getHeight();
-
-    const outletPos = this.rotatePoint(outletX, outletY, elemCenterX, elemCenterY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
-      this.id,
-      'outlet',
-      'bottom',
-      outletOffsetFromCenter,
-      this.getHeight(),
-      outletPos.x,
-      outletPos.y
-    ));
-
-    return ports;
-  }
-
-  // Реалистичная проверка попадания точки в отвод
-  isPointInElbow(localX, localY) {
-    const w = this.width;
-    const R = this.radius;
-    const outerRadius = R + w;
-    const innerRadius = R;
-
-    // Центр изгиба в точке (0, getHeight())
-    const centerX = 0;
-    const centerY = this.getHeight();
-
-    // Расстояние от центра изгиба
-    const dx = localX - centerX;
-    const dy = localY - centerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Угол точки относительно центра изгиба
-    let angle = Math.atan2(dy, dx);
-    if (angle < 0) angle += 2 * Math.PI;
-
-    // Основная часть отвода - четверть кольца от 270° до 360°
-    const isInArcRegion = angle >= 3 * Math.PI / 2 - 0.01 && angle <= 2 * Math.PI + 0.01;
-    const isBetweenRadii = distance >= innerRadius - 0.01 && distance <= outerRadius + 0.01;
-
-    // Патрубки - прямоугольные области на торцах
-
-    // Центральная линия патрубков
-    const centerRadius = R + w / 2;
-
-    // Область входного патрубка (левая сторона) - прямоугольник на левом торце
-    const inletRect = {
-      xMin: -2,  // Небольшой запас для учета погрешностей
-      xMax: 0,
-      yMin: centerRadius - w / 2,
-      yMax: centerRadius + w / 2
-    };
-
-    const inInlet = localX >= inletRect.xMin && localX <= inletRect.xMax &&
-      localY >= inletRect.yMin && localY <= inletRect.yMax;
-
-    // Область выходного патрубка (нижняя сторона) - прямоугольник на нижнем торце
-    const outletRect = {
-      xMin: centerRadius - w / 2,
-      xMax: centerRadius + w / 2,
-      yMin: this.getHeight(),
-      yMax: this.getHeight() + 2  // Небольшой запас
-    };
-
-    const inOutlet = localX >= outletRect.xMin && localX <= outletRect.xMax &&
-      localY >= outletRect.yMin && localY <= outletRect.yMax;
-
-    // Области соединения патрубков с изгибом (для плавного перехода)
-    const inletJointRect = {
-      xMin: 0,
-      xMax: 5,  // Небольшая область внутрь от левого края
-      yMin: centerRadius - w / 2,
-      yMax: centerRadius + w / 2
-    };
-
-    const inInletJoint = localX >= inletJointRect.xMin && localX <= inletJointRect.xMax &&
-      localY >= inletJointRect.yMin && localY <= inletJointRect.yMax;
-
-    const outletJointRect = {
-      xMin: centerRadius - w / 2,
-      xMax: centerRadius + w / 2,
-      yMin: this.getHeight() - 5,
-      yMax: this.getHeight()
-    };
-
-    const inOutletJoint = localX >= outletJointRect.xMin && localX <= outletJointRect.xMax &&
-      localY >= outletJointRect.yMin && localY <= outletJointRect.yMax;
-
-    // Возвращаем true, если точка попадает в любую часть отвода
-    return (isInArcRegion && isBetweenRadii) || inInlet || inOutlet || inInletJoint || inOutletJoint;
-  }
-
-  hitTest(worldX, worldY) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x + this.getWidth() / 2;
-    const centerY = this.y + this.getHeight() / 2;
-
-    let localX = worldX;
-    let localY = worldY;
-
-    if (rotation !== 0) {
-      const dx = worldX - centerX;
-      const dy = worldY - centerY;
-      const angle = -rotation * Math.PI / 180;
-      localX = dx * Math.cos(angle) - dy * Math.sin(angle) + centerX;
-      localY = dx * Math.sin(angle) + dy * Math.cos(angle) + centerY;
-    }
-
-    return this.isPointInElbow(localX - this.x, localY - this.y);
-  }
-
-  draw(ctx, scale, isSelected, isDarkTheme) {
-    const rotation = this.rotation || 0;
-    const w = this.width;
-    const R = this.radius;
-    const outerRadius = R + w;
-    const innerRadius = R;
-
-    // Центр элемента (для вращения)
-    const elemCenterX = this.x + this.getWidth() / 2;
-    const elemCenterY = this.y + this.getHeight() / 2;
-
-    // Центр изгиба в левом верхнем углу элемента
-    const bendCenterX = this.x;
-    const bendCenterY = this.y + this.getHeight();
-
-    ctx.save();
-    ctx.translate(elemCenterX, elemCenterY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-elemCenterX, -elemCenterY);
-
-    // Настройка стилей
-    if (isSelected) {
-      ctx.fillStyle = '#ffeb3b';
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = Math.max(1, 2 / scale);
-    } else {
-      ctx.fillStyle = this.color;
-      ctx.strokeStyle = '#666';
-      ctx.lineWidth = 1 / scale;
-    }
-
-    // Рисуем четверть кольца от 270° до 360° (нижний правый квадрант)
-    ctx.beginPath();
-
-    // Внешняя дуга от 270° до 360°
-    ctx.arc(bendCenterX, bendCenterY, outerRadius, 3 * Math.PI / 2, 2 * Math.PI);
-
-    // Линия от конца внешней дуги к началу внутренней дуги
-    ctx.lineTo(
-      bendCenterX + innerRadius * Math.cos(2 * Math.PI),
-      bendCenterY + innerRadius * Math.sin(2 * Math.PI)
-    );
-
-    // Внутренняя дуга от 360° до 270° (обратное направление)
-    ctx.arc(bendCenterX, bendCenterY, innerRadius, 2 * Math.PI, 3 * Math.PI / 2, true);
-
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Рисуем текст элемента
-    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
-    ctx.font = `${Math.max(8, 12 / scale)}px Arial`;
-    ctx.fillText(this.getElementText(), this.x + 5, this.y + 20 / scale);
-
-    ctx.restore();
-  }
-
-  toJSON() {
-    return {
-      ...super.toJSON(),
-      width: this.width,
-      radius: this.radius
-    };
-  }
-}
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
   constructor(id, elements) {
