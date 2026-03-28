@@ -33,6 +33,7 @@
       <div class="save-controls">
         <button @click="saveToLocalStorage" class="save-btn">💾 Сохранить</button>
         <button @click="resetToDefault" class="reset-btn">↺ Сброс</button>
+        <button @click="updateAllPortsAndConnections" class="update-ports-btn" style="background: #ff9800;">🔄 Обновить все порты и связи</button>
       </div>
 
       <!-- Информация о выбранных элементах -->
@@ -217,6 +218,18 @@ const resetToDefault = () => {
     selectedElements.value = [];
     renderer?.setSelectedElements([]);
     renderer?.draw();
+  }
+};
+
+const updateAllPortsAndConnections = () => {
+  const restored = connectionManager.updateAllPortsAndConnections(5);
+  renderer?.draw();
+
+  const btn = document.querySelector('.update-ports-btn');
+  if (btn) {
+    const original = btn.textContent;
+    btn.textContent = `✓ Восстановлено ${restored} связей!`;
+    setTimeout(() => { if (btn) btn.textContent = original; }, 2000);
   }
 };
 

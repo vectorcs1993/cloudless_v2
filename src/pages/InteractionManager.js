@@ -171,7 +171,6 @@ export class InteractionManager {
     this.currentSnappedPorts = { movingPort, targetPort };
   }
 
-  // Применение привязки к портам при перемещении
   applyPortSnapping(element, deltaWorldX, deltaWorldY) {
     // Сначала сбрасываем элемент в начальную позицию
     this.setElementPosition(element, this.dragStartElementPos.x, this.dragStartElementPos.y);
@@ -189,19 +188,12 @@ export class InteractionManager {
       const adjustedDeltaX = deltaWorldX + match.offsetX;
       const adjustedDeltaY = deltaWorldY + match.offsetY;
       this.moveElement(element, adjustedDeltaX, adjustedDeltaY);
-      this.connectPorts(match.movingPort, match.targetPort);
+      // Убираем создание связи - только подсветка порта
       this.renderer.setHighlightedPort(match.targetPort);
     } else {
       this.moveElement(element, deltaWorldX, deltaWorldY);
       this.renderer.setHighlightedPort(null);
-      // Если было соединение – разрываем
-      if (this.currentSnappedPorts) {
-        this.connectionManager.disconnectPorts(
-          this.currentSnappedPorts.movingPort,
-          this.currentSnappedPorts.targetPort
-        );
-        this.currentSnappedPorts = null;
-      }
+      // Убираем разрыв связей - они не создавались
     }
   }
 

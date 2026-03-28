@@ -144,4 +144,87 @@ export class ConnectionManager {
 
     return bestMatch;
   }
+
+  updateAllPortsAndConnections(radius = 5) {
+    console.log('=== АВТОМАТИЧЕСКОЕ ВОССТАНОВЛЕНИЕ СВЯЗЕЙ ПО БЛИЗОСТИ ПОРТОВ ===');
+
+    // 1. Удаляем ВСЕ связи у всех элементов
+    const removeAllConnections = (element) => {
+      if (element.ports) {
+        element.ports.forEach(port => {
+          port.disconnect();
+        });
+      }
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(removeAllConnections);
+      }
+    };
+    this.elements.value.forEach(removeAllConnections);
+    console.log('Все связи удалены');
+
+    // 2. Обновляем геометрию всех портов (без изменения позиций)
+    const updatePortsOnly = (element) => {
+      const savedX = element.x;
+      const savedY = element.y;
+      const savedRotation = element.rotation;
+
+      if (element.updatePorts) {
+        element.updatePorts();
+      }
+
+      element.x = savedX;
+      element.y = savedY;
+      element.rotation = savedRotation;
+
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(updatePortsOnly);
+      }
+    };
+    this.elements.value.forEach(updatePortsOnly);
+    console.log('Геометрия портов обновлена');
+
+    // 3. Автоматически восстанавливаем связи по близости портов
+    const allPorts = this.getAllPorts();
+    let connectionsRestored = 0;
+    const processedPorts = new Set();
+
+    for (let i = 0; i < allPorts.length; i++) {
+      const port1 = allPorts[i];
+
+      if (port1.isConnected() || processedPorts.has(port1.id)) continue;
+
+      let closestPort = null;
+      let minDistance = radius + 1;
+
+      for (let j = 0; j < allPorts.length; j++) {
+        const port2 = allPorts[j];
+
+        if (port1.id === port2.id) continue;
+        if (port1.elementId === port2.elementId) continue;
+        if (port2.isConnected()) continue;
+
+        const dx = port1.worldX - port2.worldX;
+        const dy = port1.worldY - port2.worldY;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestPort = port2;
+        }
+      }
+
+      if (closestPort && minDistance <= radius) {
+        this.connectPorts(port1, closestPort);
+        processedPorts.add(port1.id);
+        processedPorts.add(closestPort.id);
+        connectionsRestored++;
+        console.log(`Соединены порты ${port1.id} (${port1.direction}) и ${closestPort.id} (${closestPort.direction}), расстояние: ${minDistance.toFixed(2)}px`);
+      }
+    }
+
+    console.log(`Восстановлено связей: ${connectionsRestored}`);
+    console.log('=== ОБНОВЛЕНИЕ ЗАВЕРШЕНО ===');
+
+    return connectionsRestored;
+  }
 }
