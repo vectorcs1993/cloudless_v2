@@ -13,6 +13,8 @@ export class StorageManager {
       panX: render.panX.value,
       panY: render.panY.value,
       scale: render.scale.value,
+      showColors: render.showColors.value,
+      showElementAxes: render.showElementAxes.value,
       version: '2.0',
       savedAt: new Date().toISOString()
     };

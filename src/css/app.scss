@@ -219,11 +219,11 @@ h3 {
 
 /* Параметры элемента */
 .element-params {
+    height: 300px;
     margin-top: 15px;
     background: white;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-    overflow-x: auto;
+    overflow-y: scroll;
+    overflow-x: hidden;
 }
 
 .dark-theme .element-params {

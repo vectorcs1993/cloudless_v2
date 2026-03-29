@@ -12,6 +12,7 @@
           <label v-if="showPorts && snapToPorts"><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
           <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
           <label><input type="checkbox" v-model="showColors" /> Показывать цвета</label>
+          <label><input type="checkbox" v-model="showElementAxes" /> Показывать оси элементов</label>
         </div>
       </div>
 
@@ -78,14 +79,14 @@
         </div>
 
         <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
-          <h5>Порты и связи:</h5>
+          <h5>Cвязи:</h5>
           <div v-for="port in selectedElements[0].ports" :key="port.id"
             :class="['connection-info', { 'connected': port.isConnected(), 'disconnected': !port.isConnected() }]">
             <div v-if="port.isConnected()">
-              🔗 Порт {{ port.side }} ({{ port.getDirectionName() }}) → ID {{ port.connectedElementId }}
+              🔗 {{ port.side }} ({{ port.getDirectionName() }}) → ID {{ port.connectedElementId }}
             </div>
             <div v-else>
-              ⭕ Порт {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
+              ⭕ {{ port.side }} ({{ port.getDirectionName() }}) - не подключен
             </div>
           </div>
         </div>
@@ -103,7 +104,7 @@
         </div>
       </div>
 
-      <div class="group-controls">
+      <div v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls">
         <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
           📦 Сгруппировать ({{ selectedElements.length }})
         </button>
@@ -203,12 +204,12 @@ const dragItems = [
 ];
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
-// Состояние
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
 const showPorts = ref(true);
 const showCallouts = ref(true);
 const showColors = ref(true);
+const showElementAxes = ref(false);
 const snapToPorts = ref(true);
 const gridStepM = ref(1);
 const autoUpdateConnections = ref(true);
@@ -244,6 +245,7 @@ const renderOptions = {
   showPorts,
   showColors,
   showCallouts,
+  showElementAxes,
   gridStepM,
   isDarkTheme,
   mouseWorldPos
@@ -291,6 +293,8 @@ const loadFromLocalStorage = () => {
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
+    showColors.value = data.showColors !== undefined ? data.showColors : true;
+    showElementAxes.value = data.showElementAxes !== undefined ? data.showElementAxes : false;
     elements.value.forEach(el => el.updatePorts());
     selectedElements.value = [];
     renderer?.setSelectedElements([]);
@@ -755,7 +759,10 @@ watch(isDarkTheme, () => {
   renderer?.draw();
 });
 
-// Также добавьте watch для gridStepM, если он используется
+watch(showElementAxes, () => {
+  renderer?.draw();
+});
+
 watch(gridStepM, () => {
   renderer?.draw();
 });

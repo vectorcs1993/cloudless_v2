@@ -139,7 +139,7 @@ export class CanvasRenderer {
     // Рисуем все элементы
     this.elements.value.forEach(element => {
       const isSelected = this.selectedElements.some(sel => sel.id === element.id);
-      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value, this.options.showPorts.value, this.options.showColors.value);
+      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value, this.options.showPorts.value, this.options.showColors.value, this.options.showElementAxes.value);
     });
 
     this.drawAxes(ctx);
