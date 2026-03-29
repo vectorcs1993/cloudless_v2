@@ -90,7 +90,7 @@
           </div>
         </div>
 
-        <div class="rotation-controls">
+        <div v-if="!isGroupSelected" class="rotation-controls">
           <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
           <button @click="rotateRight" class="rotate-btn">↻ 90°</button>
         </div>
