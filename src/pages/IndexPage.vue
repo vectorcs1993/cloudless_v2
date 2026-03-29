@@ -4,45 +4,43 @@
     <div class="toolbar">
       <h3>Безоблачный</h3>
       <div class="tab-settings">
-        <label>Масштаб:
-          <input type="number" v-model.number="pixelsPerMeter" step="10" min="20" max="200" />
-          px/м
-        </label>
         <div>
           <label><input type="checkbox" v-model="isDarkTheme" /> Темная тема</label>
           <label><input type="checkbox" v-model="showGrid" /> Сетка</label>
           <label><input type="checkbox" v-model="showPorts" /> Показать порты</label>
           <label v-if="showPorts"><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
+          <label v-if="showPorts && snapToPorts"><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
           <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
-          <label><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
           <label><input type="checkbox" v-model="showColors" /> Показывать цвета</label>
         </div>
       </div>
 
-      <!-- Панель добавления элементов -->
-      <div class="add-element-panel">
-        <button @click="addDuctDirect" class="add-btn">➕ Прямой воздуховод</button>
-        <button @click="addFan" class="add-btn">🌀 Вентилятор</button>
-        <button @click="addTee" class="add-btn">🔀 Тройник</button>
-        <button @click="addCross" class="add-btn">❌ Крестовина</button>
-        <button @click="addElbow" class="add-btn">↪️ Отвод</button>
+      <!-- Панель drag-and-drop элементов -->
+      <div class="drag-panel">
+        <div class="drag-items">
+          <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
+            @dragend="onDragEnd">
+            <div class="drag-item-preview" v-html="item.svg"></div>
+            <span class="drag-item-label">{{ item.label }}</span>
+          </div>
+        </div>
       </div>
 
       <!-- Кнопки управления сохранением -->
       <div class="save-controls">
-        <button @click="saveToLocalStorage" class="add-btn">💾 Сохранить</button>
-        <button @click="resetToDefault" class="add-btn">↺ Сброс</button>
-        <button @click="updateAllPortsAndConnections" class="add-btn">🔄 Обновить все порты и связи</button>
+        <button @click="saveToLocalStorage" class="cl-btn">💾 Сохранить</button>
+        <button @click="resetToDefault" class="cl-btn">↺ Сброс</button>
+        <button @click="updateAllPortsAndConnections" class="cl-btn">🔄 Обновить все порты и связи</button>
       </div>
 
     </div>
-
-    <canvas ref="mainCanvas" class="main-canvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-      @wheel.prevent="onWheel" @contextmenu.prevent>
+    <!-- Канвас для рендеринга элементов -->
+    <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
+      @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop">
     </canvas>
     <!-- Информация о выбранных элементах -->
-    <div v-if="selectedElements.length > 0" class="selected-info">
-      <h4>Выбрано элементов: {{ selectedElements.length }}</h4>
+    <div class="selected-info" v-if="selectedElements.length > 0">
+      <h5>Выбрано элементов: {{ selectedElements.length }}</h5>
 
       <div v-if="selectedElements.length === 1" class="single-element-info">
         <p>ID: {{ selectedElements[0].id }}</p>
@@ -60,15 +58,13 @@
             </thead>
             <tbody>
               <tr v-for="param in selectedElements[0].getParameters()" :key="param.name">
-                <td class="param-label">{{ param.label }}:</td>
+                <td class="param-label">{{ param.label }}: </td>
                 <td class="param-input">
-                  <!-- Для select -->
                   <select v-if="param.type === 'select'" v-model="selectedElements[0][param.name]" @change="onParameterChange" class="param-select">
                     <option v-for="option in param.options" :key="option.value" :value="option.value">
                       {{ option.label }}
                     </option>
                   </select>
-                  <!-- Для ввода строки/числа -->
                   <input v-else :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
                     @change="onParameterChange" />
                 </td>
@@ -80,7 +76,6 @@
             </tbody>
           </table>
         </div>
-
 
         <div v-if="selectedElements[0].ports && selectedElements[0].ports.length > 0">
           <h5>Порты и связи:</h5>
@@ -95,7 +90,6 @@
           </div>
         </div>
 
-
         <div class="rotation-controls">
           <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
           <button @click="rotateRight" class="rotate-btn">↻ 90°</button>
@@ -108,9 +102,6 @@
           <button @click="moveDown" class="layer-btn">⬇️ Ниже</button>
         </div>
       </div>
-
-
-
 
       <div class="group-controls">
         <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
@@ -137,11 +128,71 @@ import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { Tee, DuctDirect, Fan, ElementFactory, Elbow, Cross, Group } from './Elements.js';
 
+// Элементы для drag and drop
+const dragItems = [
+  {
+    type: 'duct',
+    label: 'Воздуховод',
+    color: '#4a90e2',
+    width: 64,
+    height: 40,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <rect x="12" y="24" width="40" height="16" fill="#4a90e2" stroke="#2c3e50" stroke-width="2" rx="2"/>
+      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
+    </svg>`
+  },
+  {
+    type: 'fan',
+    label: 'Вентилятор',
+    color: '#f39c12',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="18" fill="#f39c12" stroke="#2c3e50" stroke-width="2"/>
+      <path d="M32 14 L32 8 M32 56 L32 50 M14 32 L8 32 M56 32 L50 32 M20 20 L16 16 M44 44 L48 48 M20 44 L16 48 M44 20 L48 16" stroke="#2c3e50" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="32" cy="32" r="6" fill="#e67e22"/>
+    </svg>`
+  },
+  {
+    type: 'tee',
+    label: 'Тройник',
+    color: '#27ae60',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <rect x="12" y="24" width="40" height="16" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
+      <rect x="28" y="12" width="8" height="40" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
+    </svg>`
+  },
+  {
+    type: 'elbow',
+    label: 'Отвод',
+    color: '#e74c3c',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <path d="M12 32 L32 32 L32 52" fill="none" stroke="#e74c3c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="32" r="3" fill="#e74c3c"/>
+      <circle cx="32" cy="32" r="3" fill="#e74c3c"/>
+      <circle cx="32" cy="52" r="3" fill="#e74c3c"/>
+    </svg>`
+  },
+  {
+    type: 'cross',
+    label: 'Крестовина',
+    color: '#9b59b6',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <rect x="12" y="28" width="40" height="8" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
+      <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
+    </svg>`
+  }
+];
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
 // Состояние
 const isDarkTheme = ref(false);
-const pixelsPerMeter = ref(50);
 const showGrid = ref(true);
 const showPorts = ref(true);
 const showCallouts = ref(true);
@@ -165,6 +216,13 @@ let nextElementId = 100;
 let nextPortId = 1000;
 let nextGroupId = 1000;
 
+// Для drag and drop и призрака
+let dragType = null;
+let dragItemData = null;
+let ghostElement = null; // Временный элемент для призрака
+let isDragging = false;
+let ghostWorldPos = { x: 0, y: 0 };
+
 // Параметры для рендерера
 const renderOptions = {
   scale: ref(1),
@@ -174,7 +232,6 @@ const renderOptions = {
   showPorts,
   showColors,
   showCallouts,
-  pixelsPerMeter,
   gridStepM,
   isDarkTheme,
   mouseWorldPos
@@ -263,9 +320,27 @@ const updateAllPortsAndConnections = () => {
   }
 };
 
-const addElement = (ElementClass, params = []) => {
+const addElement = (ElementClass, params = [], x = null, y = null, centerOffset = true) => {
   const newId = ++nextElementId;
-  const newElement = new ElementClass(newId, 100, 300, ...params);
+
+  // Если координаты не переданы, используем значения по умолчанию
+  let posX = x !== null ? x : 100;
+  let posY = y !== null ? y : 300;
+
+  // Создаем элемент
+  const newElement = new ElementClass(newId, posX, posY, ...params);
+
+  // Если нужно центрировать относительно курсора
+  if (centerOffset && x !== null && y !== null) {
+    // Получаем размеры элемента
+    const width = newElement.getWidth?.() || 64;
+    const height = newElement.getHeight?.() || 64;
+
+    // Корректируем позицию, чтобы центр элемента был в точке курсора
+    newElement.x = posX - width / 2;
+    newElement.y = posY - height / 2;
+  }
+
   elements.value.push(newElement);
   newElement.updatePorts();
 
@@ -276,13 +351,153 @@ const addElement = (ElementClass, params = []) => {
   selectedElements.value = [newElement];
   renderer?.setSelectedElements([newElement]);
   renderer?.draw();
+  return newElement;
 };
 
-const addDuctDirect = () => addElement(DuctDirect);
-const addFan = () => addElement(Fan);
-const addTee = () => addElement(Tee);
-const addElbow = () => addElement(Elbow);
-const addCross = () => addElement(Cross);
+// Создание временного элемента для призрака
+const createGhostElement = (itemType, worldX, worldY) => {
+  let ghost = null;
+  switch (itemType) {
+    case 'duct':
+      ghost = new DuctDirect(-1, worldX, worldY);
+      break;
+    case 'fan':
+      ghost = new Fan(-1, worldX, worldY);
+      break;
+    case 'tee':
+      ghost = new Tee(-1, worldX, worldY);
+      break;
+    case 'elbow':
+      ghost = new Elbow(-1, worldX, worldY);
+      break;
+    case 'cross':
+      ghost = new Cross(-1, worldX, worldY);
+      break;
+    default:
+      return null;
+  }
+  return ghost;
+};
+
+// Обновление позиции призрака
+const updateGhostPosition = (worldX, worldY) => {
+  if (ghostElement) {
+    // Корректируем позицию, чтобы центр элемента был под курсором
+    const width = ghostElement.getWidth?.() || 64;
+    const height = ghostElement.getHeight?.() || 64;
+    ghostElement.x = worldX - width / 2;
+    ghostElement.y = worldY - height / 2;
+    ghostWorldPos = { x: ghostElement.x, y: ghostElement.y };
+
+    // Обновляем рендер
+    renderer?.draw();
+  }
+};
+
+// Drag and drop handlers
+const onDragStart = (e, item) => {
+  dragType = item.type;
+  dragItemData = item;
+  isDragging = true;
+
+  // Сохраняем смещение курсора относительно элемента для более точного размещения
+  const rect = e.target.closest('.drag-item').getBoundingClientRect();
+  const offsetX = e.clientX - rect.left;
+  const offsetY = e.clientY - rect.top;
+
+  // Получаем текущую мировую позицию курсора
+  const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
+  if (worldPos) {
+    // Создаем призрак
+    ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
+    if (ghostElement) {
+      // Корректируем позицию с учетом смещения
+      const width = ghostElement.getWidth?.() || 64;
+      const height = ghostElement.getHeight?.() || 64;
+      ghostElement.x = worldPos.x - width / 2;
+      ghostElement.y = worldPos.y - height / 2;
+    }
+  }
+
+  e.dataTransfer.setData('text/plain', item.type);
+  e.dataTransfer.effectAllowed = 'copy';
+
+  // Создаем прозрачное изображение для drag preview
+  const dragIcon = document.createElement('div');
+  dragIcon.style.opacity = '0';
+  document.body.appendChild(dragIcon);
+  e.dataTransfer.setDragImage(dragIcon, 0, 0);
+  setTimeout(() => document.body.removeChild(dragIcon), 0);
+};
+
+const onDragEnd = (e) => {
+  dragType = null;
+  dragItemData = null;
+  isDragging = false;
+  ghostElement = null;
+  renderer?.draw();
+};
+
+const onDragOver = (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+
+  // Обновляем позицию призрака при движении мыши
+  if (isDragging && ghostElement) {
+    const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
+    if (worldPos) {
+      updateGhostPosition(worldPos.x, worldPos.y);
+    }
+  }
+};
+
+const onDrop = (e) => {
+  e.preventDefault();
+
+  if (!dragType) return;
+
+  // Получаем координаты мыши относительно canvas
+  const rect = mainCanvas.value.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+
+  // Конвертируем в мировые координаты с учетом масштаба и панорамирования
+  const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
+
+  if (worldPos) {
+    // Создаем элемент в позиции курсора в мировых координатах
+    // centerOffset = true означает, что элемент будет центрирован относительно курсора
+    const elementX = worldPos.x;
+    const elementY = worldPos.y;
+
+    // Создаем элемент в зависимости от типа
+    switch (dragType) {
+      case 'duct':
+        addElement(DuctDirect, [], elementX, elementY, true);
+        break;
+      case 'fan':
+        addElement(Fan, [], elementX, elementY, true);
+        break;
+      case 'tee':
+        addElement(Tee, [], elementX, elementY, true);
+        break;
+      case 'elbow':
+        addElement(Elbow, [], elementX, elementY, true);
+        break;
+      case 'cross':
+        addElement(Cross, [], elementX, elementY, true);
+        break;
+      default:
+        console.warn('Unknown drag type:', dragType);
+    }
+  }
+
+  // Очищаем призрак
+  ghostElement = null;
+  isDragging = false;
+  dragType = null;
+  renderer?.draw();
+};
 
 const onParameterChange = () => {
   if (selectedElements.value.length === 1) {
@@ -408,6 +623,9 @@ const toggleTheme = () => {
 
 // Обработчики событий canvas
 const onCanvasMouseDown = (e) => {
+  // Если идет перетаскивание, игнорируем
+  if (isDragging) return;
+
   interactionManager?.onMouseDown(e);
 
   // Обновляем выбранные элементы из renderer
@@ -421,7 +639,13 @@ const onCanvasMouseDown = (e) => {
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
-  interactionManager?.onMouseMove(e);
+
+  // Если идет перетаскивание, обновляем позицию призрака
+  if (isDragging && ghostElement) {
+    updateGhostPosition(worldPos.x, worldPos.y);
+  } else {
+    interactionManager?.onMouseMove(e);
+  }
 
   if (renderer?.selectedElements) {
     selectedElements.value = [...renderer.selectedElements];
@@ -429,6 +653,8 @@ const onCanvasMouseMove = (e) => {
 };
 
 const onCanvasMouseUp = (e) => {
+  if (isDragging) return;
+
   interactionManager?.onMouseUp(e);
   if (renderer?.selectedElements) {
     selectedElements.value = [...renderer.selectedElements];
@@ -441,10 +667,31 @@ onMounted(() => {
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') isDarkTheme.value = true;
 
-
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
+
+  // Добавляем возможность рисовать призрака
+  const originalDraw = renderer.draw.bind(renderer);
+  renderer.draw = () => {
+    originalDraw();
+    // Рисуем призрака поверх всего
+    if (isDragging && ghostElement) {
+      const ctx = renderer.canvas.getContext('2d');
+      ctx.save();
+      // Применяем трансформации для рисования призрака в мировых координатах
+      ctx.translate(renderOptions.panX.value, renderOptions.panY.value);
+      ctx.scale(renderOptions.scale.value, renderOptions.scale.value);
+
+      // Рисуем призрака с полупрозрачностью
+      ctx.globalAlpha = 0.6;
+      ghostElement.draw(ctx, renderOptions.scale.value, false, isDarkTheme.value, showPorts.value, showColors.value);
+      ctx.globalAlpha = 1.0;
+
+      ctx.restore();
+    }
+  };
+
   interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, {
     snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
   });
@@ -487,10 +734,6 @@ watch(showColors, () => {
 });
 
 watch(isDarkTheme, () => {
-  renderer?.draw();
-});
-
-watch(pixelsPerMeter, () => {
   renderer?.draw();
 });
 

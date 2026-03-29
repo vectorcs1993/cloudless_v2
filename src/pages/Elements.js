@@ -859,6 +859,7 @@ export class Fan extends BaseElement {
     super(id, 'fan', x, y, `Вентилятор ${id}`, '#ff9800', size);
     this._size = size;
     this.flow = 1000;
+    this.pressure = 500;
   }
 
   get size() { return this._size; }
@@ -876,14 +877,15 @@ export class Fan extends BaseElement {
   getHeight() { return this._size; }
 
   getCalloutText() {
-    return `${this.name}\nРазмер: ${this._size}×${this._size} мм\nПроизводительность: ${this.flow} м³/ч`;
+    return `${this.name}\nРазмер: ${this._size}×${this._size} мм\nПроизводительность: ${this.flow} м³/ч\nНапор: ${this.pressure} Па`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
       { name: 'size', label: 'Размер', type: 'number', step: 10, min: 50, value: this._size, unit: 'мм' },
-      { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' }
+      { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' },
+      { name: 'pressure', label: 'Напор', type: 'number', step: 1, value: this.pressure, unit: 'Па' }
     ];
   }
 
@@ -975,7 +977,8 @@ export class Fan extends BaseElement {
     return {
       ...super.toJSON(),
       size: this._size,
-      flow: this.flow
+      flow: this.flow,
+      pressure: this.pressure
     };
   }
 }
@@ -1018,6 +1021,7 @@ export class ElementFactory {
       case 'fan':
         const fan = new Fan(id, x, y, size);
         if (params.flow !== undefined) fan.flow = params.flow;
+        if (params.pressure !== undefined) fan.pressure = params.pressure;
         if (params.rotation !== undefined) fan.rotation = params.rotation;
         if (params.name) fan.name = params.name;
         return fan;
@@ -1054,7 +1058,8 @@ export class ElementFactory {
         centerY: jsonData.centerY,
         radius: jsonData.radius,
         flow: jsonData.flow,
-        rotation: jsonData.rotation,  // Добавляем rotation
+        pressure: jsonData.pressure,
+        rotation: jsonData.rotation,
         elements: jsonData.elements,
         name: jsonData.name,
         color: jsonData.color,

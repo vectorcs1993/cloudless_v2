@@ -185,10 +185,9 @@ export class CanvasRenderer {
   }
 
   drawGrid(ctx) {
-    // Используем pixelsPerMeter для определения шага сетки в пикселях
-    const gridStepPx = 50; // Фиксированный шаг сетки в пикселях (50px)
-    // Или можно сделать шаг зависимым от масштаба:
-    // const gridStepPx = 50 / this.scale.value; // для постоянного размера в мировых координатах
+
+    // шаг зависит от масштаба:
+    const gridStepPx = 50 / this.scale.value; // для постоянного размера в мировых координатах
 
     const width = this.canvas.width / this.scale.value;
     const height = this.canvas.height / this.scale.value;
