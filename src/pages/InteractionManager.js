@@ -265,7 +265,11 @@ export class InteractionManager {
     } else if (e.button === 2) {
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
       if (clickedElement) {
-        this.addCalloutToElement(clickedElement, worldPos);
+        this.connectionManager.disconnectElement(clickedElement);
+        clickedElement.rotation = ((clickedElement.rotation || 0) + 90) % 360;
+        clickedElement.updatePorts();
+        clickedElement.updateCalloutText();
+        this.renderer.draw();
       }
     }
   }
