@@ -126,7 +126,7 @@ import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, Elbow, Cross, Group } from './Elements.js';
+import { Tee, DuctDirect, Fan, ElementFactory, ElbowCircular, ElbowRectangular, Cross, Group } from './Elements.js';
 
 // Элементы для drag and drop
 const dragItems = [
@@ -165,7 +165,7 @@ const dragItems = [
     </svg>`
   },
   {
-    type: 'elbow',
+    type: 'elbowCircular',
     label: 'Отвод',
     color: '#e74c3c',
     width: 64,
@@ -175,6 +175,18 @@ const dragItems = [
       <circle cx="12" cy="32" r="3" fill="#e74c3c"/>
       <circle cx="32" cy="32" r="3" fill="#e74c3c"/>
       <circle cx="32" cy="52" r="3" fill="#e74c3c"/>
+    </svg>`
+  },
+  {
+    type: 'elbowRectangular',
+    label: 'Отвод секционный',
+    color: '#ff6600',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <path d="M12 32 L32 32 L32 52" fill="none" stroke="#ff6600" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="12" y="28" width="20" height="8" fill="#ff6600" stroke="#2c3e50" stroke-width="2"/>
+      <rect x="28" y="40" width="8" height="12" fill="#ff6600" stroke="#2c3e50" stroke-width="2"/>
     </svg>`
   },
   {
@@ -367,8 +379,11 @@ const createGhostElement = (itemType, worldX, worldY) => {
     case 'tee':
       ghost = new Tee(-1, worldX, worldY);
       break;
-    case 'elbow':
-      ghost = new Elbow(-1, worldX, worldY);
+    case 'elbowCircular':
+      ghost = new ElbowCircular(-1, worldX, worldY);
+      break;
+    case 'elbowRectangular':
+      ghost = new ElbowRectangular(-1, worldX, worldY);
       break;
     case 'cross':
       ghost = new Cross(-1, worldX, worldY);
@@ -481,8 +496,11 @@ const onDrop = (e) => {
       case 'tee':
         addElement(Tee, [], elementX, elementY, true);
         break;
-      case 'elbow':
-        addElement(Elbow, [], elementX, elementY, true);
+      case 'elbowCircular':
+        addElement(ElbowCircular, [], elementX, elementY, true);
+        break;
+      case 'elbowRectangular':
+        addElement(ElbowRectangular, [], elementX, elementY, true);
         break;
       case 'cross':
         addElement(Cross, [], elementX, elementY, true);
