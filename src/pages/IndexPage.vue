@@ -129,6 +129,7 @@ import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
+import { SelectionManager } from './SelectionManager.js';
 import { Tee, DuctDirect, Fan, ElementFactory, ElbowCircular, ElbowRectangular, Cross, Group } from './Elements.js';
 
 // Элементы для drag and drop
@@ -220,6 +221,7 @@ const mainCanvas = ref(null);
 let renderer = null;
 let connectionManager = null;
 let interactionManager = null;
+let selectionManager = null;
 let layerManager = null;
 let storageManager = null;
 
@@ -817,6 +819,7 @@ onMounted(() => {
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
+  selectionManager = new SelectionManager(elements, renderer);
 
   // Добавляем возможность рисовать призрака
   const originalDraw = renderer.draw.bind(renderer);
@@ -839,9 +842,21 @@ onMounted(() => {
     }
   };
 
-  interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, {
-    snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
-  });
+  interactionManager = new InteractionManager(
+    mainCanvas.value,
+    elements,
+    renderer,
+    connectionManager,
+    selectionManager,
+    {
+      snapToPorts,
+      showPorts,
+      showCallouts,
+      panX: renderOptions.panX,
+      panY: renderOptions.panY,
+      scale: renderOptions.scale
+    }
+  );
   // Настройка автоматического обновления связей
   interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
 
@@ -852,6 +867,9 @@ onMounted(() => {
   // Устанавливаем callback для обновления selectedElements
   interactionManager.setOnElementMoveCallback((elements) => {
     selectedElements.value = elements;
+    if (selectionManager) {
+      selectionManager.setSelectedElements(elements);
+    }
   });
 
   layerManager = new LayerManager(elements, renderer);

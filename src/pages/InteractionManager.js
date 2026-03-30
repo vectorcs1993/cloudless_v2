@@ -1,26 +1,27 @@
 export class InteractionManager {
-  constructor(canvas, elements, renderer, connectionManager, options) {
+  constructor(canvas, elements, renderer, connectionManager, selectionManager, options) {
     this.canvas = canvas;
-    this.elements = elements;           // ref массив элементов
+    this.elements = elements;
     this.renderer = renderer;
     this.connectionManager = connectionManager;
-    this.options = options;              // содержит snapToPorts, panX, panY, scale и др.
+    this.selectionManager = selectionManager;
+    this.options = options;
     this.onElementMoveCallback = null;
 
     // Состояния взаимодействия
     this.isDragging = false;
     this.isPanning = false;
     this.isSelecting = false;
-    this.draggingElements = [];          // Массив перетаскиваемых элементов
+    this.draggingElements = [];
     this.draggingCallout = null;
     this.draggingCalloutElement = null;
     this.dragStartCalloutsPositions = null;
     this.dragStartMouseScreen = { x: 0, y: 0 };
     this.dragStartPan = { x: 0, y: 0 };
-    this.dragStartElementsPositions = []; // Массив начальных позиций элементов
+    this.dragStartElementsPositions = [];
     this.selectionStart = null;
-    this.currentSnappedPorts = null;   // запоминаем текущее соединение при перетаскивании
-    this.autoUpdateConnections = true; // флаг автоматического обновления связей
+    this.currentSnappedPorts = null;
+    this.autoUpdateConnections = true;
   }
 
   setAutoUpdateConnections(enabled) {
@@ -31,14 +32,10 @@ export class InteractionManager {
     this.onElementMoveCallback = callback;
   }
 
-  // Найти элемент под курсором (мировые координаты)
   findElementAt(x, y) {
-    // Получаем контекст canvas для hitTest
     const ctx = this.canvas.getContext('2d');
-
     for (let i = this.elements.value.length - 1; i >= 0; i--) {
       const element = this.elements.value[i];
-      // Передаём контекст в hitTest
       if (element.hitTest(x, y, ctx)) {
         return element;
       }
@@ -46,7 +43,6 @@ export class InteractionManager {
     return null;
   }
 
-  // Найти выноску под курсором
   findCalloutAt(x, y) {
     for (const element of this.elements.value) {
       for (const callout of element.callouts) {
@@ -59,7 +55,6 @@ export class InteractionManager {
     return null;
   }
 
-  // Найти порт под курсором
   findPortAtPosition(worldX, worldY, maxDistance = 15) {
     const allPorts = this.connectionManager.getAllPorts();
     for (const port of allPorts) {
@@ -69,7 +64,6 @@ export class InteractionManager {
     return null;
   }
 
-  // Добавить выноску элементу
   addCalloutToElement(element, worldPos) {
     const calloutX = worldPos.x + 50 / this.options.scale.value;
     const calloutY = worldPos.y - 30 / this.options.scale.value;
@@ -78,7 +72,6 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
-  // Перетаскивание выноски
   startDragCallout(calloutHit, e) {
     this.isDragging = true;
     this.draggingCallout = calloutHit;
@@ -89,14 +82,9 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
-  // Начать перетаскивание выбранных элементов
   startDrag(e) {
     this.isDragging = true;
-
-    // Получаем все выбранные элементы
     this.draggingElements = [...this.renderer.selectedElements];
-
-    // Сохраняем начальные позиции для всех выбранных элементов
     this.dragStartElementsPositions = this.draggingElements.map(element => ({
       element,
       x: element.x,
@@ -107,10 +95,7 @@ export class InteractionManager {
         y: callout.y
       }))
     }));
-
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
-
-    // Сохраняем начальные соединения для всех элементов
     this.currentSnappedPorts = [];
     for (const element of this.draggingElements) {
       if (element.type !== 'group') {
@@ -126,12 +111,10 @@ export class InteractionManager {
         }
       }
     }
-
     this.canvas.style.cursor = 'grabbing';
     this.renderer.draw();
   }
 
-  // Панорамирование
   startPan(e) {
     this.isPanning = true;
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
@@ -139,7 +122,6 @@ export class InteractionManager {
     this.canvas.style.cursor = 'grabbing';
   }
 
-  // Универсальное перемещение элемента или группы (относительное смещение)
   moveElement(element, deltaX, deltaY) {
     if (element.type === 'group') {
       element.move(deltaX, deltaY);
@@ -157,7 +139,6 @@ export class InteractionManager {
     }
   }
 
-  // Перемещение нескольких элементов
   moveElements(elements, deltaX, deltaY) {
     for (const element of elements) {
       this.moveElement(element, deltaX, deltaY);
@@ -165,16 +146,13 @@ export class InteractionManager {
     this.updateSelectedElementReactive();
   }
 
-  // Установить абсолютную позицию элемента или группы
   setElementPosition(element, newX, newY) {
     const deltaX = newX - element.x;
     const deltaY = newY - element.y;
     this.moveElement(element, deltaX, deltaY);
   }
 
-  // Установить соединение между портами и запомнить его
   connectPorts(movingPort, targetPort) {
-    // Разрываем старые соединения, если они были
     if (movingPort.isConnected()) {
       const oldTarget = this.connectionManager.getPortById(movingPort.connectedPortId);
       if (oldTarget) this.connectionManager.disconnectPorts(movingPort, oldTarget);
@@ -187,28 +165,22 @@ export class InteractionManager {
     this.currentSnappedPorts = [{ movingPort, targetPort, element: this.draggingElements[0] }];
   }
 
-  // Применение привязки к портам для нескольких элементов
   applyPortSnappingForMultiple(elements, deltaWorldX, deltaWorldY, startPositions) {
-    // Сначала сбрасываем все элементы в начальные позиции
     for (const pos of startPositions) {
       this.setElementPosition(pos.element, pos.x, pos.y);
     }
 
     if (!this.options.snapToPorts.value) {
-      // Без привязки просто перемещаем все элементы
       this.moveElements(elements, deltaWorldX, deltaWorldY);
       return;
     }
 
-    // Проверяем привязку для каждого перемещаемого элемента
     let bestMatch = null;
     let bestElement = null;
 
     for (const element of elements) {
       if (element.type === 'group') continue;
-
       const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
-
       if (match && match.distance < 40) {
         if (!bestMatch || match.distance < bestMatch.distance) {
           bestMatch = match;
@@ -218,11 +190,8 @@ export class InteractionManager {
     }
 
     if (bestMatch && bestElement) {
-      // Корректируем смещение для найденного элемента
       const adjustedDeltaX = deltaWorldX + bestMatch.offsetX;
       const adjustedDeltaY = deltaWorldY + bestMatch.offsetY;
-
-      // Применяем это смещение ко всем элементам
       this.moveElements(elements, adjustedDeltaX, adjustedDeltaY);
       this.renderer.setHighlightedPort(bestMatch.targetPort);
     } else {
@@ -241,14 +210,12 @@ export class InteractionManager {
     }
   }
 
-  // ========== Обработчики событий canvas ==========
   onMouseDown(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (e.button === 0) {
       const isCtrlPressed = e.ctrlKey || e.metaKey;
 
-      // Проверяем выноску
       const calloutHit = this.findCalloutAt(worldPos.x, worldPos.y);
       if (calloutHit) {
         this.startDragCallout(calloutHit, e);
@@ -258,7 +225,6 @@ export class InteractionManager {
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
 
       if (clickedElement) {
-        // Проверяем, нажат ли Ctrl для множественного выбора
         if (isCtrlPressed) {
           const index = this.renderer.selectedElements.findIndex(el => el.id === clickedElement.id);
           if (index === -1) {
@@ -271,7 +237,6 @@ export class InteractionManager {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
         } else {
-          // Если элемент уже выбран и выбранных несколько, не сбрасываем выделение
           if (!this.renderer.selectedElements.includes(clickedElement)) {
             this.renderer.selectedElements = [clickedElement];
             this.renderer.draw();
@@ -280,10 +245,8 @@ export class InteractionManager {
             }
           }
         }
-        // Начинаем перетаскивание выбранных элементов
         this.startDrag(e);
       } else {
-        // Клик по пустому месту - сбрасываем выделение, если не зажат Ctrl
         if (!isCtrlPressed) {
           this.renderer.selectedElements = [];
           this.renderer.draw();
@@ -291,12 +254,16 @@ export class InteractionManager {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
         }
+        // Начинаем выделение прямоугольником
         this.isSelecting = true;
+        const rect = this.canvas.getBoundingClientRect();
         const screenPos = {
-          x: e.clientX - this.canvas.getBoundingClientRect().left,
-          y: e.clientY - this.canvas.getBoundingClientRect().top
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
         };
         this.selectionStart = screenPos;
+        // Запускаем прямоугольник выделения в selectionManager
+        this.selectionManager.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.draw();
       }
@@ -316,38 +283,30 @@ export class InteractionManager {
   }
 
   onMouseMove(e) {
-    // Получаем правильные экранные координаты относительно canvas
     const rect = this.canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
-    // Перетаскивание выноски
     if (this.draggingCallout) {
       const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
       const deltaX = currentWorldPos.x - startWorldPos.x;
       const deltaY = currentWorldPos.y - startWorldPos.y;
-
       this.draggingCallout.callout.x = this.dragStartElementPos.x + deltaX;
       this.draggingCallout.callout.y = this.dragStartElementPos.y + deltaY;
-
       if (this.draggingCalloutElement) {
         this.draggingCalloutElement.updateCalloutText();
       }
-
       this.renderer.draw();
       return;
     }
 
-    // Перетаскивание элементов
     if (this.isDragging && this.draggingElements.length > 0) {
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
       const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const deltaWorldX = currentWorldPos.x - startWorldPos.x;
       const deltaWorldY = currentWorldPos.y - startWorldPos.y;
-
       this.applyPortSnappingForMultiple(
         this.draggingElements,
         deltaWorldX,
@@ -358,7 +317,6 @@ export class InteractionManager {
       return;
     }
 
-    // Панорамирование
     if (this.isPanning) {
       this.options.panX.value = this.dragStartPan.x + (e.clientX - this.dragStartMouseScreen.x);
       this.options.panY.value = this.dragStartPan.y + (e.clientY - this.dragStartMouseScreen.y);
@@ -366,24 +324,22 @@ export class InteractionManager {
       return;
     }
 
-    // Выделение прямоугольником
     if (this.isSelecting && this.selectionStart) {
       const currentScreenPos = {
-        x: e.clientX - this.canvas.getBoundingClientRect().left,
-        y: e.clientY - this.canvas.getBoundingClientRect().top
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
       };
+      // Обновляем прямоугольник в selectionManager и renderer
+      this.selectionManager.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.draw();
       return;
     }
 
-    // Обычное состояние - проверяем порты и элементы
     let cursorStyle = 'default';
-
     if (this.options.showPorts.value) {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       this.renderer.setHighlightedPort(portUnderCursor);
-
       if (portUnderCursor) {
         this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
         cursorStyle = 'pointer';
@@ -400,31 +356,38 @@ export class InteractionManager {
       this.renderer.setHighlightedPort(null);
       this.renderer.clearTooltip();
     }
-
     this.canvas.style.cursor = cursorStyle;
     this.renderer.draw();
   }
 
   onMouseUp(e) {
+    // Завершаем выделение прямоугольником
     if (this.isSelecting) {
+      // Получаем выбранные элементы из selectionManager
+      const selected = this.selectionManager.endSelectionRect(
+        this.options.panX.value,
+        this.options.panY.value,
+        this.options.scale.value
+      );
+      // Обновляем renderer и callback
+      this.renderer.setSelectedElements(selected);
       this.renderer.endSelectionRect();
+      if (this.onElementMoveCallback) {
+        this.onElementMoveCallback(selected);
+      }
+      // Сбрасываем состояние выделения
       this.isSelecting = false;
       this.selectionStart = null;
       this.renderer.draw();
-
-      if (this.onElementMoveCallback) {
-        this.onElementMoveCallback(this.renderer.selectedElements);
-      }
     }
 
+    // Завершаем перетаскивание элементов
     if (this.isDragging && this.draggingElements.length > 0) {
       const movedElements = [...this.draggingElements];
-
       this.isDragging = false;
       this.draggingElements = [];
       this.dragStartElementsPositions = [];
       this.currentSnappedPorts = null;
-
       if (this.canvas) this.canvas.style.cursor = '';
 
       if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElements.length > 0) {
@@ -441,17 +404,15 @@ export class InteractionManager {
       }
     }
 
+    // Завершаем перетаскивание выноски
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
       if (this.canvas) this.canvas.style.cursor = '';
-
-      // Проверяем порт после завершения перетаскивания выноски
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
-
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       if (portUnderCursor && this.options.showPorts.value) {
         this.renderer.setHighlightedPort(portUnderCursor);
@@ -463,16 +424,17 @@ export class InteractionManager {
         this.renderer.setHighlightedPort(null);
         this.renderer.clearTooltip();
       }
-
       this.renderer.draw();
     }
 
+    // Завершаем панорамирование
     if (this.isPanning) {
       this.isPanning = false;
       if (this.canvas) this.canvas.style.cursor = '';
       this.renderer.draw();
     }
 
+    // Очищаем подсветку порта через некоторое время
     setTimeout(() => {
       if (!this.isDragging && !this.draggingCallout && !this.isSelecting && this.renderer) {
         if (this.renderer.setHighlightedPort) {
@@ -486,8 +448,6 @@ export class InteractionManager {
   onWheel(e) {
     e.preventDefault();
     const rect = this.canvas.getBoundingClientRect();
-    const centerX = e.clientX - rect.left;
-    const centerY = e.clientY - rect.top;
     const worldBefore = this.renderer.screenToWorld(e.clientX, e.clientY);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(Math.max(this.options.scale.value * delta, 0.2), 5);
