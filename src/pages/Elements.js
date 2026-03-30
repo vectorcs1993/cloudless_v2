@@ -131,12 +131,19 @@ class BaseElement {
       return { x: worldX, y: worldY };
     }
 
+    // Перемещаем в систему координат центра элемента
     const dx = worldX - centerX;
     const dy = worldY - centerY;
+    // Поворачиваем обратно (отрицательный угол)
     const angle = -rotation * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const rotatedX = dx * cos - dy * sin;
+    const rotatedY = dx * sin + dy * cos;
+
     return {
-      x: dx * Math.cos(angle) - dy * Math.sin(angle) + centerX,
-      y: dx * Math.sin(angle) + dy * Math.cos(angle) + centerY
+      x: rotatedX + centerX,
+      y: rotatedY + centerY
     };
   }
 
@@ -392,10 +399,49 @@ export class DuctDirect extends DuctBase {
     }
   }
 
+  // ИСПРАВЛЕННЫЙ hitTest - теперь правильно обрабатывает поворот
   hitTest(worldX, worldY, ctx) {
-    return this.hitTestRectangular(worldX, worldY, this._lengthHorizontal, this._size);
+    const width = this.getWidth();
+    const height = this.getHeight();
+
+    // Преобразуем мировые координаты в локальные координаты элемента (с учетом поворота)
+    const local = this.transformToLocalCoords(worldX, worldY);
+
+    // Проверяем попадание в прямоугольник в локальных координатах
+    const isHit = local.x >= this.x && local.x <= this.x + width &&
+      local.y >= this.y && local.y <= this.y + height;
+
+    // Для отладки (можно убрать)
+    if (isHit) {
+      // console.log(`Hit test on ${this.name} (${this.rotation}°): world(${worldX},${worldY}) -> local(${local.x},${local.y})`);
+    }
+
+    return isHit;
   }
 
+  // Исправленный метод transformToLocalCoords в базовом классе BaseElement
+  transformToLocalCoords(worldX, worldY) {
+    const centerX = this.x + this.getWidth() / 2;
+    const centerY = this.y + this.getHeight() / 2;
+    const rotation = this.rotation || 0;
+
+    if (rotation === 0) {
+      return { x: worldX, y: worldY };
+    }
+
+    // Перемещаем в систему координат центра элемента
+    const dx = worldX - centerX;
+    const dy = worldY - centerY;
+    // Поворачиваем обратно (отрицательный угол)
+    const angle = -rotation * Math.PI / 180;
+    const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
+    const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
+
+    return {
+      x: rotatedX + centerX,
+      y: rotatedY + centerY
+    };
+  }
 
   drawCenterLines(ctx, scale, isDarkTheme) {
     const width = this.getWidth();
@@ -422,6 +468,7 @@ export class DuctDirect extends DuctBase {
     ctx.setLineDash([]);
     ctx.restore();
   }
+
   toJSON() {
     return {
       ...super.toJSON(),

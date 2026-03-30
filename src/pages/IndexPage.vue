@@ -213,7 +213,7 @@ const showCallouts = ref(true);
 const showColors = ref(true);
 const showElementAxes = ref(false);
 const snapToPorts = ref(true);
-const gridStepM = ref(1);
+const gridStepM = ref(50);
 const autoUpdateConnections = ref(true);
 // Canvas
 const mainCanvas = ref(null);
