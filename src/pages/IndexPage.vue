@@ -32,12 +32,14 @@
         <button @click="saveToLocalStorage" class="cl-btn">💾 Сохранить</button>
         <button @click="resetToDefault" class="cl-btn">↺ Сброс</button>
         <button @click="updateAllPortsAndConnections" class="cl-btn">🔄 Обновить все порты и связи</button>
+        <button @click="copySelected" class="cl-btn" :disabled="selectedElements.length === 0">📋 Копировать ({{ selectedElements.length }})</button>
+        <button @click="pasteElements" class="cl-btn" :disabled="!clipboardElements.length">📋 Вставить</button>
       </div>
 
     </div>
     <!-- Канвас для рендеринга элементов -->
     <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-      @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop">
+      @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
     </canvas>
     <!-- Информация о выбранных элементах -->
     <div class="selected-info" v-if="selectedElements.length > 0">
@@ -121,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue';
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
@@ -229,6 +231,9 @@ let nextElementId = 100;
 let nextPortId = 1000;
 let nextGroupId = 1000;
 
+// Для копирования/вставки
+const clipboardElements = ref([]);
+
 // Для drag and drop и призрака
 let dragType = null;
 let dragItemData = null;
@@ -256,7 +261,126 @@ const isGroupSelected = computed(() => {
   return selectedElements.value.length === 1 && selectedElements.value[0] instanceof Group;
 });
 
-// ========== Функции ==========
+// ========== Функции копирования и вставки ==========
+const copySelected = () => {
+  if (selectedElements.value.length === 0) return;
+
+  // Сохраняем копии выбранных элементов в буфер обмена
+  clipboardElements.value = selectedElements.value.map(element => {
+    // Создаем глубокую копию через JSON
+    const json = element.toJSON();
+    // Очищаем выноски, чтобы они не дублировались при вставке
+    // Выноски будут созданы заново при вставке
+    json.callouts = [];
+    return json;
+  });
+
+  // Показываем уведомление
+  const copyBtn = document.querySelector('.cl-btn:has(> 📋 Копировать)');
+  if (copyBtn) {
+    const originalText = copyBtn.textContent;
+    copyBtn.textContent = `✓ Скопировано ${clipboardElements.value.length} элементов!`;
+    setTimeout(() => { if (copyBtn) copyBtn.textContent = originalText; }, 1000);
+  }
+
+  console.log(`Скопировано ${clipboardElements.value.length} элементов`);
+};
+
+const pasteElements = () => {
+  if (clipboardElements.value.length === 0) return;
+
+  // Снимаем выделение со всех элементов
+  selectedElements.value = [];
+
+  const newElements = [];
+  const offset = 50; // Смещение для вставки, чтобы не накладывались на оригинал
+
+  // Находим центр масс скопированных элементов для определения смещения
+  let minX = Infinity, minY = Infinity;
+  clipboardElements.value.forEach(json => {
+    if (json.x < minX) minX = json.x;
+    if (json.y < minY) minY = json.y;
+  });
+
+  clipboardElements.value.forEach(json => {
+    // Создаем новый элемент на основе сохраненного JSON
+    // Важно: НЕ передаем callouts из JSON, так как мы их очистили
+    const newElement = ElementFactory.createFromJSON({
+      ...json,
+      id: ++nextElementId,
+      // Смещаем позицию
+      x: json.x + offset,
+      y: json.y + offset,
+      // Очищаем связи и выноски
+      ports: json.ports.map(port => ({
+        ...port,
+        id: ++nextPortId,
+        connectedElementId: null,
+        connectedPortId: null
+      })),
+      callouts: [] // Явно очищаем выноски
+    });
+
+    // Обновляем имя, чтобы не было дубликатов
+    if (newElement.name) {
+      const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
+      newElement.name = `${baseName} (копия)`;
+    }
+
+    // Обновляем порты
+    newElement.updatePorts();
+
+    // Добавляем ОДНУ выноску для нового элемента
+    const calloutX = newElement.x;
+    const calloutY = newElement.y - 150;
+    newElement.addCallout(calloutX, calloutY);
+
+    elements.value.push(newElement);
+    newElements.push(newElement);
+  });
+
+  // Выделяем вставленные элементы
+  selectedElements.value = newElements;
+  renderer?.setSelectedElements(newElements);
+  renderer?.draw();
+
+  // Показываем уведомление
+  const pasteBtn = document.querySelector('.cl-btn:has(> 📋 Вставить)');
+  if (pasteBtn) {
+    const originalText = pasteBtn.textContent;
+    pasteBtn.textContent = `✓ Вставлено ${newElements.length} элементов!`;
+    setTimeout(() => { if (pasteBtn) pasteBtn.textContent = originalText; }, 1000);
+  }
+
+  console.log(`Вставлено ${newElements.length} элементов`);
+};
+
+// Обработчик горячих клавиш
+const handleKeyDown = (e) => {
+  // Ctrl+C (копирование)
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    e.preventDefault();
+    copySelected();
+  }
+  // Ctrl+V (вставка)
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    e.preventDefault();
+    pasteElements();
+  }
+  // Delete (удаление)
+  else if (e.key === 'Delete' && selectedElements.value.length > 0) {
+    e.preventDefault();
+    deleteSelected();
+  }
+  // Escape (снятие выделения)
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    selectedElements.value = [];
+    renderer?.setSelectedElements([]);
+    renderer?.draw();
+  }
+};
+
 const saveToLocalStorage = () => {
   storageManager.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
   const saveBtn = document.querySelector('.save-btn');
@@ -319,6 +443,7 @@ const resetToDefault = () => {
     nextPortId = 1000;
     nextGroupId = 1000;
     selectedElements.value = [];
+    clipboardElements.value = [];
     renderer?.setSelectedElements([]);
     renderer?.draw();
   }
@@ -589,13 +714,11 @@ const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
 
   const groupId = ++nextGroupId;
-  // Создаем копию выбранных элементов
-  const elementsToGroup = [...selectedElements.value];
-  const group = new Group(groupId, elementsToGroup);
+  const group = new Group(groupId, [...selectedElements.value]);
   group.updatePorts();
 
   // Удаляем выбранные элементы из основного массива
-  elementsToGroup.forEach(element => {
+  selectedElements.value.forEach(element => {
     const index = elements.value.findIndex(el => el.id === element.id);
     if (index !== -1) {
       elements.value.splice(index, 1);
@@ -671,9 +794,7 @@ const onCanvasMouseMove = (e) => {
     interactionManager?.onMouseMove(e);
   }
 
-  // Обновляем выбранные элементы из renderer
   if (renderer?.selectedElements) {
-    // Создаем новый массив, чтобы реактивность сработала
     selectedElements.value = [...renderer.selectedElements];
   }
 };
@@ -740,7 +861,18 @@ onMounted(() => {
   const resizeObserver = new ResizeObserver(() => renderer?.draw());
   resizeObserver.observe(mainCanvas.value);
 
+  // Добавляем обработчик горячих клавиш
+  window.addEventListener('keydown', handleKeyDown);
+  // Делаем canvas фокусируемым для получения событий клавиатуры
+  mainCanvas.value.setAttribute('tabindex', '0');
+  mainCanvas.value.focus();
+
   renderer.draw();
+});
+
+// Удаляем обработчик при размонтировании
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 
 watch(showGrid, () => {

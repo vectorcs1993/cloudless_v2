@@ -1395,9 +1395,15 @@ export class ElementFactory {
       });
     }
 
-    // Восстанавливаем выноски для НЕ-групп (для групп уже восстановили выше)
-    if (jsonData.callouts && element.type !== 'group') {
+    // Восстанавливаем выноски только если они есть в JSON и элемент не группа
+    // И только если это не процесс вставки (мы передаем пустой массив callouts)
+    if (jsonData.callouts && jsonData.callouts.length > 0 && element.type !== 'group') {
+      // Очищаем существующие выноски, чтобы избежать дублирования
+      element.callouts = [];
       element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+    } else if (element.type !== 'group') {
+      // Если выносок нет в JSON, убеждаемся, что массив пустой
+      element.callouts = [];
     }
 
     return element;
