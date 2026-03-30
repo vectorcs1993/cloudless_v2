@@ -11,20 +11,22 @@ export class InteractionManager {
     this.isDragging = false;
     this.isPanning = false;
     this.isSelecting = false;
-    this.draggingElement = null;
+    this.draggingElements = [];          // Массив перетаскиваемых элементов
     this.draggingCallout = null;
     this.draggingCalloutElement = null;
     this.dragStartCalloutsPositions = null;
     this.dragStartMouseScreen = { x: 0, y: 0 };
     this.dragStartPan = { x: 0, y: 0 };
-    this.dragStartElementPos = { x: 0, y: 0 };
+    this.dragStartElementsPositions = []; // Массив начальных позиций элементов
     this.selectionStart = null;
     this.currentSnappedPorts = null;   // запоминаем текущее соединение при перетаскивании
     this.autoUpdateConnections = true; // флаг автоматического обновления связей
   }
+
   setAutoUpdateConnections(enabled) {
     this.autoUpdateConnections = enabled;
   }
+
   setOnElementMoveCallback(callback) {
     this.onElementMoveCallback = callback;
   }
@@ -87,34 +89,42 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
-  // Начать перетаскивание элемента
-  startDrag(element, e) {
+  // Начать перетаскивание выбранных элементов
+  startDrag(e) {
     this.isDragging = true;
-    this.draggingElement = element;
-    this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
-    this.dragStartElementPos = { x: element.x, y: element.y };
 
-    // Сохраняем начальные позиции выносок элемента
-    this.dragStartCalloutsPositions = (element.callouts || []).map(callout => ({
-      callout,
-      x: callout.x,
-      y: callout.y
+    // Получаем все выбранные элементы
+    this.draggingElements = [...this.renderer.selectedElements];
+
+    // Сохраняем начальные позиции для всех выбранных элементов
+    this.dragStartElementsPositions = this.draggingElements.map(element => ({
+      element,
+      x: element.x,
+      y: element.y,
+      callouts: (element.callouts || []).map(callout => ({
+        callout,
+        x: callout.x,
+        y: callout.y
+      }))
     }));
 
-    // Запоминаем текущее соединение, если элемент не группа
-    if (element.type !== 'group') {
-      const connectedPort = element.ports?.find(p => p.isConnected());
-      if (connectedPort) {
-        const targetElement = this.elements.value.find(el => el.id === connectedPort.connectedElementId);
-        if (targetElement) {
-          const targetPort = targetElement.ports?.find(p => p.id === connectedPort.connectedPortId);
-          if (targetPort) {
-            this.currentSnappedPorts = { movingPort: connectedPort, targetPort };
+    this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
+
+    // Сохраняем начальные соединения для всех элементов
+    this.currentSnappedPorts = [];
+    for (const element of this.draggingElements) {
+      if (element.type !== 'group') {
+        const connectedPort = element.ports?.find(p => p.isConnected());
+        if (connectedPort) {
+          const targetElement = this.elements.value.find(el => el.id === connectedPort.connectedElementId);
+          if (targetElement && !this.draggingElements.includes(targetElement)) {
+            const targetPort = targetElement.ports?.find(p => p.id === connectedPort.connectedPortId);
+            if (targetPort) {
+              this.currentSnappedPorts.push({ movingPort: connectedPort, targetPort, element });
+            }
           }
         }
       }
-    } else {
-      this.currentSnappedPorts = null;
     }
 
     this.canvas.style.cursor = 'grabbing';
@@ -145,6 +155,13 @@ export class InteractionManager {
       }
       element.updateCalloutText();
     }
+  }
+
+  // Перемещение нескольких элементов
+  moveElements(elements, deltaX, deltaY) {
+    for (const element of elements) {
+      this.moveElement(element, deltaX, deltaY);
+    }
     this.updateSelectedElementReactive();
   }
 
@@ -167,39 +184,57 @@ export class InteractionManager {
       if (oldMoving) this.connectionManager.disconnectPorts(targetPort, oldMoving);
     }
     this.connectionManager.connectPorts(movingPort, targetPort);
-    this.currentSnappedPorts = { movingPort, targetPort };
+    this.currentSnappedPorts = [{ movingPort, targetPort, element: this.draggingElements[0] }];
   }
 
-  applyPortSnapping(element, deltaWorldX, deltaWorldY) {
-    // Сначала сбрасываем элемент в начальную позицию
-    this.setElementPosition(element, this.dragStartElementPos.x, this.dragStartElementPos.y);
+  // Применение привязки к портам для нескольких элементов
+  applyPortSnappingForMultiple(elements, deltaWorldX, deltaWorldY, startPositions) {
+    // Сначала сбрасываем все элементы в начальные позиции
+    for (const pos of startPositions) {
+      this.setElementPosition(pos.element, pos.x, pos.y);
+    }
 
     if (!this.options.snapToPorts.value) {
-      // Без привязки просто перемещаем на дельту
-      this.moveElement(element, deltaWorldX, deltaWorldY);
+      // Без привязки просто перемещаем все элементы
+      this.moveElements(elements, deltaWorldX, deltaWorldY);
       return;
     }
 
-    const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
+    // Проверяем привязку для каждого перемещаемого элемента
+    let bestMatch = null;
+    let bestElement = null;
 
-    if (match && match.distance < 40) {
-      // Корректируем смещение, чтобы порт встал на место
-      const adjustedDeltaX = deltaWorldX + match.offsetX;
-      const adjustedDeltaY = deltaWorldY + match.offsetY;
-      this.moveElement(element, adjustedDeltaX, adjustedDeltaY);
-      // Убираем создание связи - только подсветка порта
-      this.renderer.setHighlightedPort(match.targetPort);
+    for (const element of elements) {
+      if (element.type === 'group') continue;
+
+      const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
+
+      if (match && match.distance < 40) {
+        if (!bestMatch || match.distance < bestMatch.distance) {
+          bestMatch = match;
+          bestElement = element;
+        }
+      }
+    }
+
+    if (bestMatch && bestElement) {
+      // Корректируем смещение для найденного элемента
+      const adjustedDeltaX = deltaWorldX + bestMatch.offsetX;
+      const adjustedDeltaY = deltaWorldY + bestMatch.offsetY;
+
+      // Применяем это смещение ко всем элементам
+      this.moveElements(elements, adjustedDeltaX, adjustedDeltaY);
+      this.renderer.setHighlightedPort(bestMatch.targetPort);
     } else {
-      this.moveElement(element, deltaWorldX, deltaWorldY);
+      this.moveElements(elements, deltaWorldX, deltaWorldY);
       this.renderer.setHighlightedPort(null);
-      // Убираем разрыв связей - они не создавались
     }
   }
 
   updateSelectedElementReactive() {
     if (this.onElementMoveCallback) {
-      if (this.draggingElement) {
-        this.onElementMoveCallback([this.draggingElement]);
+      if (this.draggingElements.length > 0) {
+        this.onElementMoveCallback(this.draggingElements);
       } else if (this.renderer.selectedElements) {
         this.onElementMoveCallback(this.renderer.selectedElements);
       }
@@ -221,7 +256,9 @@ export class InteractionManager {
       }
 
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
+
       if (clickedElement) {
+        // Проверяем, нажат ли Ctrl для множественного выбора
         if (isCtrlPressed) {
           const index = this.renderer.selectedElements.findIndex(el => el.id === clickedElement.id);
           if (index === -1) {
@@ -234,17 +271,25 @@ export class InteractionManager {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
         } else {
-          this.renderer.selectedElements = [clickedElement];
+          // Если элемент уже выбран и выбранных несколько, не сбрасываем выделение
+          if (!this.renderer.selectedElements.includes(clickedElement)) {
+            this.renderer.selectedElements = [clickedElement];
+            this.renderer.draw();
+            if (this.onElementMoveCallback) {
+              this.onElementMoveCallback(this.renderer.selectedElements);
+            }
+          }
+        }
+        // Начинаем перетаскивание выбранных элементов
+        this.startDrag(e);
+      } else {
+        // Клик по пустому месту - сбрасываем выделение, если не зажат Ctrl
+        if (!isCtrlPressed) {
+          this.renderer.selectedElements = [];
           this.renderer.draw();
           if (this.onElementMoveCallback) {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
-        }
-        this.startDrag(clickedElement, e);
-      } else {
-        if (!isCtrlPressed) {
-          this.renderer.selectedElements = [];
-          this.renderer.draw();
         }
         this.isSelecting = true;
         const screenPos = {
@@ -254,10 +299,6 @@ export class InteractionManager {
         this.selectionStart = screenPos;
         this.renderer.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.draw();
-      }
-
-      if (this.onElementMoveCallback) {
-        this.onElementMoveCallback(this.renderer.selectedElements);
       }
     } else if (e.button === 1) {
       e.preventDefault();
@@ -297,17 +338,22 @@ export class InteractionManager {
       }
 
       this.renderer.draw();
-      return; // Важно: выходим, чтобы не проверять порты во время перетаскивания
+      return;
     }
 
-    // Перетаскивание элемента
-    if (this.isDragging && this.draggingElement) {
+    // Перетаскивание элементов
+    if (this.isDragging && this.draggingElements.length > 0) {
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
       const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const deltaWorldX = currentWorldPos.x - startWorldPos.x;
       const deltaWorldY = currentWorldPos.y - startWorldPos.y;
 
-      this.applyPortSnapping(this.draggingElement, deltaWorldX, deltaWorldY);
+      this.applyPortSnappingForMultiple(
+        this.draggingElements,
+        deltaWorldX,
+        deltaWorldY,
+        this.dragStartElementsPositions
+      );
       this.renderer.draw();
       return;
     }
@@ -371,19 +417,19 @@ export class InteractionManager {
       }
     }
 
-    if (this.isDragging && this.draggingElement) {
-      const movedElement = this.draggingElement;
+    if (this.isDragging && this.draggingElements.length > 0) {
+      const movedElements = [...this.draggingElements];
 
       this.isDragging = false;
-      this.draggingElement = null;
-      this.dragStartCalloutsPositions = null;
+      this.draggingElements = [];
+      this.dragStartElementsPositions = [];
       this.currentSnappedPorts = null;
 
       if (this.canvas) this.canvas.style.cursor = '';
 
-      if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElement) {
+      if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElements.length > 0) {
         setTimeout(() => {
-          console.log('Автоматическое обновление связей после перемещения элемента');
+          console.log('Автоматическое обновление связей после перемещения элементов');
           const restored = this.connectionManager.updateAllPortsAndConnections(5);
           if (restored > 0) {
             console.log(`Автоматически восстановлено ${restored} связей`);
@@ -400,20 +446,18 @@ export class InteractionManager {
       this.draggingCalloutElement = null;
       if (this.canvas) this.canvas.style.cursor = '';
 
-      // ПРИНУДИТЕЛЬНО ПРОВЕРЯЕМ ПОРТ ПОСЛЕ ЗАВЕРШЕНИЯ ПЕРЕТАСКИВАНИЯ ВЫНОСКИ
+      // Проверяем порт после завершения перетаскивания выноски
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const rect = this.canvas.getBoundingClientRect();
       const screenX = e.clientX - rect.left;
       const screenY = e.clientY - rect.top;
 
-      // Проверяем порт под курсором
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       if (portUnderCursor && this.options.showPorts.value) {
         this.renderer.setHighlightedPort(portUnderCursor);
         this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
         this.canvas.style.cursor = 'pointer';
       } else {
-        // Проверяем элемент под курсором
         const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
         this.canvas.style.cursor = elementUnderCursor ? 'pointer' : 'default';
         this.renderer.setHighlightedPort(null);

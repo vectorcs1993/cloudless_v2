@@ -589,11 +589,13 @@ const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
 
   const groupId = ++nextGroupId;
-  const group = new Group(groupId, selectedElements.value);
+  // Создаем копию выбранных элементов
+  const elementsToGroup = [...selectedElements.value];
+  const group = new Group(groupId, elementsToGroup);
   group.updatePorts();
 
   // Удаляем выбранные элементы из основного массива
-  selectedElements.value.forEach(element => {
+  elementsToGroup.forEach(element => {
     const index = elements.value.findIndex(el => el.id === element.id);
     if (index !== -1) {
       elements.value.splice(index, 1);
@@ -669,7 +671,9 @@ const onCanvasMouseMove = (e) => {
     interactionManager?.onMouseMove(e);
   }
 
+  // Обновляем выбранные элементы из renderer
   if (renderer?.selectedElements) {
+    // Создаем новый массив, чтобы реактивность сработала
     selectedElements.value = [...renderer.selectedElements];
   }
 };
