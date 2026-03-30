@@ -179,7 +179,6 @@ export class InteractionManager {
     let bestElement = null;
 
     for (const element of elements) {
-      if (element.type === 'group') continue;
       const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
       if (match && match.distance < 40) {
         if (!bestMatch || match.distance < bestMatch.distance) {
