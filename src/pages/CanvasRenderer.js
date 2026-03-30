@@ -11,7 +11,6 @@ export class CanvasRenderer {
     this.selectionRect = null;
     this.tooltipPort = null;
     this.tooltipPos = { x: 0, y: 0 };
-    this.tempCanvas = document.createElement('canvas'); // Временный canvas для hit testing
   }
 
   setTooltipPort(port, screenX, screenY) {
@@ -50,73 +49,7 @@ export class CanvasRenderer {
     }
   }
 
-  // Проверка пересечения path элемента с прямоугольником выделения
-  isElementIntersectsRect(element, worldRect) {
-    // Создаем временный контекст для path
-    const tempCtx = this.tempCanvas.getContext('2d');
-    if (!tempCtx) return false;
-
-    // Очищаем временный canvas
-    this.tempCanvas.width = 1;
-    this.tempCanvas.height = 1;
-
-    // Получаем path элемента
-    try {
-      // Некоторые элементы создают path через createPath
-      if (element.createPath) {
-        element.createPath(tempCtx);
-      } else {
-        // Для элементов без createPath используем bounding box
-        return this.isElementInSelectionRect(element, worldRect);
-      }
-    } catch (e) {
-      return this.isElementInSelectionRect(element, worldRect);
-    }
-
-    // Проверяем углы прямоугольника на попадание в path
-    const corners = [
-      { x: worldRect.minX, y: worldRect.minY },
-      { x: worldRect.maxX, y: worldRect.minY },
-      { x: worldRect.maxX, y: worldRect.maxY },
-      { x: worldRect.minX, y: worldRect.maxY }
-    ];
-
-    for (const corner of corners) {
-      if (tempCtx.isPointInPath(corner.x, corner.y)) {
-        return true;
-      }
-    }
-
-    // Проверяем центр прямоугольника
-    const center = {
-      x: (worldRect.minX + worldRect.maxX) / 2,
-      y: (worldRect.minY + worldRect.maxY) / 2
-    };
-    if (tempCtx.isPointInPath(center.x, center.y)) {
-      return true;
-    }
-
-    // Проверяем точки на границах прямоугольника (для тонких элементов)
-    const steps = 5; // Количество проверяемых точек на каждой стороне
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const topPoint = { x: worldRect.minX + t * (worldRect.maxX - worldRect.minX), y: worldRect.minY };
-      const bottomPoint = { x: worldRect.minX + t * (worldRect.maxX - worldRect.minX), y: worldRect.maxY };
-      const leftPoint = { x: worldRect.minX, y: worldRect.minY + t * (worldRect.maxY - worldRect.minY) };
-      const rightPoint = { x: worldRect.maxX, y: worldRect.minY + t * (worldRect.maxY - worldRect.minY) };
-
-      if (tempCtx.isPointInPath(topPoint.x, topPoint.y) ||
-        tempCtx.isPointInPath(bottomPoint.x, bottomPoint.y) ||
-        tempCtx.isPointInPath(leftPoint.x, leftPoint.y) ||
-        tempCtx.isPointInPath(rightPoint.x, rightPoint.y)) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  // Проверка пересечения повернутого прямоугольника с областью выделения (запасной метод)
+  // Проверка пересечения повернутого прямоугольника с областью выделения
   isElementInSelectionRect(element, worldRect) {
     // Получаем углы элемента в мировых координатах
     const width = element.getWidth();
@@ -127,10 +60,10 @@ export class CanvasRenderer {
 
     // Углы элемента в локальных координатах (относительно центра)
     const corners = [
-      { x: -width / 2, y: -height / 2 },
-      { x: width / 2, y: -height / 2 },
-      { x: width / 2, y: height / 2 },
-      { x: -width / 2, y: height / 2 }
+      { x: -width / 2, y: -height / 2 }, // левый верхний
+      { x: width / 2, y: -height / 2 }, // правый верхний
+      { x: width / 2, y: height / 2 }, // правый нижний
+      { x: -width / 2, y: height / 2 }  // левый нижний
     ];
 
     // Поворачиваем углы и преобразуем в мировые координаты
@@ -144,6 +77,7 @@ export class CanvasRenderer {
     }));
 
     // Проверяем, пересекается ли хотя бы один угол с прямоугольником выделения
+    // Или если прямоугольник полностью внутри элемента
     let anyCornerInside = false;
     let allCornersInside = true;
 
@@ -154,12 +88,16 @@ export class CanvasRenderer {
       else allCornersInside = false;
     }
 
+    // Если все углы внутри или хотя бы один угол внутри - элемент выделен
     if (allCornersInside || anyCornerInside) return true;
 
-    // Проверка пересечения ребер элемента с прямоугольником
+    // Проверка пересечения ребер элемента с прямоугольником выделения
+    // (более точная проверка для случаев, когда прямоугольник пересекает элемент, но не содержит углы)
     for (let i = 0; i < worldCorners.length; i++) {
       const p1 = worldCorners[i];
       const p2 = worldCorners[(i + 1) % worldCorners.length];
+
+      // Проверяем пересечение отрезка [p1, p2] с прямоугольником
       if (this.lineIntersectsRect(p1, p2, worldRect)) {
         return true;
       }
@@ -168,12 +106,14 @@ export class CanvasRenderer {
     return false;
   }
 
+  // Проверка пересечения отрезка с прямоугольником
   lineIntersectsRect(p1, p2, rect) {
+    // Проверяем пересечение с каждой стороной прямоугольника
     const rectEdges = [
-      { p1: { x: rect.minX, y: rect.minY }, p2: { x: rect.maxX, y: rect.minY } },
-      { p1: { x: rect.maxX, y: rect.minY }, p2: { x: rect.maxX, y: rect.maxY } },
-      { p1: { x: rect.maxX, y: rect.maxY }, p2: { x: rect.minX, y: rect.maxY } },
-      { p1: { x: rect.minX, y: rect.maxY }, p2: { x: rect.minX, y: rect.minY } }
+      { p1: { x: rect.minX, y: rect.minY }, p2: { x: rect.maxX, y: rect.minY } }, // верх
+      { p1: { x: rect.maxX, y: rect.minY }, p2: { x: rect.maxX, y: rect.maxY } }, // право
+      { p1: { x: rect.maxX, y: rect.maxY }, p2: { x: rect.minX, y: rect.maxY } }, // низ
+      { p1: { x: rect.minX, y: rect.maxY }, p2: { x: rect.minX, y: rect.minY } }  // лево
     ];
 
     for (const edge of rectEdges) {
@@ -185,6 +125,7 @@ export class CanvasRenderer {
     return false;
   }
 
+  // Проверка пересечения двух отрезков
   segmentsIntersect(a, b, c, d) {
     const orientation = (p, q, r) => {
       const val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
@@ -199,6 +140,7 @@ export class CanvasRenderer {
 
     if (o1 !== o2 && o3 !== o4) return true;
 
+    // Особые случаи (коллинеарность)
     if (o1 === 0 && this.onSegment(a, c, b)) return true;
     if (o2 === 0 && this.onSegment(a, d, b)) return true;
     if (o3 === 0 && this.onSegment(c, a, d)) return true;
@@ -214,9 +156,11 @@ export class CanvasRenderer {
 
   endSelectionRect() {
     if (this.selectionRect) {
+      // Вычисляем размеры прямоугольника
       const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
       const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
 
+      // Если прямоугольник слишком маленький (просто клик), не выделяем элементы
       const minSelectionSize = 5;
       if (width < minSelectionSize && height < minSelectionSize) {
         this.selectionRect = null;
@@ -230,6 +174,7 @@ export class CanvasRenderer {
         maxY: Math.max(this.selectionRect.startY, this.selectionRect.endY)
       };
 
+      // Преобразуем экранные координаты прямоугольника в мировые
       const worldRect = {
         minX: (rect.minX - this.panX.value) / this.scale.value,
         minY: (rect.minY - this.panY.value) / this.scale.value,
@@ -237,8 +182,9 @@ export class CanvasRenderer {
         maxY: (rect.maxY - this.panY.value) / this.scale.value
       };
 
+      // Находим все элементы, пересекающиеся с прямоугольником выделения
       const selected = this.elements.value.filter(element => {
-        // Для групп используем bounding box
+        // Для групп используем упрощенную проверку (bounding box)
         if (element.type === 'group') {
           const elementBounds = {
             minX: element.x,
@@ -252,23 +198,8 @@ export class CanvasRenderer {
             elementBounds.minY > worldRect.maxY);
         }
 
-        // Сначала быстрая проверка через bounding box (оптимизация)
-        const elementBounds = {
-          minX: element.x,
-          minY: element.y,
-          maxX: element.x + element.getWidth(),
-          maxY: element.y + element.getHeight()
-        };
-
-        const bboxIntersects = !(elementBounds.maxX < worldRect.minX ||
-          elementBounds.minX > worldRect.maxX ||
-          elementBounds.maxY < worldRect.minY ||
-          elementBounds.minY > worldRect.maxY);
-
-        if (!bboxIntersects) return false;
-
-        // Точная проверка через path элемента
-        return this.isElementIntersectsRect(element, worldRect);
+        // Для остальных элементов используем точную проверку с учетом поворота
+        return this.isElementInSelectionRect(element, worldRect);
       });
 
       this.selectedElements = selected;
