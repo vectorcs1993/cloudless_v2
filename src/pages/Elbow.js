@@ -3,10 +3,19 @@ import { Port } from './Port.js';
 
 // ========== ОТВОД ==========
 export class Elbow extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', size_mm = 125) {
-    super(id, 'elbow', x_px, y_px, `${BaseElement.getAvailableTypes().elbow} ${id}`, sectionType, size_mm);
+  constructor(id, x_px, y_px, sectionType = 'round', a = 125) {
+    super(id, 'elbow', x_px, y_px, `${BaseElement.getAvailableTypes().elbow} ${id}`, sectionType, a);
+    this._b = 100;                   // Высота отвода (B параметр)
     this._radius_mm = 125;           // Радиус изгиба (для обоих типов)
     this._segments = 4;              // Количество сегментов для круглого отвода
+  }
+
+  // Геттеры и сеттеры для высоты
+  get b() { return this._b; }
+
+  set b(newB) {
+    if (this._b === newB) return;
+    this._b = newB;
   }
 
   // Геттеры и сеттеры для радиуса
@@ -40,14 +49,12 @@ export class Elbow extends DuctBase {
     };
   }
 
-
-
   getCalloutText() {
-    const baseText = `${super.getCalloutText()}\nУгол: 90°`;
+    const baseText = `${super.getCalloutText()}`;
     if (this._sectionType === 'round') {
-      return `${baseText}\nДиаметр: ${this._size_mm} мм\nРадиус изгиба: ${this._radius_mm} мм`;
+      return `${baseText}\nR: ${this._radius_mm} мм`;
     } else {
-      return `${baseText}\nШирина: ${this._size_mm} мм\nРадиус изгиба: ${this._radius_mm} мм`;
+      return `${baseText}\nB: ${this._b} мм\nR: ${this._radius_mm} мм`;
     }
   }
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
@@ -68,7 +75,7 @@ export class Elbow extends DuctBase {
         ...baseParams,
         {
           name: 'radius_mm',
-          label: 'Радиус изгиба',
+          label: 'R',
           type: 'number',
           step: 5,
           min: 30,
@@ -77,7 +84,7 @@ export class Elbow extends DuctBase {
         },
         {
           name: 'segments',
-          label: 'Количество сегментов',
+          label: 'N',
           type: 'number',
           step: 1,
           min: 3,
@@ -90,8 +97,17 @@ export class Elbow extends DuctBase {
       return [
         ...baseParams,
         {
+          name: 'b',
+          label: 'B',
+          type: 'number',
+          step: 1,
+          min: 30,
+          value: this._b,
+          unit: 'мм'
+        },
+        {
           name: 'radius_mm',
-          label: 'Радиус изгиба',
+          label: 'R',
           type: 'number',
           step: 5,
           min: 30,
@@ -284,7 +300,7 @@ export class Elbow extends DuctBase {
   }
 
   hitTest(worldX, worldY, ctx) {
-    if (!this._size_mm || !this._radius_mm || this._size_mm <= 0 || this._radius_mm <= 0) {
+    if (!this._a || !this._radius_mm || this._a <= 0 || this._radius_mm <= 0) {
       return false;
     }
 

@@ -272,17 +272,17 @@ export class BaseElement {
 
 // ========== БАЗОВЫЙ КЛАСС ВОЗДУХОВОДА ==========
 export class DuctBase extends BaseElement {
-  constructor(id, type, x, y, name, sectionType = 'round', size_mm) {
+  constructor(id, type, x, y, name, sectionType = 'round', size) {
     super(id, type, x, y, name);
-    this._size_mm = size_mm;
+    this._a = size;
     this._sectionType = sectionType;
   }
 
-  get size_mm() { return this._size_mm; }
+  get a() { return this._a; }
 
-  set size_mm(value) {
-    if (this._size_mm === value) return;
-    this._size_mm = value;
+  set a(value) {
+    if (this._a === value) return;
+    this._a = value;
     // Центр остается на месте, размеры изменяются
     this.updatePorts();
   }
@@ -297,11 +297,10 @@ export class DuctBase extends BaseElement {
 
   // Размер в пикселях для отрисовки
   getSizePx() {
-    return this.mmToPx(this._size_mm);
+    return this.mmToPx(this._a);
   }
-
   getCalloutText() {
-    return `${super.getCalloutText()}\nШирина: ${this._size_mm} мм`;
+    return `${super.getCalloutText()}\nA: ${this._a} мм`;
   }
 
   getParameters() {
@@ -314,12 +313,12 @@ export class DuctBase extends BaseElement {
         ], value: this.sectionType
       },
       {
-        name: 'size_mm',
-        label: this._sectionType === 'round' ? 'Диаметр' : 'Ширина',
+        name: 'a',
+        label: 'A',
         type: 'number',
         step: 10,
         min: 20,
-        value: this._size_mm,
+        value: this._a,
         unit: 'мм'
       },
     ];
@@ -378,7 +377,7 @@ export class DuctBase extends BaseElement {
   toJSON() {
     return {
       ...super.toJSON(),
-      size_mm: this._size_mm,
+      a: this._a,
       sectionType: this._sectionType
     };
   }
@@ -386,8 +385,8 @@ export class DuctBase extends BaseElement {
 
 // ========== ТРОЙНИК ==========
 export class Tee extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', size_mm = 100) {
-    super(id, 'tee', x_px, y_px, `Тройник ${id}`, sectionType, size_mm);
+  constructor(id, x_px, y_px, sectionType = 'round', a = 100) {
+    super(id, 'tee', x_px, y_px, `Тройник ${id}`, sectionType, a);
     this._lengthHorizontal_mm = 300;   // горизонтальная длина в ММ
     this._branchHeight_mm = 150;       // высота ветки в ММ
   }
@@ -412,7 +411,7 @@ export class Tee extends DuctBase {
   }
 
   getHeight() {
-    return this.mmToPx(this._size_mm) + this.mmToPx(this._branchHeight_mm);
+    return this.mmToPx(this._a) + this.mmToPx(this._branchHeight_mm);
   }
 
   getTopLeft() {
@@ -576,8 +575,8 @@ export class Tee extends DuctBase {
 
 // ========== КРЕСТОВИНА ==========
 export class Cross extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', size_mm = 100) {
-    super(id, 'cross', x_px, y_px, `Крестовина ${id}`, sectionType, size_mm);
+  constructor(id, x_px, y_px, sectionType = 'round', a = 100) {
+    super(id, 'cross', x_px, y_px, `Крестовина ${id}`, sectionType, a);
     this._lengthHorizontal_mm = 300;
     this._lengthVertical_mm = 150;
   }
@@ -602,7 +601,7 @@ export class Cross extends DuctBase {
   }
 
   getHeight() {
-    return this.mmToPx(this._size_mm) + this.mmToPx(this._lengthVertical_mm) * 2;
+    return this.mmToPx(this._a) + this.mmToPx(this._lengthVertical_mm) * 2;
   }
 
   getTopLeft() {

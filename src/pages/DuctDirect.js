@@ -2,46 +2,44 @@ import { BaseElement, DuctBase } from './Elements.js';
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
 export class DuctDirect extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', size_mm = 125, length = 3000) {
-    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, size_mm);
-    this._lengthHorizontal_mm = length;
+  constructor(id, x_px, y_px, sectionType = 'round', width = 125, length = 3000) {
+    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, width);
+    this._b = length;
   }
 
-  get length_mm() { return this._lengthHorizontal_mm; }
+  get b() { return this._b; }
 
-  set length_mm(value) {
-    if (this._lengthHorizontal_mm === value) return;
-    const centerX = this.x;
-    this._lengthHorizontal_mm = value;
-    // Центр остается на месте
+  set b(value) {
+    if (this._b === value) return;
+    this._b = value;
     this.updatePorts();
   }
 
   getWidth() {
-    return this.mmToPx(this._lengthHorizontal_mm);
+    return this.mmToPx(this._b);
   }
 
   getHeight() {
-    return this.mmToPx(this._size_mm);
+    return this.mmToPx(this._a);
   }
 
   getCalloutText() {
-    const length_m = this._lengthHorizontal_mm / 1000;
-    const size_m = this._size_mm / 1000;
+    const length_m = this._b / 1000;
+    const size_m = this._a / 1000;
     const area = (length_m * size_m).toFixed(2);
-    return `${super.getCalloutText()}\nДлина: ${this._lengthHorizontal_mm} мм\nПлощадь: ${area} м²`;
+    return `${super.getCalloutText()}\nB: ${this._b} мм\nS: ${area} м²`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
       {
-        name: 'length_mm',
-        label: 'Длина',
+        name: 'b',
+        label: 'B',
         type: 'number',
         step: 10,
-        min: 100,
-        value: this._lengthHorizontal_mm,
+        min: 30,
+        value: this._b,
         unit: 'мм'
       },
     ];
@@ -90,7 +88,7 @@ export class DuctDirect extends DuctBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      length_mm: this._lengthHorizontal_mm
+      b: this._b
     };
   }
 }

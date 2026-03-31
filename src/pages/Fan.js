@@ -3,8 +3,8 @@ import { BaseElement } from './Elements.js';
 
 // ========== ВЕНТИЛЯТОР ==========
 export class Fan extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', size_mm = 440, length = 550) {
-    super(id, x_px, y_px, sectionType, size_mm, length);
+  constructor(id, x_px, y_px, sectionType = 'round', width = 440, length = 550) {
+    super(id, x_px, y_px, sectionType, width, length);
     this.type = 'fan';
     this.name = `${BaseElement.getAvailableTypes().fan} ${id}`;
     this.flow = 1000;
@@ -67,7 +67,7 @@ export class Fan extends DuctDirect {
       type: 'fan',
       flow: this.flow,
       pressure: this.pressure,
-      length_mm: this._lengthHorizontal_mm
+      length_mm: this._b
     };
   }
 }

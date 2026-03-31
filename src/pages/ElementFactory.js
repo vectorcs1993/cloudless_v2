@@ -9,17 +9,18 @@ import { Callout } from './Callout.js';
 export class ElementFactory {
   static createElement(type, id, x_px, y_px, params = {}) {
     const sectionType = params.sectionType || 'round';
-    const size_mm = params.size_mm || 50;
+    const a = params.a || 50;
+    const b = params.b || 50;
 
     switch (type) {
       case 'duct':
-        const duct = new DuctDirect(id, x_px, y_px, sectionType, size_mm, params.length_mm);
+        const duct = new DuctDirect(id, x_px, y_px, sectionType, a, b);
         if (params.rotation !== undefined) duct.rotation = params.rotation;
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
         return duct;
       case 'tee':
-        const tee = new Tee(id, x_px, y_px, sectionType, size_mm);
+        const tee = new Tee(id, x_px, y_px, sectionType, a);
         if (params.length_mm !== undefined) tee._lengthHorizontal_mm = params.length_mm;
         if (params.branchHeight_mm !== undefined) tee._branchHeight_mm = params.branchHeight_mm;
         if (params.rotation !== undefined) tee.rotation = params.rotation;
@@ -27,7 +28,7 @@ export class ElementFactory {
         if (params.color) tee.color = params.color;
         return tee;
       case 'cross':
-        const cross = new Cross(id, x_px, y_px, sectionType, size_mm);
+        const cross = new Cross(id, x_px, y_px, sectionType, a);
         if (params.lengthHorizontal_mm !== undefined) cross._lengthHorizontal_mm = params.lengthHorizontal_mm;
         if (params.lengthVertical_mm !== undefined) cross._lengthVertical_mm = params.lengthVertical_mm;
         if (params.rotation !== undefined) cross.rotation = params.rotation;
@@ -35,15 +36,15 @@ export class ElementFactory {
         if (params.color) cross.color = params.color;
         return cross;
       case 'elbow':
-        const elbow = new Elbow(id, x_px, y_px, sectionType, size_mm);
+        const elbow = new Elbow(id, x_px, y_px, sectionType, a);
         if (params.radius_mm !== undefined) elbow._radius_mm = params.radius_mm;
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
         if (params.name) elbow.name = params.name;
         if (params.color) elbow.color = params.color;
         return elbow;
       case 'fan':
-        const fan = new Fan(id, x_px, y_px, sectionType, size_mm);
-        if (params.length_mm !== undefined) fan._lengthHorizontal_mm = params.length_mm;
+        const fan = new Fan(id, x_px, y_px, sectionType, a);
+        if (params.length_mm !== undefined) fan._b = params.length_mm;
         if (params.flow !== undefined) fan.flow = params.flow;
         if (params.pressure !== undefined) fan.pressure = params.pressure;
         if (params.rotation !== undefined) fan.rotation = params.rotation;
@@ -73,8 +74,8 @@ export class ElementFactory {
       jsonData.y,
       {
         sectionType: jsonData.sectionType,
-        size_mm: jsonData.size_mm !== undefined ? jsonData.size_mm : jsonData.size,
-        length_mm: jsonData.length_mm !== undefined ? jsonData.length_mm : jsonData.length,
+        a: jsonData.a !== undefined ? jsonData.a : jsonData.size,
+        b: jsonData.b !== undefined ? jsonData.b : jsonData.length,
         branchHeight_mm: jsonData.branchHeight_mm,
         lengthHorizontal_mm: jsonData.lengthHorizontal_mm,
         lengthVertical_mm: jsonData.lengthVertical_mm,
