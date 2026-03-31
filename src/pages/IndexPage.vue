@@ -4,23 +4,45 @@
     <div class="toolbar">
       <h3>Безоблачный</h3>
       <div class="tab-settings">
-        <div>
-          <label><input type="checkbox" v-model="isDarkTheme" /> Темная тема</label>
-          <label><input type="checkbox" v-model="showGrid" /> Сетка</label>
-          <label><input type="checkbox" v-model="showPorts" /> Показать порты</label>
-          <label v-if="showPorts"><input type="checkbox" v-model="snapToPorts" /> Привязка к портам</label>
-          <label v-if="showPorts && snapToPorts"><input type="checkbox" v-model="autoUpdateConnections" /> Автообновление связей</label>
-          <label><input type="checkbox" v-model="showCallouts" /> Показать выноски</label>
-          <label><input type="checkbox" v-model="showColors" /> Показывать цвета</label>
-          <label><input type="checkbox" v-model="showElementAxes" /> Показывать оси элементов</label>
+        <div class="settings-grid">
+          <label>Масштаб:</label>
+          <div><input type="number" v-model.number="gridStepM" step="10" min="50" max="500" />px</div>
+
+          <label>Темная тема:</label>
+          <div><input type="checkbox" v-model="isDarkTheme" /></div>
+
+          <label>Сетка:</label>
+          <div><input type="checkbox" v-model="showGrid" /></div>
+
+          <label>Показать порты:</label>
+          <div><input type="checkbox" v-model="showPorts" /></div>
+
+          <template v-if="showPorts">
+            <label>Привязка к портам:</label>
+            <div><input type="checkbox" v-model="snapToPorts" /></div>
+          </template>
+
+          <template v-if="showPorts && snapToPorts">
+            <label>Автообновление связей:</label>
+            <div><input type="checkbox" v-model="autoUpdateConnections" /></div>
+          </template>
+
+          <label>Показать выноски:</label>
+          <div><input type="checkbox" v-model="showCallouts" /></div>
+
+          <label>Показывать цвета:</label>
+          <div><input type="checkbox" v-model="showColors" /></div>
+
+          <label>Показывать оси элементов:</label>
+          <div><input type="checkbox" v-model="showElementAxes" /></div>
         </div>
       </div>
 
       <!-- Панель drag-and-drop элементов -->
       <div class="drag-panel">
         <div class="drag-items">
-          <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
-            @dragend="onDragEnd">
+          <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true"
+            @dragstart="onDragStart($event, item)" @dragend="onDragEnd">
             <div class="drag-item-preview" v-html="item.svg"></div>
             <span class="drag-item-label">{{ item.label }}</span>
           </div>
@@ -32,14 +54,16 @@
         <button @click="saveToLocalStorage" class="cl-btn">💾 Сохранить</button>
         <button @click="resetToDefault" class="cl-btn">↺ Сброс</button>
         <button @click="updateAllPortsAndConnections" class="cl-btn">🔄 Обновить все порты и связи</button>
-        <button @click="copySelected" class="cl-btn" :disabled="selectedElements.length === 0">📋 Копировать ({{ selectedElements.length }})</button>
+        <button @click="copySelected" class="cl-btn" :disabled="selectedElements.length === 0">📋 Копировать ({{
+          selectedElements.length }})</button>
         <button @click="pasteElements" class="cl-btn" :disabled="!clipboardElements.length">📋 Вставить</button>
       </div>
 
     </div>
     <!-- Канвас для рендеринга элементов -->
-    <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-      @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
+    <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
+      @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop"
+      tabindex="0">
     </canvas>
     <!-- Информация о выбранных элементах -->
     <div class="selected-info" v-if="selectedElements.length > 0">
@@ -63,13 +87,14 @@
               <tr v-for="param in selectedElements[0].getParameters()" :key="param.name">
                 <td class="param-label">{{ param.label }}: </td>
                 <td class="param-input">
-                  <select v-if="param.type === 'select'" v-model="selectedElements[0][param.name]" @change="onParameterChange" class="param-select">
+                  <select v-if="param.type === 'select'" v-model="selectedElements[0][param.name]"
+                    @change="onParameterChange" class="param-select">
                     <option v-for="option in param.options" :key="option.value" :value="option.value">
                       {{ option.label }}
                     </option>
                   </select>
-                  <input v-else :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step" :min="param.min"
-                    @change="onParameterChange" />
+                  <input v-else :type="param.type" v-model.number="selectedElements[0][param.name]" :step="param.step"
+                    :min="param.min" @change="onParameterChange" />
                 </td>
                 <td class="param-unit">
                   <span v-if="param.unit">{{ param.unit }}</span>
@@ -252,10 +277,13 @@ const renderOptions = {
   showPorts,
   showColors,
   showCallouts,
+  snapToPorts,
   showElementAxes,
+  autoUpdateConnections,
+  isDarkTheme,
   gridStepM,
   isDarkTheme,
-  mouseWorldPos
+  mouseWorldPos,
 };
 
 // Вычисляемое свойство для проверки, выбрана ли группа
@@ -421,6 +449,13 @@ const loadFromLocalStorage = () => {
     renderOptions.scale.value = data.scale || 1;
     showColors.value = data.showColors !== undefined ? data.showColors : true;
     showElementAxes.value = data.showElementAxes !== undefined ? data.showElementAxes : false;
+    isDarkTheme.value = data.isDarkTheme !== undefined ? data.isDarkTheme : false;
+    showGrid.value = data.showGrid !== undefined ? data.showGrid : false;
+    showPorts.value = data.showPorts !== undefined ? data.showPorts : false;
+    snapToPorts.value = data.snapToPorts !== undefined ? data.snapToPorts : false;
+    autoUpdateConnections.value = data.autoUpdateConnections !== undefined ? data.autoUpdateConnections : false;
+    showCallouts.value = data.showCallouts !== undefined ? data.showCallouts : false;
+    gridStepM.value = data.gridStepM !== undefined ? data.gridStepM : 50;
     elements.value.forEach(el => el.updatePorts());
     selectedElements.value = [];
     renderer?.setSelectedElements([]);

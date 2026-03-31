@@ -15,7 +15,14 @@ export class StorageManager {
       scale: render.scale.value,
       showColors: render.showColors.value,
       showElementAxes: render.showElementAxes.value,
-      version: '2.0',
+      showGrid: render.showGrid.value,
+      showPorts: render.showPorts.value,
+      snapToPorts: render.snapToPorts.value,
+      autoUpdateConnections: render.autoUpdateConnections.value,
+      showCallouts: render.showCallouts.value,
+      isDarkTheme: render.isDarkTheme.value,
+      gridStepM: render.gridStepM.value,
+      version: '1.0',
       savedAt: new Date().toISOString()
     };
     localStorage.setItem(this.key, JSON.stringify(data));
