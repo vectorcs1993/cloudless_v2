@@ -2,9 +2,17 @@
   <div class="app" :class="{ 'dark-theme': isDarkTheme }">
     <!-- Тулбар -->
     <div class="toolbar">
-      <h3>Безоблачный</h3>
+      <h3>HVAC Editor</h3>
       <div class="tab-settings">
         <div class="settings-grid">
+
+
+          <label>Масштаб размеров (мм/px):</label>
+          <div>
+            <input type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" />
+            (1px = {{ mmPerPx }} мм)
+          </div>
+
           <label>Масштаб:</label>
           <div><input type="number" v-model.number="gridStepM" step="10" min="50" max="500" />px</div>
 
@@ -155,7 +163,7 @@ import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, ElbowCircular, ElbowRectangular, Cross, Group } from './Elements.js';
+import { Tee, DuctDirect, Fan, ElementFactory, ElbowCircular, ElbowRectangular, Cross, Group, setGlobalMmPerPx } from './Elements.js';
 
 // Элементы для drag and drop
 const dragItems = [
@@ -240,6 +248,7 @@ const showColors = ref(true);
 const showElementAxes = ref(false);
 const snapToPorts = ref(true);
 const gridStepM = ref(50);
+const mmPerPx = ref(1.0); // 1px = 1мм по умолчанию
 const autoUpdateConnections = ref(true);
 // Canvas
 const mainCanvas = ref(null);
@@ -282,6 +291,7 @@ const renderOptions = {
   autoUpdateConnections,
   isDarkTheme,
   gridStepM,
+  mmPerPx,
   isDarkTheme,
   mouseWorldPos,
 };
@@ -456,9 +466,10 @@ const loadFromLocalStorage = () => {
     autoUpdateConnections.value = data.autoUpdateConnections !== undefined ? data.autoUpdateConnections : false;
     showCallouts.value = data.showCallouts !== undefined ? data.showCallouts : false;
     gridStepM.value = data.gridStepM !== undefined ? data.gridStepM : 50;
+    mmPerPx.value = data.mmPerPx !== undefined ? data.mmPerPx : 1;
     elements.value.forEach(el => el.updatePorts());
     selectedElements.value = [];
-    renderer?.setSelectedElements([]);
+    renderer?.setSelectedElements([mmPerPx]);
     renderer?.draw();
     console.log('Элементы после загрузки:', elements.value.length);
   } catch (error) {
@@ -848,6 +859,8 @@ const onWheel = (e) => interactionManager?.onWheel(e);
 
 // Инициализация
 onMounted(() => {
+
+  setGlobalMmPerPx(mmPerPx.value);
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') isDarkTheme.value = true;
 
@@ -954,5 +967,15 @@ watch(showElementAxes, () => {
 
 watch(gridStepM, () => {
   renderer?.draw();
+});
+
+watch(mmPerPx, (newVal) => {
+    setGlobalMmPerPx(newVal);
+    // Обновляем порты у всех элементов
+    elements.value.forEach(el => {
+        el.updatePorts();
+        el.updateCalloutText();
+    });
+    renderer?.draw();
 });
 </script>

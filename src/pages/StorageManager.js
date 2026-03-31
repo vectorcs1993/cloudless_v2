@@ -22,6 +22,7 @@ export class StorageManager {
       showCallouts: render.showCallouts.value,
       isDarkTheme: render.isDarkTheme.value,
       gridStepM: render.gridStepM.value,
+      mmPerPx: render.mmPerPx.value,
       version: '1.0',
       savedAt: new Date().toISOString()
     };

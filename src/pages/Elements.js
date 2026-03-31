@@ -1,18 +1,44 @@
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
 
+// ========== ГЛОБАЛЬНЫЙ МАСШТАБ ==========
+let globalMmPerPx = 1.0;
+
+export function setGlobalMmPerPx(value) {
+  globalMmPerPx = value;
+}
+
+export function getGlobalMmPerPx() {
+  return globalMmPerPx;
+}
+
 // ========== БАЗОВЫЙ КЛАСС ЭЛЕМЕНТА ==========
 class BaseElement {
-  constructor(id, type, x, y, name, color) {
+  constructor(id, type, x, y, name, color = this.getColors()[0]) {
     this.id = id;
     this.type = type;
-    this.x = x;
-    this.y = y;
+    this.x = x;          // в пикселях (экранные координаты)
+    this.y = y;          // в пикселях (экранные координаты)
     this.name = name;
     this.color = color;
     this.rotation = 0;
     this.ports = [];
     this.callouts = [];
+  }
+
+  // Получение текущего масштаба мм/px
+  getMmPerPx() {
+    return globalMmPerPx;
+  }
+
+  // Конвертация мм в px
+  mmToPx(mm) {
+    return mm / globalMmPerPx;
+  }
+
+  // Конвертация px в мм
+  pxToMm(px) {
+    return px * globalMmPerPx;
   }
 
   static getAvailableTypes() {
@@ -21,6 +47,7 @@ class BaseElement {
       'fan': 'Вентилятор',
       'tee': 'Тройник',
       'elbowCircular': 'Отвод',
+      'elbowRectangular': 'Отвод секционный',
       'cross': 'Крестовина',
       'group': 'Группа элементов'
     };
@@ -59,15 +86,8 @@ class BaseElement {
   getElementText() {
     return '';
   }
-
-  getParameters() {
+  getColors() {
     return [
-      { name: 'name', label: 'Имя', type: 'text', value: this.name },
-      { name: 'x', label: 'X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
-      { name: 'y', label: 'Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
-      { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
-      {
-        name: 'color', label: 'Цвет', type: 'select', options: [
           { value: '#ff0000', label: 'Красный' },
           { value: '#00ff00', label: 'Зеленый' },
           { value: '#0000ff', label: 'Синий' },
@@ -78,7 +98,16 @@ class BaseElement {
           { value: '#ff3399', label: 'Розовый' },
           { value: '#663399', label: 'Пурпурный' },
           { value: '#0099ff', label: 'Лазурный' }
-        ], value: this.color
+        ];
+  }
+  getParameters() {
+    return [
+      { name: 'name', label: 'Имя', type: 'text', value: this.name },
+      { name: 'x', label: 'X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
+      { name: 'y', label: 'Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
+      { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
+      {
+        name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color
       },
     ];
   }
@@ -131,10 +160,8 @@ class BaseElement {
       return { x: worldX, y: worldY };
     }
 
-    // Перемещаем в систему координат центра элемента
     const dx = worldX - centerX;
     const dy = worldY - centerY;
-    // Поворачиваем обратно (отрицательный угол)
     const angle = -rotation * Math.PI / 180;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -204,6 +231,7 @@ class BaseElement {
       this.callouts[0].text = this.getCalloutText();
     }
   }
+
   drawCenterLines(ctx, scale, isDarkTheme) {
     const width = this.getWidth();
     const height = this.getHeight();
@@ -217,10 +245,8 @@ class BaseElement {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
-    // Горизонтальная осевая линия
     ctx.moveTo(this.x, centerY);
     ctx.lineTo(this.x + width, centerY);
-    // Вертикальная осевая линия
     ctx.moveTo(centerX, this.y);
     ctx.lineTo(centerX, this.y + height);
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
@@ -231,6 +257,7 @@ class BaseElement {
     ctx.setLineDash([]);
     ctx.restore();
   }
+
   toJSON() {
     return {
       id: this.id, type: this.type, x: this.x, y: this.y, name: this.name,
@@ -243,47 +270,46 @@ class BaseElement {
 
 // ========== БАЗОВЫЙ КЛАСС ВОЗДУХОВОДА ==========
 class DuctBase extends BaseElement {
-  constructor(id, type, x, y, name, color, sectionType = 'rectangular', size) {
+  constructor(id, type, x, y, name, color, sectionType = 'rectangular', size_mm) {
     super(id, type, x, y, name, color);
-    this._size = size;
+    this._size_mm = size_mm;           // размер в ММ
     this._sectionType = sectionType;
-    this._originalX = x;
-    this._originalY = y;
   }
 
-  get size() {
-    return this._size;
-  }
+  get size_mm() { return this._size_mm; }
 
-  set size(newSize) {
-    if (this._size === newSize) return;
-
+  set size_mm(value) {
+    if (this._size_mm === value) return;
     const centerX = this.x + this.getWidth() / 2;
     const centerY = this.y + this.getHeight() / 2;
-    this._size = newSize;
+    this._size_mm = value;
     this.x = centerX - this.getWidth() / 2;
     this.y = centerY - this.getHeight() / 2;
     this.updatePorts();
   }
 
-  get sectionType() {
-    return this._sectionType;
-  }
+  get sectionType() { return this._sectionType; }
 
   set sectionType(newType) {
     if (this._sectionType === newType) return;
     this._sectionType = newType;
     this.updateCalloutText();
   }
+
+  // Размер в пикселях для отрисовки
+  getSizePx() {
+    return this.mmToPx(this._size_mm);
+  }
+
   getRelativeCalloutEntryPoint() {
     const ports = this.getPorts();
     const inletPort = ports.find(p => p.direction === 'inlet');
-
     if (inletPort) {
       return { x: inletPort.localX + 40, y: inletPort.localY };
     }
     return { x: 20, y: this.getHeight() / 2 };
   }
+
   getParameters() {
     return [
       ...super.getParameters(),
@@ -293,43 +319,43 @@ class DuctBase extends BaseElement {
           { value: 'round', label: 'Круглое' }
         ], value: this.sectionType
       },
-      { name: 'size', label: this._sectionType === 'round' ? 'Диаметр' : 'Ширина', type: 'number', step: 1, min: 20, value: this.size, unit: 'мм' },
+      {
+        name: 'size_mm',
+        label: this._sectionType === 'round' ? 'Диаметр (мм)' : 'Ширина (мм)',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._size_mm,
+        unit: 'мм'
+      },
     ];
   }
 
-  fromJSON(jsonData) {
-    this._size = jsonData.size;
-    if (jsonData.sectionType !== undefined) this._sectionType = jsonData.sectionType;
-    if (jsonData.length !== undefined) this._lengthHorizontal = jsonData.length;
-    if (jsonData.radius !== undefined) this._radius = jsonData.radius;
-    if (jsonData.centerY !== undefined) this._centerY = jsonData.centerY;
-  }
-
-  createLinearPorts(width, height, offsetX = 0, offsetY = 0) {
+  createLinearPorts(width_px, height_px, offsetX = 0, offsetY = 0) {
     const ports = [];
     const rotation = this.rotation || 0;
-    const centerX = this.x + width / 2;
-    const centerY = this.y + height / 2;
+    const centerX = this.x + width_px / 2;
+    const centerY = this.y + height_px / 2;
 
     const inletPos = this.rotatePoint(this.x + offsetX, centerY + offsetY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', offsetX, height / 2 + offsetY, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', offsetX, height_px / 2 + offsetY, inletPos.x, inletPos.y
     ));
 
-    const outletPos = this.rotatePoint(this.x + width - offsetX, centerY + offsetY, centerX, centerY, rotation);
+    const outletPos = this.rotatePoint(this.x + width_px - offsetX, centerY + offsetY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', width - offsetX, height / 2 + offsetY, outletPos.x, outletPos.y
+      this.id, 'outlet', 'right', width_px - offsetX, height_px / 2 + offsetY, outletPos.x, outletPos.y
     ));
 
     return ports;
   }
 
-  drawRectangular(ctx, width, height, isSelected, scale, showColors) {
+  drawRectangular(ctx, width_px, height_px, isSelected, scale, showColors) {
     const rotation = this.rotation || 0;
-    const centerX = this.x + width / 2;
-    const centerY = this.y + height / 2;
+    const centerX = this.x + width_px / 2;
+    const centerY = this.y + height_px / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -337,7 +363,7 @@ class DuctBase extends BaseElement {
     ctx.translate(-centerX, -centerY);
     ctx.beginPath();
 
-    ctx.rect(this.x, this.y, width, height);
+    ctx.rect(this.x, this.y, width_px, height_px);
     if (showColors) {
       this.setFillStyle(ctx, isSelected, false);
     }
@@ -346,101 +372,81 @@ class DuctBase extends BaseElement {
     ctx.restore();
   }
 
-  hitTestRectangular(worldX, worldY, width, height) {
+  hitTestRectangular(worldX, worldY, width_px, height_px) {
     const local = this.transformToLocalCoords(worldX, worldY);
-    return local.x >= this.x && local.x <= this.x + width &&
-      local.y >= this.y && local.y <= this.y + height;
+    return local.x >= this.x && local.x <= this.x + width_px &&
+      local.y >= this.y && local.y <= this.y + height_px;
   }
 
   toJSON() {
-    return { ...super.toJSON(), size: this._size, sectionType: this._sectionType };
+    return {
+      ...super.toJSON(),
+      size_mm: this._size_mm,
+      sectionType: this._sectionType
+    };
   }
 }
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
 export class DuctDirect extends DuctBase {
-  constructor(id, x, y, length = 750, sectionType = 'rectangular', size = 100) {
-    super(id, 'duct', x, y, `Воздуховод ${id}`, '#2196f3', sectionType, size);
-    this._lengthHorizontal = length;
+  constructor(id, x_px, y_px, length_mm = 750, sectionType = 'rectangular', size_mm = 100) {
+    super(id, 'duct', x_px, y_px, `Воздуховод ${id}`, '#2196f3', sectionType, size_mm);
+    this._lengthHorizontal_mm = length_mm;   // длина в ММ
   }
 
-  get length() { return this._lengthHorizontal; }
-  set length(value) {
-    if (this._lengthHorizontal === value) return;
-    const centerX = this.x + this._lengthHorizontal / 2;
-    this._lengthHorizontal = value;
-    this.x = centerX - this._lengthHorizontal / 2;
+  get length_mm() { return this._lengthHorizontal_mm; }
+
+  set length_mm(value) {
+    if (this._lengthHorizontal_mm === value) return;
+    const centerX = this.x + this.getWidth() / 2;
+    this._lengthHorizontal_mm = value;
+    this.x = centerX - this.getWidth() / 2;
     this.updatePorts();
   }
 
-  getWidth() { return this._lengthHorizontal; }
-  getHeight() { return this._size; }
+  getWidth() {
+    return this.mmToPx(this._lengthHorizontal_mm);
+  }
+
+  getHeight() {
+    return this.mmToPx(this._size_mm);
+  }
 
   getCalloutText() {
-    const area = (this._lengthHorizontal * this._size / 1000000).toFixed(2);
-    return `${this.name}\nДлина: ${this._lengthHorizontal} мм\nШирина: ${this._size} мм\nПлощадь: ${area} м²`;
+    const length_m = this._lengthHorizontal_mm / 1000;
+    const size_m = this._size_mm / 1000;
+    const area = (length_m * size_m).toFixed(2);
+    return `${this.name}\nДлина: ${this._lengthHorizontal_mm} мм\nШирина: ${this._size_mm} мм\nПлощадь: ${area} м²`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
-      { name: 'length', label: 'Длина', type: 'number', step: 1, min: 100, value: this._lengthHorizontal, unit: 'мм' },
+      {
+        name: 'length_mm',
+        label: 'Длина (мм)',
+        type: 'number',
+        step: 10,
+        min: 100,
+        value: this._lengthHorizontal_mm,
+        unit: 'мм'
+      },
     ];
   }
 
   getPorts() {
-    return this.createLinearPorts(this._lengthHorizontal, this._size);
+    return this.createLinearPorts(this.getWidth(), this.getHeight());
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.drawRectangular(ctx, this._lengthHorizontal, this._size, isSelected, scale, showColors);
+    this.drawRectangular(ctx, this.getWidth(), this.getHeight(), isSelected, scale, showColors);
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
   }
 
-  // ИСПРАВЛЕННЫЙ hitTest - теперь правильно обрабатывает поворот
   hitTest(worldX, worldY, ctx) {
-    const width = this.getWidth();
-    const height = this.getHeight();
-
-    // Преобразуем мировые координаты в локальные координаты элемента (с учетом поворота)
-    const local = this.transformToLocalCoords(worldX, worldY);
-
-    // Проверяем попадание в прямоугольник в локальных координатах
-    const isHit = local.x >= this.x && local.x <= this.x + width &&
-      local.y >= this.y && local.y <= this.y + height;
-
-    // Для отладки (можно убрать)
-    if (isHit) {
-      // console.log(`Hit test on ${this.name} (${this.rotation}°): world(${worldX},${worldY}) -> local(${local.x},${local.y})`);
-    }
-
-    return isHit;
-  }
-
-  // Исправленный метод transformToLocalCoords в базовом классе BaseElement
-  transformToLocalCoords(worldX, worldY) {
-    const centerX = this.x + this.getWidth() / 2;
-    const centerY = this.y + this.getHeight() / 2;
-    const rotation = this.rotation || 0;
-
-    if (rotation === 0) {
-      return { x: worldX, y: worldY };
-    }
-
-    // Перемещаем в систему координат центра элемента
-    const dx = worldX - centerX;
-    const dy = worldY - centerY;
-    // Поворачиваем обратно (отрицательный угол)
-    const angle = -rotation * Math.PI / 180;
-    const rotatedX = dx * Math.cos(angle) - dy * Math.sin(angle);
-    const rotatedY = dx * Math.sin(angle) + dy * Math.cos(angle);
-
-    return {
-      x: rotatedX + centerX,
-      y: rotatedY + centerY
-    };
+    return this.hitTestRectangular(worldX, worldY, this.getWidth(), this.getHeight());
   }
 
   drawCenterLines(ctx, scale, isDarkTheme) {
@@ -456,7 +462,6 @@ export class DuctDirect extends DuctBase {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
-    // Горизонтальная осевая линия
     ctx.moveTo(this.x - 20, centerY);
     ctx.lineTo(this.x + width + 20, centerY);
 
@@ -472,46 +477,48 @@ export class DuctDirect extends DuctBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      length: this._lengthHorizontal
+      length_mm: this._lengthHorizontal_mm
     };
   }
 }
 
 // ========== ТРОЙНИК ==========
 export class Tee extends DuctBase {
-  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
-    super(id, 'tee', x, y, `Тройник ${id}`, '#9c27b0', sectionType, size);
-    this._lengthHorizontal = 300;
-    this._branchHeight = 150;
+  constructor(id, x_px, y_px, sectionType = 'rectangular', size_mm = 100) {
+    super(id, 'tee', x_px, y_px, `Тройник ${id}`, '#9c27b0', sectionType, size_mm);
+    this._lengthHorizontal_mm = 300;   // горизонтальная длина в ММ
+    this._branchHeight_mm = 150;       // высота ветки в ММ
   }
 
-  get length() { return this._lengthHorizontal; }
-  get branchHeight() { return this._branchHeight; }
+  get length_mm() { return this._lengthHorizontal_mm; }
+  get branchHeight_mm() { return this._branchHeight_mm; }
 
-  set length(newLength) {
-    if (this._lengthHorizontal === newLength) return;
-    const oldCenterX = this.x + this._lengthHorizontal / 2;
-    this._lengthHorizontal = newLength;
-    this.x = oldCenterX - this._lengthHorizontal / 2;
+  set length_mm(newLength) {
+    if (this._lengthHorizontal_mm === newLength) return;
+    const oldCenterX = this.x + this.getWidth() / 2;
+    this._lengthHorizontal_mm = newLength;
+    this.x = oldCenterX - this.getWidth() / 2;
     this.updatePorts();
   }
 
-  set branchHeight(newHeight) {
-    if (this._branchHeight === newHeight) return;
+  set branchHeight_mm(newHeight) {
+    if (this._branchHeight_mm === newHeight) return;
     const oldCenterY = this.y + this.getHeight() / 2;
-    this._branchHeight = newHeight;
+    this._branchHeight_mm = newHeight;
     this.y = oldCenterY - this.getHeight() / 2;
     this.updatePorts();
   }
 
-  getWidth() { return this._lengthHorizontal; }
+  getWidth() {
+    return this.mmToPx(this._lengthHorizontal_mm);
+  }
 
   getHeight() {
-    return this._size + this._branchHeight;
+    return this.mmToPx(this._size_mm) + this.mmToPx(this._branchHeight_mm);
   }
 
   getCenterX() {
-    return this.x + this._lengthHorizontal / 2;
+    return this.x + this.getWidth() / 2;
   }
 
   getCenterY() {
@@ -519,45 +526,60 @@ export class Tee extends DuctBase {
   }
 
   getCalloutText() {
-    const area = (this._lengthHorizontal * this._size / 1000000).toFixed(2);
-    return `${this.name}\nРазмер: ${this._size} мм\nДлина гор.: ${this._lengthHorizontal} мм\nВысота ветки: ${this._branchHeight} мм\nТип: тройник\nСечение: ${area} м²`;
+    const width_m = this._size_mm / 1000;
+    const area = (this._lengthHorizontal_mm * this._size_mm / 1000000).toFixed(2);
+    return `${this.name}\nРазмер: ${this._size_mm} мм\nДлина гор.: ${this._lengthHorizontal_mm} мм\nВысота ветки: ${this._branchHeight_mm} мм\nТип: тройник\nСечение: ${area} м²`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
-      { name: 'length', label: 'Длина горизонтальная', type: 'number', step: 10, min: 50, value: this._lengthHorizontal, unit: 'мм' },
-      { name: 'branchHeight', label: 'Высота ветки', type: 'number', step: 10, min: 20, value: this._branchHeight, unit: 'мм' },
+      {
+        name: 'length_mm',
+        label: 'Длина горизонтальная (мм)',
+        type: 'number',
+        step: 10,
+        min: 50,
+        value: this._lengthHorizontal_mm,
+        unit: 'мм'
+      },
+      {
+        name: 'branchHeight_mm',
+        label: 'Высота ветки (мм)',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._branchHeight_mm,
+        unit: 'мм'
+      },
     ];
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
-    const halfSize = this._size / 2;
-    const bottomBranchY = centerY + this._branchHeight;
+    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
 
-    // Inlet порт (слева)
     const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, this.getHeight() / 2, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', 0, height_px / 2, inletPos.x, inletPos.y
     ));
 
-    // Outlet порт (справа)
-    const outletPos = this.rotatePoint(this.x + this._lengthHorizontal, centerY, centerX, centerY, rotation);
+    const outletPos = this.rotatePoint(this.x + width_px, centerY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', this._lengthHorizontal, this.getHeight() / 2, outletPos.x, outletPos.y
+      this.id, 'outlet', 'right', width_px, height_px / 2, outletPos.x, outletPos.y
     ));
 
-    // Branch порт (снизу)
-    const branchPos = this.rotatePoint(centerX, bottomBranchY, centerX, centerY, rotation);
+    const branchPos = this.rotatePoint(centerX, centerY + branchHeight_px, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
-      this.id, 'branch', 'bottom', this._lengthHorizontal / 2, this.getHeight() / 2 + this._branchHeight, branchPos.x, branchPos.y
+      this.id, 'branch', 'bottom', width_px / 2, height_px / 2 + branchHeight_px, branchPos.x, branchPos.y
     ));
 
     return ports;
@@ -565,10 +587,12 @@ export class Tee extends DuctBase {
 
   createPath(ctx) {
     const rotation = this.rotation || 0;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const size_px = this.getSizePx();
+    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
-    const halfSize = this._size / 2;
-    const bottomBranchY = centerY + this._branchHeight;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -578,19 +602,18 @@ export class Tee extends DuctBase {
     ctx.beginPath();
 
     const leftX = this.x;
-    const rightX = this.x + this._lengthHorizontal;
-    const mainTopY = centerY - halfSize;
-    const mainBottomY = centerY + halfSize;
-    const branchLeftX = centerX - halfSize;
-    const branchRightX = centerX + halfSize;
+    const rightX = this.x + width_px;
+    const mainTopY = centerY - size_px / 2;
+    const mainBottomY = centerY + size_px / 2;
+    const branchLeftX = centerX - size_px / 2;
+    const branchRightX = centerX + size_px / 2;
 
-    // Рисуем тройник
     ctx.moveTo(leftX, mainTopY);
     ctx.lineTo(rightX, mainTopY);
     ctx.lineTo(rightX, mainBottomY);
     ctx.lineTo(branchRightX, mainBottomY);
-    ctx.lineTo(branchRightX, bottomBranchY);
-    ctx.lineTo(branchLeftX, bottomBranchY);
+    ctx.lineTo(branchRightX, centerY + branchHeight_px);
+    ctx.lineTo(branchLeftX, centerY + branchHeight_px);
     ctx.lineTo(branchLeftX, mainBottomY);
     ctx.lineTo(leftX, mainBottomY);
     ctx.closePath();
@@ -602,6 +625,7 @@ export class Tee extends DuctBase {
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
     const rotation = this.rotation || 0;
+    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -609,12 +633,10 @@ export class Tee extends DuctBase {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
-    // Горизонтальная осевая линия (через весь горизонтальный канал)
     ctx.moveTo(this.x - 20, centerY);
-    ctx.lineTo(this.x + this._lengthHorizontal + 20, centerY);
+    ctx.lineTo(this.x + this.getWidth() + 20, centerY);
 
-    // Вертикальная осевая линия (от центра до низа)
-    const bottomY = centerY + this._branchHeight + 20;
+    const bottomY = centerY + branchHeight_px + 20;
     ctx.moveTo(centerX, centerY);
     ctx.lineTo(centerX, bottomY);
 
@@ -652,47 +674,49 @@ export class Tee extends DuctBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      length: this._lengthHorizontal,
-      branchHeight: this._branchHeight
+      length_mm: this._lengthHorizontal_mm,
+      branchHeight_mm: this._branchHeight_mm
     };
   }
 }
 
 // ========== КРЕСТОВИНА ==========
 export class Cross extends DuctBase {
-  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
-    super(id, 'cross', x, y, `Крестовина ${id}`, '#e91e63', sectionType, size);
-    this._lengthHorizontal = 300;
-    this._lengthVertical = 150;
+  constructor(id, x_px, y_px, sectionType = 'rectangular', size_mm = 100) {
+    super(id, 'cross', x_px, y_px, `Крестовина ${id}`, '#e91e63', sectionType, size_mm);
+    this._lengthHorizontal_mm = 300;
+    this._lengthVertical_mm = 150;
   }
 
-  get lengthHorizontal() { return this._lengthHorizontal; }
-  get lengthVertical() { return this._lengthVertical; }
+  get lengthHorizontal_mm() { return this._lengthHorizontal_mm; }
+  get lengthVertical_mm() { return this._lengthVertical_mm; }
 
-  set lengthHorizontal(newLength) {
-    if (this._lengthHorizontal === newLength) return;
-    const oldCenterX = this.x + this._lengthHorizontal / 2;
-    this._lengthHorizontal = newLength;
-    this.x = oldCenterX - this._lengthHorizontal / 2;
+  set lengthHorizontal_mm(newLength) {
+    if (this._lengthHorizontal_mm === newLength) return;
+    const oldCenterX = this.x + this.getWidth() / 2;
+    this._lengthHorizontal_mm = newLength;
+    this.x = oldCenterX - this.getWidth() / 2;
     this.updatePorts();
   }
 
-  set lengthVertical(newLength) {
-    if (this._lengthVertical === newLength) return;
+  set lengthVertical_mm(newLength) {
+    if (this._lengthVertical_mm === newLength) return;
     const oldCenterY = this.y + this.getHeight() / 2;
-    this._lengthVertical = newLength;
+    this._lengthVertical_mm = newLength;
     this.y = oldCenterY - this.getHeight() / 2;
     this.updatePorts();
   }
 
-  getWidth() { return this._lengthHorizontal; }
+  getWidth() {
+    return this.mmToPx(this._lengthHorizontal_mm);
+  }
 
   getHeight() {
-    return this._size + this._lengthVertical * 2;
+    return this.mmToPx(this._size_mm) + this.mmToPx(this._lengthVertical_mm) * 2;
   }
 
   getCenterX() {
-    return this.x + this._lengthHorizontal / 2;
+    return this.x + this.getWidth() / 2;
   }
 
   getCenterY() {
@@ -700,53 +724,65 @@ export class Cross extends DuctBase {
   }
 
   getCalloutText() {
-    const area = (this._lengthHorizontal * this._size / 1000000).toFixed(2);
-    return `${this.name}\nРазмер: ${this._size} мм\nДлина гор.: ${this._lengthHorizontal} мм\nДлина верт.: ${this._lengthVertical} мм\nТип: крестовина\nСечение: ${area} м²`;
+    const area = (this._lengthHorizontal_mm * this._size_mm / 1000000).toFixed(2);
+    return `${this.name}\nРазмер: ${this._size_mm} мм\nДлина гор.: ${this._lengthHorizontal_mm} мм\nДлина верт.: ${this._lengthVertical_mm} мм\nТип: крестовина\nСечение: ${area} м²`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
-      { name: 'lengthHorizontal', label: 'Длина горизонтальная', type: 'number', step: 10, min: 50, value: this._lengthHorizontal, unit: 'мм' },
-      { name: 'lengthVertical', label: 'Длина вертикальная', type: 'number', step: 10, min: 20, value: this._lengthVertical, unit: 'мм' },
+      {
+        name: 'lengthHorizontal_mm',
+        label: 'Длина горизонтальная (мм)',
+        type: 'number',
+        step: 10,
+        min: 50,
+        value: this._lengthHorizontal_mm,
+        unit: 'мм'
+      },
+      {
+        name: 'lengthVertical_mm',
+        label: 'Длина вертикальная (мм)',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._lengthVertical_mm,
+        unit: 'мм'
+      },
     ];
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
-    const halfSize = this._size / 2;
-    const topBranchY = centerY - this._lengthVertical;
-    const bottomBranchY = centerY + this._lengthVertical;
+    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
 
-    // Inlet порт (слева)
     const inletPos = this.rotatePoint(this.x, centerY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, this.getHeight() / 2, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', 0, height_px / 2, inletPos.x, inletPos.y
     ));
 
-    // Outlet порт (справа)
-    const outletPos = this.rotatePoint(this.x + this._lengthHorizontal, centerY, centerX, centerY, rotation);
+    const outletPos = this.rotatePoint(this.x + width_px, centerY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', this._lengthHorizontal, this.getHeight() / 2, outletPos.x, outletPos.y
+      this.id, 'outlet', 'right', width_px, height_px / 2, outletPos.x, outletPos.y
     ));
 
-    // Branch порт (снизу)
-    const branchPos = this.rotatePoint(centerX, bottomBranchY, centerX, centerY, rotation);
+    const branchPos = this.rotatePoint(centerX, centerY + verticalLength_px, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
-      this.id, 'branch', 'bottom', this._lengthHorizontal / 2, this.getHeight() / 2 + this._lengthVertical, branchPos.x, branchPos.y
+      this.id, 'branch', 'bottom', width_px / 2, height_px / 2 + verticalLength_px, branchPos.x, branchPos.y
     ));
 
-    // Верхний порт
-    const topPos = this.rotatePoint(centerX, topBranchY, centerX, centerY, rotation);
+    const topPos = this.rotatePoint(centerX, centerY - verticalLength_px, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'top')?.id || Date.now() + Math.random(),
-      this.id, 'top', 'top', this._lengthHorizontal / 2, this.getHeight() / 2 - this._lengthVertical, topPos.x, topPos.y
+      this.id, 'top', 'top', width_px / 2, height_px / 2 - verticalLength_px, topPos.x, topPos.y
     ));
 
     return ports;
@@ -754,11 +790,11 @@ export class Cross extends DuctBase {
 
   createPath(ctx) {
     const rotation = this.rotation || 0;
+    const width_px = this.getWidth();
+    const size_px = this.getSizePx();
+    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
-    const halfSize = this._size / 2;
-    const topBranchY = centerY - this._lengthVertical;
-    const bottomBranchY = centerY + this._lengthVertical;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -768,26 +804,27 @@ export class Cross extends DuctBase {
     ctx.beginPath();
 
     const leftX = this.x;
-    const rightX = this.x + this._lengthHorizontal;
-    const mainTopY = centerY - halfSize;
-    const mainBottomY = centerY + halfSize;
-    const branchLeftX = centerX - halfSize;
-    const branchRightX = centerX + halfSize;
+    const rightX = this.x + width_px;
+    const mainTopY = centerY - size_px / 2;
+    const mainBottomY = centerY + size_px / 2;
+    const branchLeftX = centerX - size_px / 2;
+    const branchRightX = centerX + size_px / 2;
+    const topY = centerY - verticalLength_px;
+    const bottomY = centerY + verticalLength_px;
 
-    // Рисуем симметричную крестовину
-    ctx.moveTo(branchLeftX, topBranchY);
-    ctx.lineTo(branchRightX, topBranchY);
+    ctx.moveTo(branchLeftX, topY);
+    ctx.lineTo(branchRightX, topY);
     ctx.lineTo(branchRightX, mainTopY);
     ctx.lineTo(rightX, mainTopY);
     ctx.lineTo(rightX, mainBottomY);
     ctx.lineTo(branchRightX, mainBottomY);
-    ctx.lineTo(branchRightX, bottomBranchY);
-    ctx.lineTo(branchLeftX, bottomBranchY);
+    ctx.lineTo(branchRightX, bottomY);
+    ctx.lineTo(branchLeftX, bottomY);
     ctx.lineTo(branchLeftX, mainBottomY);
     ctx.lineTo(leftX, mainBottomY);
     ctx.lineTo(leftX, mainTopY);
     ctx.lineTo(branchLeftX, mainTopY);
-    ctx.lineTo(branchLeftX, topBranchY);
+    ctx.lineTo(branchLeftX, topY);
     ctx.closePath();
 
     ctx.restore();
@@ -797,6 +834,7 @@ export class Cross extends DuctBase {
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
     const rotation = this.rotation || 0;
+    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -804,13 +842,11 @@ export class Cross extends DuctBase {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
-    // Горизонтальная осевая линия (через весь горизонтальный канал)
     ctx.moveTo(this.x - 20, centerY);
-    ctx.lineTo(this.x + this._lengthHorizontal + 20, centerY);
+    ctx.lineTo(this.x + this.getWidth() + 20, centerY);
 
-    // Вертикальная осевая линия (через весь вертикальный канал)
-    const topY = centerY - this._lengthVertical - 20;
-    const bottomY = centerY + this._lengthVertical + 20;
+    const topY = centerY - verticalLength_px - 20;
+    const bottomY = centerY + verticalLength_px + 20;
     ctx.moveTo(centerX, topY);
     ctx.lineTo(centerX, bottomY);
 
@@ -848,15 +884,16 @@ export class Cross extends DuctBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      lengthHorizontal: this._lengthHorizontal,
-      lengthVertical: this._lengthVertical
+      lengthHorizontal_mm: this._lengthHorizontal_mm,
+      lengthVertical_mm: this._lengthVertical_mm
     };
   }
 }
+
 // ========== ОТВОД АБСТРАКТНЫЙ ==========
 class ElbowBase extends DuctBase {
-  constructor(id, type, x, y, name, color, sectionType = 'rectangular', size) {
-    super(id, type, x, y, name, color, sectionType, size);
+  constructor(id, type, x_px, y_px, name, color, sectionType = 'rectangular', size_mm) {
+    super(id, type, x_px, y_px, name, color, sectionType, size_mm);
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
@@ -870,34 +907,32 @@ class ElbowBase extends DuctBase {
     }
   }
 }
+
 // ========== ОТВОД (СКРУГЛЕННЫЙ) ==========
 export class ElbowCircular extends ElbowBase {
-  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
-    super(id, 'elbowCircular', x, y, `Отвод ${id}`, '#00ff00', sectionType, size);
-    this._radius = 100;
+  constructor(id, x_px, y_px, sectionType = 'rectangular', size_mm = 100) {
+    super(id, 'elbowCircular', x_px, y_px, `Отвод ${id}`, '#00ff00', sectionType, size_mm);
+    this._radius_mm = 100;   // радиус изгиба в ММ
   }
 
-  get radius() {
-    return this._radius;
-  }
+  get radius_mm() { return this._radius_mm; }
 
-  set radius(newRadius) {
-    if (this._radius === newRadius) return;
-
+  set radius_mm(newRadius) {
+    if (this._radius_mm === newRadius) return;
     const centerX = this.x + this.getWidth() / 2;
     const centerY = this.y + this.getHeight() / 2;
-    this._radius = newRadius;
+    this._radius_mm = newRadius;
     this.x = centerX - this.getWidth() / 2;
     this.y = centerY - this.getHeight() / 2;
     this.updatePorts();
   }
 
   getWidth() {
-    return this._radius + this._size;
+    return this.mmToPx(this._radius_mm) + this.getSizePx();
   }
 
   getHeight() {
-    return this._radius + this._size;
+    return this.mmToPx(this._radius_mm) + this.getSizePx();
   }
 
   getCenterX() {
@@ -909,39 +944,49 @@ export class ElbowCircular extends ElbowBase {
   }
 
   getCalloutText() {
-    return `${this.name}\nДиаметр: ${this._size} мм\nРадиус изгиба: ${this._radius} мм\nУгол: 90°`;
+    return `${this.name}\nДиаметр: ${this._size_mm} мм\nРадиус изгиба: ${this._radius_mm} мм\nУгол: 90°`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
-      { name: 'radius', label: 'Радиус изгиба', type: 'number', step: 5, min: 30, value: this._radius, unit: 'мм' }
+      {
+        name: 'radius_mm',
+        label: 'Радиус изгиба (мм)',
+        type: 'number',
+        step: 5,
+        min: 30,
+        value: this._radius_mm,
+        unit: 'мм'
+      }
     ];
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
-    const centerRadius = this._radius + this._size / 2;
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._radius_mm);
+    const centerRadius_px = radius_px + size_px / 2;
 
-    // Inlet порт (слева)
     const inletX = this.x;
-    const inletY = this.y + this.getHeight() - centerRadius;
+    const inletY = this.y + height_px - centerRadius_px;
     const inletPos = this.rotatePoint(inletX, inletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
-      this.id, 'inlet', 'left', 0, this.getHeight() - centerRadius, inletPos.x, inletPos.y
+      this.id, 'inlet', 'left', 0, height_px - centerRadius_px, inletPos.x, inletPos.y
     ));
 
-    // Outlet порт (снизу)
-    const outletX = this.x + centerRadius;
-    const outletY = this.y + this.getHeight();
+    const outletX = this.x + centerRadius_px;
+    const outletY = this.y + height_px;
     const outletPos = this.rotatePoint(outletX, outletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
-      this.id, 'outlet', 'bottom', centerRadius, this.getHeight(), outletPos.x, outletPos.y
+      this.id, 'outlet', 'bottom', centerRadius_px, height_px, outletPos.x, outletPos.y
     ));
 
     return ports;
@@ -951,10 +996,12 @@ export class ElbowCircular extends ElbowBase {
     const rotation = this.rotation || 0;
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._radius_mm);
     const bendCenterX = this.x;
     const bendCenterY = this.y + this.getHeight();
-    const outerRadius = this._radius + this._size;
-    const innerRadius = this._radius;
+    const outerRadius_px = radius_px + size_px;
+    const innerRadius_px = radius_px;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -962,19 +1009,12 @@ export class ElbowCircular extends ElbowBase {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
-
-    // Внешняя дуга от 270° до 360°
-    ctx.arc(bendCenterX, bendCenterY, outerRadius, Math.PI * 1.5, Math.PI * 2);
-
-    // Прямая линия от конца внешней дуги к началу внутренней
+    ctx.arc(bendCenterX, bendCenterY, outerRadius_px, Math.PI * 1.5, Math.PI * 2);
     ctx.lineTo(
-      bendCenterX + innerRadius * Math.cos(Math.PI * 2),
-      bendCenterY + innerRadius * Math.sin(Math.PI * 2)
+      bendCenterX + innerRadius_px * Math.cos(Math.PI * 2),
+      bendCenterY + innerRadius_px * Math.sin(Math.PI * 2)
     );
-
-    // Внутренняя дуга от 360° до 270° (против часовой стрелки)
-    ctx.arc(bendCenterX, bendCenterY, innerRadius, Math.PI * 2, Math.PI * 1.5, true);
-
+    ctx.arc(bendCenterX, bendCenterY, innerRadius_px, Math.PI * 2, Math.PI * 1.5, true);
     ctx.closePath();
 
     ctx.restore();
@@ -984,9 +1024,11 @@ export class ElbowCircular extends ElbowBase {
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
     const rotation = this.rotation || 0;
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._radius_mm);
     const bendCenterX = this.x;
     const bendCenterY = this.y + this.getHeight();
-    const centerRadius = this._radius + this._size / 2;
+    const centerRadius_px = radius_px + size_px / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -994,18 +1036,14 @@ export class ElbowCircular extends ElbowBase {
     ctx.translate(-centerX, -centerY);
 
     ctx.beginPath();
+    ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
 
-    // Центральная дуга (осевая линия) от 270° до 360°
-    ctx.arc(bendCenterX, bendCenterY, centerRadius, Math.PI * 1.5, Math.PI * 2);
-
-    // От левого конца дуги к левому краю
     const startX = bendCenterX;
-    const startY = bendCenterY - centerRadius;
+    const startY = bendCenterY - centerRadius_px;
     ctx.moveTo(startX, startY);
     ctx.lineTo(this.x - 20, startY);
 
-    // От нижнего конца дуги к нижнему краю
-    const endX = bendCenterX + centerRadius;
+    const endX = bendCenterX + centerRadius_px;
     const endY = bendCenterY;
     ctx.moveTo(endX, endY);
     ctx.lineTo(endX, this.y + this.getHeight() + 20);
@@ -1019,19 +1057,8 @@ export class ElbowCircular extends ElbowBase {
     ctx.restore();
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
-    if (showElementAxes) {
-      this.drawCenterLines(ctx, scale, isDarkTheme);
-    }
-  }
-
   hitTest(worldX, worldY, ctx) {
-    if (!this._size || !this._radius || this._size <= 0 || this._radius <= 0) {
+    if (!this._size_mm || !this._radius_mm || this._size_mm <= 0 || this._radius_mm <= 0) {
       return false;
     }
 
@@ -1049,69 +1076,50 @@ export class ElbowCircular extends ElbowBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      radius: this._radius
+      radius_mm: this._radius_mm
     };
   }
 }
+
+// ========== ОТВОД СЕКЦИОННЫЙ ==========
 export class ElbowRectangular extends ElbowBase {
-  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
-    super(id, 'elbowRectangular', x, y, `Отвод секционный ${id}`, '#0000ff', sectionType, size);
-    this._horizontalLength = 100; // Длина горизонтальной части до изгиба
-    this._verticalLength = 100;   // Длина вертикальной части после изгиба
+  constructor(id, x_px, y_px, sectionType = 'rectangular', size_mm = 100) {
+    super(id, 'elbowRectangular', x_px, y_px, `Отвод секционный ${id}`, '#0000ff', sectionType, size_mm);
+    this._horizontalLength_mm = 100;   // горизонтальная часть до изгиба в ММ
+    this._verticalLength_mm = 100;     // вертикальная часть после изгиба в ММ
   }
 
-  get horizontalLength() {
-    return this._horizontalLength;
-  }
+  get horizontalLength_mm() { return this._horizontalLength_mm; }
+  get verticalLength_mm() { return this._verticalLength_mm; }
 
-  set horizontalLength(newLength) {
-    if (this._horizontalLength === newLength) return;
+  set horizontalLength_mm(newLength) {
+    if (this._horizontalLength_mm === newLength) return;
     const centerX = this.x + this.getWidth() / 2;
     const centerY = this.y + this.getHeight() / 2;
-    this._horizontalLength = newLength;
+    this._horizontalLength_mm = newLength;
     this.x = centerX - this.getWidth() / 2;
     this.y = centerY - this.getHeight() / 2;
     this.updatePorts();
   }
 
-  get verticalLength() {
-    return this._verticalLength;
-  }
-
-  set verticalLength(newLength) {
-    if (this._verticalLength === newLength) return;
+  set verticalLength_mm(newLength) {
+    if (this._verticalLength_mm === newLength) return;
     const centerX = this.x + this.getWidth() / 2;
     const centerY = this.y + this.getHeight() / 2;
-    this._verticalLength = newLength;
+    this._verticalLength_mm = newLength;
     this.x = centerX - this.getWidth() / 2;
     this.y = centerY - this.getHeight() / 2;
     this.updatePorts();
-  }
-
-  // Для обратной совместимости
-  get width() {
-    return this._horizontalLength;
-  }
-
-  set width(value) {
-    this.horizontalLength = value;
-  }
-
-  get height() {
-    return this._verticalLength;
-  }
-
-  set height(value) {
-    this.verticalLength = value;
   }
 
   getWidth() {
-    return this._horizontalLength + this._size;
+    return this.mmToPx(this._horizontalLength_mm) + this.getSizePx();
   }
 
   getHeight() {
-    return this._verticalLength + this._size;
+    return this.mmToPx(this._verticalLength_mm) + this.getSizePx();
   }
+
   getCenterX() {
     return this.x + this.getWidth() / 2;
   }
@@ -1119,43 +1127,63 @@ export class ElbowRectangular extends ElbowBase {
   getCenterY() {
     return this.y + this.getHeight() / 2;
   }
+
   getCalloutText() {
-    return `${this.name}\nСечение: ${this._size}×${this._size} мм`;
+    return `${this.name}\nСечение: ${this._size_mm}×${this._size_mm} мм\nГориз. часть: ${this._horizontalLength_mm} мм\nВерт. часть: ${this._verticalLength_mm} мм`;
+  }
+
+  getParameters() {
+    return [
+      ...super.getParameters(),
+      {
+        name: 'horizontalLength_mm',
+        label: 'Горизонтальная часть (мм)',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._horizontalLength_mm,
+        unit: 'мм'
+      },
+      {
+        name: 'verticalLength_mm',
+        label: 'Вертикальная часть (мм)',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._verticalLength_mm,
+        unit: 'мм'
+      },
+    ];
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
-    const width = this.getWidth();
-    const height = this.getHeight();
-    const centerX = this.x + width / 2;
-    const centerY = this.y + height / 2;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const centerX = this.getCenterX();
+    const centerY = this.getCenterY();
+    const size_px = this.getSizePx();
+    const horizLen_px = this.mmToPx(this._horizontalLength_mm);
+    const vertLen_px = this.mmToPx(this._verticalLength_mm);
 
-    const size = this._size;
-    const horizLen = this._horizontalLength;
-    const vertLen = this._verticalLength;
-
-    // Inlet порт (слева) - на левой стороне на уровне vertLen
-    // Это точка входа воздуховода
     const inletX = this.x;
-    const inletY = this.y + vertLen - size / 2;
+    const inletY = this.y + vertLen_px - size_px / 2;
     const inletPos = this.rotatePoint(inletX, inletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
       this.id, 'inlet', 'left',
-      0, vertLen - size / 2, // локальные координаты относительно x,y
+      0, vertLen_px - size_px / 2,
       inletPos.x, inletPos.y
     ));
 
-    // Outlet порт (снизу) - на нижней стороне на уровне horizLen
-    // Это точка выхода воздуховода
-    const outletX = this.x + horizLen + size / 2;
-    const outletY = this.y + height;
+    const outletX = this.x + horizLen_px + size_px / 2;
+    const outletY = this.y + height_px;
     const outletPos = this.rotatePoint(outletX, outletY, centerX, centerY, rotation);
     ports.push(new Port(
       this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
       this.id, 'outlet', 'bottom',
-      horizLen + size / 2, height, // локальные координаты относительно x,y
+      horizLen_px + size_px / 2, height_px,
       outletPos.x, outletPos.y
     ));
 
@@ -1164,37 +1192,35 @@ export class ElbowRectangular extends ElbowBase {
 
   createPath(ctx) {
     const rotation = this.rotation || 0;
-    const width = this.getWidth();
-    const height = this.getHeight();
-    const elemCenterX = this.x + width / 2;
-    const elemCenterY = this.y + height / 2;
-
-    const size = this._size;
-    const horizLen = this._horizontalLength;
-    const vertLen = this._verticalLength;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const size_px = this.getSizePx();
+    const horizLen_px = this.mmToPx(this._horizontalLength_mm);
+    const vertLen_px = this.mmToPx(this._verticalLength_mm);
+    const centerX = this.getCenterX();
+    const centerY = this.getCenterY();
 
     ctx.save();
-    ctx.translate(elemCenterX, elemCenterY);
+    ctx.translate(centerX, centerY);
     ctx.rotate((rotation + 180) * Math.PI / 180);
-    ctx.translate(-elemCenterX, -elemCenterY);
+    ctx.translate(-centerX, -centerY);
     ctx.beginPath();
 
-    // Рисуем L-образную форму
-    ctx.moveTo(this.x, this.y + vertLen);
+    ctx.moveTo(this.x, this.y + vertLen_px);
     ctx.lineTo(this.x, this.y);
-    ctx.lineTo(this.x + horizLen, this.y);
-    ctx.lineTo(this.x + horizLen, this.y + vertLen);
-    ctx.lineTo(this.x + horizLen + size, this.y + vertLen);
-    ctx.lineTo(this.x + horizLen + size, this.y + height);
-    ctx.lineTo(this.x, this.y + height);
+    ctx.lineTo(this.x + horizLen_px, this.y);
+    ctx.lineTo(this.x + horizLen_px, this.y + vertLen_px);
+    ctx.lineTo(this.x + horizLen_px + size_px, this.y + vertLen_px);
+    ctx.lineTo(this.x + horizLen_px + size_px, this.y + height_px);
+    ctx.lineTo(this.x, this.y + height_px);
     ctx.closePath();
 
     ctx.restore();
   }
 
   hitTest(worldX, worldY, ctx) {
-    if (!this._size || !this._horizontalLength || !this._verticalLength ||
-      this._size <= 0 || this._horizontalLength <= 0 || this._verticalLength <= 0) {
+    if (!this._size_mm || !this._horizontalLength_mm || !this._verticalLength_mm ||
+      this._size_mm <= 0 || this._horizontalLength_mm <= 0 || this._verticalLength_mm <= 0) {
       return false;
     }
 
@@ -1208,17 +1234,15 @@ export class ElbowRectangular extends ElbowBase {
     this.createPath(tempCtx);
     return tempCtx.isPointInPath(worldX, worldY);
   }
+
   drawCenterLines(ctx, scale, isDarkTheme) {
     const centerX = this.getCenterX();
     const centerY = this.getCenterY();
     const rotation = this.rotation || 0;
-
-    const size = this._size;
-    const horizLen = this._horizontalLength;
-    const vertLen = this._verticalLength;
-
-    // Точка внутреннего угла L-образной формы
-    const cornerX = this.x + horizLen;
+    const size_px = this.getSizePx();
+    const horizLen_px = this.mmToPx(this._horizontalLength_mm);
+    const vertLen_px = this.mmToPx(this._verticalLength_mm);
+    const cornerX = this.x + horizLen_px;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -1230,45 +1254,44 @@ export class ElbowRectangular extends ElbowBase {
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
 
-    // Горизонтальная осевая линия (через центр горизонтальной части)
-    const horizontalCenterY = this.y + vertLen - size / 2;
+    const horizontalCenterY = this.y + vertLen_px - size_px / 2;
     ctx.moveTo(this.x - 20, horizontalCenterY);
-    ctx.lineTo(cornerX + size + 20, horizontalCenterY);
+    ctx.lineTo(cornerX + size_px + 20, horizontalCenterY);
     ctx.stroke();
 
-    // Вертикальная осевая линия (через центр вертикальной части)
-    const verticalCenterX = this.x + horizLen + size / 2;
-    ctx.moveTo(verticalCenterX, this.y + vertLen - size - 20);
+    const verticalCenterX = this.x + horizLen_px + size_px / 2;
+    ctx.moveTo(verticalCenterX, this.y + vertLen_px - size_px - 20);
     ctx.lineTo(verticalCenterX, this.y + this.getHeight() + 20);
     ctx.stroke();
 
     ctx.setLineDash([]);
     ctx.restore();
   }
+
   toJSON() {
     return {
       ...super.toJSON(),
-      horizontalLength: this._horizontalLength,
-      verticalLength: this._verticalLength,
+      horizontalLength_mm: this._horizontalLength_mm,
+      verticalLength_mm: this._verticalLength_mm,
     };
   }
 }
 
 // ========== ВЕНТИЛЯТОР ==========
 export class Fan extends DuctDirect {
-  constructor(id, x, y, sectionType = 'rectangular', size = 100) {
-    // Вызываем конструктор DuctDirect, но меняем тип на 'fan'
-    super(id, x, y, size, sectionType, size); // length = size (квадратный вентилятор)
+  constructor(id, x_px, y_px, sectionType = 'rectangular', size_mm = 100) {
+    // Вентилятор квадратный, поэтому length_mm = size_mm
+    super(id, x_px, y_px, size_mm, sectionType, size_mm);
     this.type = 'fan';
     this.name = `Вентилятор ${id}`;
-    this.color = '#ff9800';
     this.flow = 1000;
     this.pressure = 500;
   }
 
   getCalloutText() {
-    const area = (this._size * this._size / 1000000).toFixed(2);
-    return `${this.name}\nРазмер: ${this._size}×${this._size} мм\nПлощадь: ${area} м²\nПроизводительность: ${this.flow} м³/ч\nНапор: ${this.pressure} Па`;
+    const size_m = this._size_mm / 1000;
+    const area = (size_m * size_m).toFixed(2);
+    return `${this.name}\nРазмер: ${this._size_mm}×${this._size_mm} мм\nПлощадь: ${area} м²\nПроизводительность: ${this.flow} м³/ч\nНапор: ${this.pressure} Па`;
   }
 
   getParameters() {
@@ -1279,30 +1302,27 @@ export class Fan extends DuctDirect {
     ];
   }
 
-  // Переопределяем draw для добавления специфических элементов вентилятора
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    // Рисуем прямоугольник (корпус)
-    this.drawRectangular(ctx, this._lengthHorizontal, this._size, isSelected, scale, showColors);
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    this.drawRectangular(ctx, width_px, height_px, isSelected, scale, showColors);
 
-    // Рисуем внутренности вентилятора
     const rotation = this.rotation || 0;
-    const centerX = this.x + this._lengthHorizontal / 2;
-    const centerY = this.y + this._size / 2;
-    const radius = this._size * 0.35;
+    const centerX = this.x + width_px / 2;
+    const centerY = this.y + height_px / 2;
+    const radius = height_px * 0.35;
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
-    // Круг (крыльчатка)
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
     ctx.strokeStyle = '#666';
     ctx.lineWidth = Math.max(1, 1.5 / scale);
     ctx.stroke();
 
-    // Стрелка направления потока
     const triangleSize = radius * 0.7;
     const direction = this.flow > 0 ? 1 : -1;
     ctx.beginPath();
@@ -1320,61 +1340,66 @@ export class Fan extends DuctDirect {
     }
   }
 
+  // Переопределяем toJSON для явного сохранения length_mm
   toJSON() {
     return {
       ...super.toJSON(),
       type: 'fan',
       flow: this.flow,
-      pressure: this.pressure
+      pressure: this.pressure,
+      // Явно сохраняем length_mm (он же size_mm для вентилятора)
+      length_mm: this._lengthHorizontal_mm
     };
   }
 }
+
 // ========== ФАБРИКА ==========
 export class ElementFactory {
-  static createElement(type, id, x, y, params = {}) {
+  static createElement(type, id, x_px, y_px, params = {}) {
     const sectionType = params.sectionType || 'rectangular';
-    const size = params.size || 50;
+    const size_mm = params.size_mm || 50;
 
     switch (type) {
       case 'duct':
-        const duct = new DuctDirect(id, x, y, params.length || 750, sectionType, size);
+        const duct = new DuctDirect(id, x_px, y_px, params.length_mm || 750, sectionType, size_mm);
         if (params.rotation !== undefined) duct.rotation = params.rotation;
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
         return duct;
       case 'tee':
-        const tee = new Tee(id, x, y, sectionType, size);
-        if (params.length !== undefined) tee._lengthHorizontal = params.length;
-        if (params.centerY !== undefined) tee._centerY = params.centerY;
+        const tee = new Tee(id, x_px, y_px, sectionType, size_mm);
+        if (params.length_mm !== undefined) tee._lengthHorizontal_mm = params.length_mm;
+        if (params.branchHeight_mm !== undefined) tee._branchHeight_mm = params.branchHeight_mm;
         if (params.rotation !== undefined) tee.rotation = params.rotation;
         if (params.name) tee.name = params.name;
         if (params.color) tee.color = params.color;
         return tee;
       case 'cross':
-        const cross = new Cross(id, x, y, sectionType, size);
-        if (params.length !== undefined) cross._lengthHorizontal = params.length;
-        if (params.centerY !== undefined) cross._centerY = params.centerY;
+        const cross = new Cross(id, x_px, y_px, sectionType, size_mm);
+        if (params.lengthHorizontal_mm !== undefined) cross._lengthHorizontal_mm = params.lengthHorizontal_mm;
+        if (params.lengthVertical_mm !== undefined) cross._lengthVertical_mm = params.lengthVertical_mm;
         if (params.rotation !== undefined) cross.rotation = params.rotation;
         if (params.name) cross.name = params.name;
         if (params.color) cross.color = params.color;
         return cross;
       case 'elbowCircular':
-        const elbow = new ElbowCircular(id, x, y, sectionType, size);
-        if (params.radius !== undefined) elbow._radius = params.radius;
+        const elbow = new ElbowCircular(id, x_px, y_px, sectionType, size_mm);
+        if (params.radius_mm !== undefined) elbow._radius_mm = params.radius_mm;
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
         if (params.name) elbow.name = params.name;
         if (params.color) elbow.color = params.color;
         return elbow;
       case 'elbowRectangular':
-        const elbowRect = new ElbowRectangular(id, x, y, sectionType, size);
-        if (params.width !== undefined) elbowRect.width = params.width;
-        if (params.height !== undefined) elbowRect.height = params.height;
+        const elbowRect = new ElbowRectangular(id, x_px, y_px, sectionType, size_mm);
+        if (params.horizontalLength_mm !== undefined) elbowRect._horizontalLength_mm = params.horizontalLength_mm;
+        if (params.verticalLength_mm !== undefined) elbowRect._verticalLength_mm = params.verticalLength_mm;
         if (params.rotation !== undefined) elbowRect.rotation = params.rotation;
         if (params.name) elbowRect.name = params.name;
         if (params.color) elbowRect.color = params.color;
         return elbowRect;
       case 'fan':
-        const fan = new Fan(id, x, y, sectionType, size);
+        const fan = new Fan(id, x_px, y_px, sectionType, size_mm);
+        if (params.length_mm !== undefined) fan._lengthHorizontal_mm = params.length_mm;
         if (params.flow !== undefined) fan.flow = params.flow;
         if (params.pressure !== undefined) fan.pressure = params.pressure;
         if (params.rotation !== undefined) fan.rotation = params.rotation;
@@ -1391,7 +1416,6 @@ export class ElementFactory {
         group._y = params._y || 0;
         group.width = params.width || 0;
         group.height = params.height || 0;
-        // Восстанавливаем выноски группы
         group.callouts = (params.callouts || []).map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
         return group;
       default:
@@ -1400,7 +1424,6 @@ export class ElementFactory {
   }
 
   static createFromJSON(jsonData) {
-    // Создаем элемент с базовыми параметрами
     let element = this.createElement(
       jsonData.type,
       jsonData.id,
@@ -1408,11 +1431,14 @@ export class ElementFactory {
       jsonData.y,
       {
         sectionType: jsonData.sectionType,
-        size: jsonData.size,
-        length: jsonData.length,
-        branchHeight: jsonData.branchHeight,
-        centerY: jsonData.centerY,
-        radius: jsonData.radius,
+        size_mm: jsonData.size_mm !== undefined ? jsonData.size_mm : jsonData.size, // fallback для старых файлов
+        length_mm: jsonData.length_mm !== undefined ? jsonData.length_mm : jsonData.length, // fallback для старых файлов
+        branchHeight_mm: jsonData.branchHeight_mm,
+        lengthHorizontal_mm: jsonData.lengthHorizontal_mm,
+        lengthVertical_mm: jsonData.lengthVertical_mm,
+        radius_mm: jsonData.radius_mm !== undefined ? jsonData.radius_mm : jsonData.radius, // fallback
+        horizontalLength_mm: jsonData.horizontalLength_mm,
+        verticalLength_mm: jsonData.verticalLength_mm,
         flow: jsonData.flow,
         pressure: jsonData.pressure,
         rotation: jsonData.rotation,
@@ -1427,7 +1453,6 @@ export class ElementFactory {
       }
     );
 
-    // Восстанавливаем порты
     if (jsonData.ports) {
       element.ports = jsonData.ports.map(p => new Port(
         p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
@@ -1442,14 +1467,10 @@ export class ElementFactory {
       });
     }
 
-    // Восстанавливаем выноски только если они есть в JSON и элемент не группа
-    // И только если это не процесс вставки (мы передаем пустой массив callouts)
     if (jsonData.callouts && jsonData.callouts.length > 0 && element.type !== 'group') {
-      // Очищаем существующие выноски, чтобы избежать дублирования
       element.callouts = [];
       element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
     } else if (element.type !== 'group') {
-      // Если выносок нет в JSON, убеждаемся, что массив пустой
       element.callouts = [];
     }
 
