@@ -227,4 +227,45 @@ export class ConnectionManager {
 
     return connectionsRestored;
   }
+  // В ConnectionManager добавьте метод, который принимает список перемещаемых элементов
+  findClosestPortsForMovingWithMultiple(movingElements, deltaX, deltaY, maxDistance = 40) {
+    // Собираем ID всех перемещаемых элементов (включая содержимое групп)
+    const allMovingIds = new Set();
+    movingElements.forEach(element => {
+      this.collectElementIds(element, allMovingIds);
+    });
+
+    // Получаем все порты, исключая порты перемещаемых элементов
+    const allPorts = this.getAllPorts();
+    const staticPorts = allPorts.filter(port => !allMovingIds.has(port.elementId));
+
+    let bestMatch = null;
+    let bestDistance = maxDistance;
+
+    // Для каждого перемещаемого элемента собираем его порты со смещением
+    for (const movingElement of movingElements) {
+      const movingPortsData = [];
+      this.collectMovingPortsWithPositions(movingElement, deltaX, deltaY, movingPortsData);
+
+      for (const movingData of movingPortsData) {
+        for (const targetPort of staticPorts) {
+          const distance = Math.hypot(movingData.worldX - targetPort.worldX, movingData.worldY - targetPort.worldY);
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestMatch = {
+              movingPort: movingData.port,
+              targetPort: targetPort,
+              distance: distance,
+              offsetX: targetPort.worldX - movingData.worldX,
+              offsetY: targetPort.worldY - movingData.worldY,
+              element: movingElement
+            };
+          }
+        }
+      }
+    }
+
+    return bestMatch;
+  }
 }

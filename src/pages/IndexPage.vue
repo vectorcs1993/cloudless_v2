@@ -443,23 +443,23 @@ const pasteElements = () => {
 
 // Обработчик горячих клавиш
 const handleKeyDown = (e) => {
-  // Ctrl+C (копирование)
-  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+  // Проверяем нажатие Ctrl+C (копирование) - используем e.code вместо e.key
+  if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyC')) {
     e.preventDefault();
     copySelected();
   }
   // Ctrl+V (вставка)
-  else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+  else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyV')) {
     e.preventDefault();
     pasteElements();
   }
   // Delete (удаление)
-  else if (e.key === 'Delete' && selectedElements.value.length > 0) {
+  else if (e.key === 'Delete' || e.key === 'Del') {
     e.preventDefault();
     deleteSelected();
   }
   // Escape (снятие выделения)
-  else if (e.key === 'Escape') {
+  else if (e.key === 'Escape' || e.code === 'Escape') {
     e.preventDefault();
     selectedElements.value = [];
     if (renderer && typeof renderer.setSelectedElements === 'function') {
@@ -467,7 +467,7 @@ const handleKeyDown = (e) => {
     }
     renderer?.draw();
   }
-};
+}
 
 const saveToLocalStorage = () => {
   if (storageManager && typeof storageManager.save === 'function') {

@@ -175,20 +175,12 @@ export class InteractionManager {
       return;
     }
 
-    let bestMatch = null;
-    let bestElement = null;
+    // Используем новый метод, который учитывает все перемещаемые элементы
+    const bestMatch = this.connectionManager.findClosestPortsForMovingWithMultiple(
+      elements, deltaWorldX, deltaWorldY, 40
+    );
 
-    for (const element of elements) {
-      const match = this.connectionManager.findClosestPortsForMoving(element, deltaWorldX, deltaWorldY, 40);
-      if (match && match.distance < 40) {
-        if (!bestMatch || match.distance < bestMatch.distance) {
-          bestMatch = match;
-          bestElement = element;
-        }
-      }
-    }
-
-    if (bestMatch && bestElement) {
+    if (bestMatch) {
       const adjustedDeltaX = deltaWorldX + bestMatch.offsetX;
       const adjustedDeltaY = deltaWorldY + bestMatch.offsetY;
       this.moveElements(elements, adjustedDeltaX, adjustedDeltaY);
