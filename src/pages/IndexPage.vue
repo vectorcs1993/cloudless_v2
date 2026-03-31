@@ -162,7 +162,12 @@ import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
-import { Tee, DuctDirect, Fan, ElementFactory, ElbowCircular, ElbowRectangular, Cross, Group, setGlobalMmPerPx } from './Elements.js';
+import { Tee, Cross, Group, BaseElement } from './Elements.js';
+import { DuctDirect } from './DuctDirect.js';
+import { Elbow } from './Elbow.js';
+import { Fan } from './Fan.js';
+import { ElementFactory } from './ElementFactory.js';
+import { globalScale } from './GlobalScale.js';
 
 // Элементы для drag and drop
 const dragItems = [
@@ -201,7 +206,7 @@ const dragItems = [
     </svg>`
   },
   {
-    type: 'elbowCircular',
+    type: 'elbow',
     label: 'Отвод',
     color: '#e74c3c',
     width: 64,
@@ -211,18 +216,6 @@ const dragItems = [
       <circle cx="12" cy="32" r="3" fill="#e74c3c"/>
       <circle cx="32" cy="32" r="3" fill="#e74c3c"/>
       <circle cx="32" cy="52" r="3" fill="#e74c3c"/>
-    </svg>`
-  },
-  {
-    type: 'elbowRectangular',
-    label: 'Отвод секционный',
-    color: '#ff6600',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <path d="M12 32 L32 32 L32 52" fill="none" stroke="#ff6600" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <rect x="12" y="28" width="20" height="8" fill="#ff6600" stroke="#2c3e50" stroke-width="2"/>
-      <rect x="28" y="40" width="8" height="12" fill="#ff6600" stroke="#2c3e50" stroke-width="2"/>
     </svg>`
   },
   {
@@ -311,15 +304,7 @@ const getElementTypeName = (element) => {
     return element.getTypeName();
   }
   // Если элемент - простой объект (например, после загрузки)
-  const types = {
-    'duct': 'Прямой воздуховод',
-    'fan': 'Вентилятор',
-    'tee': 'Тройник',
-    'elbowCircular': 'Отвод',
-    'elbowRectangular': 'Отвод секционный',
-    'cross': 'Крестовина',
-    'group': 'Группа элементов'
-  };
+  const types = BaseElement.getAvailableTypes();
   return types[element.type] || element.type || 'Неизвестно';
 };
 
@@ -641,11 +626,8 @@ const createGhostElement = (itemType, worldX, worldY) => {
     case 'tee':
       ghost = new Tee(-1, worldX, worldY);
       break;
-    case 'elbowCircular':
-      ghost = new ElbowCircular(-1, worldX, worldY);
-      break;
-    case 'elbowRectangular':
-      ghost = new ElbowRectangular(-1, worldX, worldY);
+    case 'elbow':
+      ghost = new Elbow(-1, worldX, worldY);
       break;
     case 'cross':
       ghost = new Cross(-1, worldX, worldY);
@@ -727,11 +709,8 @@ const onDrop = (e) => {
       case 'tee':
         addElement(Tee, [], worldPos.x, worldPos.y, true);
         break;
-      case 'elbowCircular':
-        addElement(ElbowCircular, [], worldPos.x, worldPos.y, true);
-        break;
-      case 'elbowRectangular':
-        addElement(ElbowRectangular, [], worldPos.x, worldPos.y, true);
+      case 'elbow':
+        addElement(Elbow, [], worldPos.x, worldPos.y, true);
         break;
       case 'cross':
         addElement(Cross, [], worldPos.x, worldPos.y, true);
@@ -905,7 +884,7 @@ const onWheel = (e) => interactionManager?.onWheel(e);
 
 // Инициализация
 onMounted(() => {
-  setGlobalMmPerPx(mmPerPx.value);
+  globalScale.setMmPerPx(mmPerPx.value);
   const savedTheme = localStorage.getItem('theme');
   if (savedTheme === 'dark') isDarkTheme.value = true;
 
@@ -988,7 +967,7 @@ watch(isDarkTheme, () => renderer?.draw());
 watch(showElementAxes, () => renderer?.draw());
 watch(gridStepM, () => renderer?.draw());
 watch(mmPerPx, (newVal) => {
-  setGlobalMmPerPx(newVal);
+  globalScale.setMmPerPx(newVal)
   elements.value.forEach(el => {
     if (typeof el.updatePorts === 'function') el.updatePorts();
     if (typeof el.updateCalloutText === 'function') el.updateCalloutText();

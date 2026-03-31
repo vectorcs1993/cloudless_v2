@@ -11,6 +11,59 @@ export class CanvasRenderer {
     this.selectionRect = null;
     this.tooltipPort = null;
     this.tooltipPos = { x: 0, y: 0 };
+
+    // Настройки отображения портов
+    this.portSettings = {
+      baseRadius: 3,        // Базовый радиус порта в пикселях (при масштабе 1)
+      minRadius: 1,         // Минимальный радиус порта
+      maxRadius: 5,        // Максимальный радиус порта
+      highlightScale: 1.5,  // Увеличение радиуса при подсветке
+      borderWidth: 0,       // Ширина обводки порта
+    };
+  }
+
+  // Метод для получения текущего радиуса порта с учетом масштаба и подсветки
+  getPortRadius(port, isHighlighted = false) {
+    let radius = this.portSettings.baseRadius;
+
+    // Масштабируем радиус относительно текущего масштаба
+    // Чем больше масштаб, тем больше радиус, но с ограничениями
+    const scaleFactor = Math.min(2, Math.max(0.5, this.scale.value));
+    radius = radius * scaleFactor;
+
+    // Применяем ограничения
+    radius = Math.min(this.portSettings.maxRadius,
+      Math.max(this.portSettings.minRadius, radius));
+
+    // Увеличиваем радиус для подсвеченного порта
+    if (isHighlighted) {
+      radius *= this.portSettings.highlightScale;
+    }
+
+    return radius;
+  }
+
+  // Метод для получения цвета порта
+  getPortColor(port, isHighlighted = false) {
+    if (isHighlighted) {
+      return '#ff00ff'; // Ярко-розовый для подсветки
+    }
+
+    if (port.isConnected()) {
+      return '#00ff00'; // Зеленый для подключенных портов
+    }
+
+    // Цвета в зависимости от направления
+    switch (port.direction) {
+      case 'inlet':
+        return '#00aaff';
+      case 'outlet':
+        return '#ffaa00';
+      case 'branch':
+        return '#aa00ff';
+      default:
+        return '#888888';
+    }
   }
 
   setTooltipPort(port, screenX, screenY) {
@@ -215,34 +268,37 @@ export class CanvasRenderer {
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(port.worldX, port.worldY, port.radius || 5, 0, 2 * Math.PI);
+      const isHighlighted = this.highlightedPort && this.highlightedPort.id === port.id;
+      const radius = this.getPortRadius(port, isHighlighted);
+      const color = this.getPortColor(port, isHighlighted);
 
-      if (this.highlightedPort && this.highlightedPort.id === port.id) {
-        ctx.fillStyle = '#ff00ff';
-      } else if (port.isConnected()) {
-        ctx.fillStyle = '#00ff00';
-      } else {
-        switch (port.direction) {
-          case 'inlet':
-            ctx.fillStyle = '#00aaff';
-            break;
-          case 'outlet':
-            ctx.fillStyle = '#ffaa00';
-            break;
-          case 'branch':
-            ctx.fillStyle = '#aa00ff';
-            break;
-          default:
-            ctx.fillStyle = '#888888';
-        }
+      ctx.save();
+
+      // Добавляем свечение для подсвеченного порта
+      if (isHighlighted) {
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#ff00ff';
       }
 
+      ctx.beginPath();
+      ctx.arc(port.worldX, port.worldY, radius, 0, 2 * Math.PI);
+
+      ctx.fillStyle = color;
       ctx.fill();
+
+      // Обводка порта
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 1 / this.scale.value;
+      ctx.lineWidth = this.portSettings.borderWidth / this.scale.value;
       ctx.stroke();
+
+      // Если порт подключен, добавляем внутреннюю точку
+      if (port.isConnected()) {
+        ctx.beginPath();
+        ctx.arc(port.worldX, port.worldY, radius * 0.4, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+      }
+
       ctx.restore();
     }
   }
@@ -263,8 +319,12 @@ export class CanvasRenderer {
       const connectedElement = this.elements.value.find(el => el.id === port.connectedElementId);
       if (connectedElement) {
         lines.push(`Связан с: ${connectedElement.name}`);
+        lines.push(`Тип: ${connectedElement.getTypeName()}`);
       }
     }
+
+    // Добавляем информацию о координатах порта
+    lines.push(`Координаты: (${Math.round(port.worldX)}, ${Math.round(port.worldY)})`);
 
     const padding = 8;
     const fontSize = 12;
@@ -337,6 +397,33 @@ export class CanvasRenderer {
     ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
     ctx.fillText('Панорама: x: ' + this.panX.value.toFixed(2) + ' y: ' + this.panY.value.toFixed(2), 10, 50);
     ctx.fillText('Элементов: ' + this.elements.value.length, 10, 70);
+
+    // Добавляем информацию о портах
+    if (this.options.showPorts.value) {
+      let connectedCount = 0;
+      let totalCount = 0;
+
+      const countPorts = (elements) => {
+        for (const element of elements) {
+          if (element.ports && element.ports.length > 0) {
+            totalCount += element.ports.length;
+            connectedCount += element.ports.filter(p => p.isConnected()).length;
+          }
+          if (element.type === 'group' && element.elements) {
+            countPorts(element.elements);
+          }
+        }
+      };
+
+      countPorts(this.elements.value);
+      ctx.fillText(`Портов: ${connectedCount}/${totalCount} подключено`, 10, 90);
+    }
+
     ctx.restore();
+  }
+
+  // Метод для обновления настроек отображения портов
+  updatePortSettings(settings) {
+    this.portSettings = { ...this.portSettings, ...settings };
   }
 }
