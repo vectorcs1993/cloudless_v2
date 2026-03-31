@@ -1,4 +1,5 @@
 import { DuctDirect } from './DuctDirect.js';
+import { BaseElement } from './Elements.js';
 
 // ========== ВЕНТИЛЯТОР ==========
 export class Fan extends DuctDirect {
