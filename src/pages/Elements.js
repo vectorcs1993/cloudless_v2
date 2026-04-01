@@ -383,181 +383,389 @@ export class DuctBase extends BaseElement {
   }
 }
 
-// ========== ТРОЙНИК ==========
+// ========== ТРОЙНИК (Т-образный) ==========
 export class Tee extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', a = 100) {
-    super(id, 'tee', x_px, y_px, `Тройник ${id}`, sectionType, a);
-    this._lengthHorizontal_mm = 300;   // горизонтальная длина в ММ
-    this._branchHeight_mm = 150;       // высота ветки в ММ
+  constructor(id, x_px, y_px, sectionType = 'round', a = 125) {
+    super(id, 'tee', x_px, y_px, `${BaseElement.getAvailableTypes().tee} ${id}`, sectionType, a);
+    this._b = 100;                   // Высота для прямоугольного сечения
+    this._branchLength_mm = 125;     // Длина ответвления
+    this._mainLength_mm = 250;       // Длина основной магистрали
   }
 
-  get length_mm() { return this._lengthHorizontal_mm; }
-  get branchHeight_mm() { return this._branchHeight_mm; }
+  // Геттеры и сеттеры для высоты прямоугольного сечения
+  get b() { return this._b; }
 
-  set length_mm(newLength) {
-    if (this._lengthHorizontal_mm === newLength) return;
-    this._lengthHorizontal_mm = newLength;
+  set b(newB) {
+    if (this._b === newB) return;
+    this._b = newB;
     this.updatePorts();
   }
 
-  set branchHeight_mm(newHeight) {
-    if (this._branchHeight_mm === newHeight) return;
-    this._branchHeight_mm = newHeight;
+  // Геттеры и сеттеры для длины ответвления
+  get branchLength_mm() { return this._branchLength_mm; }
+
+  set branchLength_mm(newLength) {
+    if (this._branchLength_mm === newLength) return;
+    this._branchLength_mm = Math.max(this._a, newLength);
+    this.updatePorts();
+  }
+
+  // Геттеры и сеттеры для длины основной магистрали
+  get mainLength_mm() { return this._mainLength_mm; }
+
+  set mainLength_mm(newLength) {
+    if (this._mainLength_mm === newLength) return;
+    this._mainLength_mm = Math.max(this._a * 2, newLength);
     this.updatePorts();
   }
 
   getWidth() {
-    return this.mmToPx(this._lengthHorizontal_mm);
+    return this.mmToPx(this._mainLength_mm);
   }
 
   getHeight() {
-    return this.mmToPx(this._a) + this.mmToPx(this._branchHeight_mm);
+    if (this._sectionType === 'round') {
+      return this.mmToPx(this._branchLength_mm);
+    } else {
+      return this.mmToPx(this._branchLength_mm);
+    }
   }
 
   getTopLeft() {
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+
     return {
-      x: this.x - this.getWidth() / 2,
-      y: this.y - this.getHeight() / 2
+      x: this.x - width_px / 2,
+      y: this.y - height_px / 2
     };
   }
 
+  getCalloutText() {
+    const baseText = `${super.getCalloutText()}`;
+    if (this._sectionType === 'round') {
+      return `${baseText}\nMain: ${this._mainLength_mm} мм\nBranch: ${this._branchLength_mm} мм`;
+    } else {
+      return `${baseText}\nB: ${this._b} мм\nMain: ${this._mainLength_mm} мм\nBranch: ${this._branchLength_mm} мм`;
+    }
+  }
+
   getParameters() {
-    return [
-      ...super.getParameters(),
-      {
-        name: 'length_mm',
-        label: 'Длина горизонтальная',
-        type: 'number',
-        step: 10,
-        min: 50,
-        value: this._lengthHorizontal_mm,
-        unit: 'мм'
-      },
-      {
-        name: 'branchHeight_mm',
-        label: 'Высота ветки',
-        type: 'number',
-        step: 10,
-        min: 20,
-        value: this._branchHeight_mm,
-        unit: 'мм'
-      },
-    ];
+    const baseParams = super.getParameters();
+
+    if (this._sectionType === 'round') {
+      return [
+        ...baseParams,
+        {
+          name: 'mainLength_mm',
+          label: 'Main L',
+          type: 'number',
+          step: 10,
+          min: 50,
+          value: this._mainLength_mm,
+          unit: 'мм'
+        },
+        {
+          name: 'branchLength_mm',
+          label: 'Branch L',
+          type: 'number',
+          step: 10,
+          min: 50,
+          value: this._branchLength_mm,
+          unit: 'мм'
+        }
+      ];
+    } else {
+      return [
+        ...baseParams,
+        {
+          name: 'b',
+          label: 'B',
+          type: 'number',
+          step: 10,
+          min: 30,
+          value: this._b,
+          unit: 'мм'
+        },
+        {
+          name: 'mainLength_mm',
+          label: 'Main L',
+          type: 'number',
+          step: 10,
+          min: 50,
+          value: this._mainLength_mm,
+          unit: 'мм'
+        },
+        {
+          name: 'branchLength_mm',
+          label: 'Branch L',
+          type: 'number',
+          step: 10,
+          min: 50,
+          value: this._branchLength_mm,
+          unit: 'мм'
+        }
+      ];
+    }
   }
 
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
     const centerX = this.x;
     const centerY = this.y;
     const topLeft = this.getTopLeft();
-    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const size_px = this.getSizePx();
 
-    const inletPos = this.rotatePoint(topLeft.x, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, height_px / 2, inletPos.x, inletPos.y
-    ));
+    if (this._sectionType === 'round') {
+      const radius_px = size_px / 2;
 
-    const outletPos = this.rotatePoint(topLeft.x + width_px, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', width_px, height_px / 2, outletPos.x, outletPos.y
-    ));
+      // Левый порт (вход/выход основной магистрали)
+      const leftX = topLeft.x;
+      const leftY = centerY;
+      const leftPos = this.rotatePoint(leftX, leftY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'left')?.id || `port_${this.id}_left`,
+        this.id, 'left', 'left', 0, height_px / 2, leftPos.x, leftPos.y
+      ));
 
-    const branchPos = this.rotatePoint(centerX, centerY + branchHeight_px, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
-      this.id, 'branch', 'bottom', width_px / 2, height_px / 2 + branchHeight_px, branchPos.x, branchPos.y
-    ));
+      // Правый порт (вход/выход основной магистрали)
+      const rightX = topLeft.x + width_px;
+      const rightY = centerY;
+      const rightPos = this.rotatePoint(rightX, rightY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'right')?.id || `port_${this.id}_right`,
+        this.id, 'right', 'right', width_px, height_px / 2, rightPos.x, rightPos.y
+      ));
+
+      // Верхний порт (ответвление)
+      const topX = centerX;
+      const topY = topLeft.y;
+      const topPos = this.rotatePoint(topX, topY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'branch')?.id || `port_${this.id}_branch`,
+        this.id, 'branch', 'top', width_px / 2, 0, topPos.x, topPos.y
+      ));
+
+    } else {
+      // Прямоугольное сечение
+      const b_px = this.mmToPx(this._b);
+
+      // Левый порт (вход/выход основной магистрали)
+      const leftX = topLeft.x;
+      const leftY = centerY;
+      const leftPos = this.rotatePoint(leftX, leftY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'left')?.id || `port_${this.id}_left`,
+        this.id, 'left', 'left', 0, height_px / 2, leftPos.x, leftPos.y
+      ));
+
+      // Правый порт (вход/выход основной магистрали)
+      const rightX = topLeft.x + width_px;
+      const rightY = centerY;
+      const rightPos = this.rotatePoint(rightX, rightY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'right')?.id || `port_${this.id}_right`,
+        this.id, 'right', 'right', width_px, height_px / 2, rightPos.x, rightPos.y
+      ));
+
+      // Верхний порт (ответвление)
+      const topX = centerX;
+      const topY = topLeft.y;
+      const topPos = this.rotatePoint(topX, topY, centerX, centerY, rotation);
+      ports.push(new Port(
+        this.ports?.find(p => p.direction === 'branch')?.id || `port_${this.id}_branch`,
+        this.id, 'branch', 'top', width_px / 2, 0, topPos.x, topPos.y
+      ));
+    }
 
     return ports;
   }
 
   createPath(ctx) {
+    if (this._sectionType === 'round') {
+      this._createRoundTee(ctx);
+    } else {
+      this._createRectangularTee(ctx);
+    }
+  }
+
+  // Круглый Т-образный тройник
+  _createRoundTee(ctx) {
     const rotation = this.rotation || 0;
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
-    const size_px = this.getSizePx();
-    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
     const centerX = this.x;
     const centerY = this.y;
     const topLeft = this.getTopLeft();
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const size_px = this.getSizePx();
+    const radius_px = size_px / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
+    // Рисуем основную горизонтальную магистраль
     ctx.beginPath();
+    const mainY = centerY - radius_px;
+    ctx.rect(topLeft.x, mainY, width_px, size_px);
+    ctx.fill();
+    ctx.stroke();
 
-    const leftX = topLeft.x;
-    const rightX = topLeft.x + width_px;
-    const mainTopY = centerY - size_px / 2;
-    const mainBottomY = centerY + size_px / 2;
-    const branchLeftX = centerX - size_px / 2;
-    const branchRightX = centerX + size_px / 2;
+    // Рисуем ответвление (вертикальная труба) - Т-образная форма
+    ctx.beginPath();
+    const branchX = centerX - radius_px;
+    const branchTop = topLeft.y;
+    const branchBottom = topLeft.y + height_px;
+    const mainTop = mainY;
+    const mainBottom = mainY + size_px;
 
-    ctx.moveTo(leftX, mainTopY);
-    ctx.lineTo(rightX, mainTopY);
-    ctx.lineTo(rightX, mainBottomY);
-    ctx.lineTo(branchRightX, mainBottomY);
-    ctx.lineTo(branchRightX, centerY + branchHeight_px);
-    ctx.lineTo(branchLeftX, centerY + branchHeight_px);
-    ctx.lineTo(branchLeftX, mainBottomY);
-    ctx.lineTo(leftX, mainBottomY);
-    ctx.closePath();
+    // Верхняя часть ответвления (над основной магистралью)
+    if (branchTop < mainTop) {
+      ctx.rect(branchX, branchTop, size_px, mainTop - branchTop);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Центральная часть ответвления (боковые стороны вокруг основной магистрали)
+    // Левая половина
+    ctx.beginPath();
+    ctx.rect(branchX, mainTop, radius_px, size_px);
+    ctx.fill();
+    ctx.stroke();
+
+    // Правая половина
+    ctx.beginPath();
+    ctx.rect(branchX + radius_px, mainTop, radius_px, size_px);
+    ctx.fill();
+    ctx.stroke();
+
+    // Нижняя часть ответвления (под основной магистралью)
+    if (mainBottom < branchBottom) {
+      ctx.beginPath();
+      ctx.rect(branchX, mainBottom, size_px, branchBottom - mainBottom);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
 
-  drawCenterLines(ctx, scale, isDarkTheme) {
+  // Прямоугольный Т-образный тройник
+  _createRectangularTee(ctx) {
+    const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
-    const rotation = this.rotation || 0;
-    const branchHeight_px = this.mmToPx(this._branchHeight_mm);
     const topLeft = this.getTopLeft();
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const b_px = this.mmToPx(this._b);
+    const branchWidth_px = this.mmToPx(this._branchLength_mm);
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
+    // Рисуем основную горизонтальную магистраль
     ctx.beginPath();
-    ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + this.getWidth(), centerY);
-
-    const bottomY = centerY + branchHeight_px;
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(centerX, bottomY);
-
-    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
-    ctx.lineWidth = Math.max(0.5, 1 / scale);
-    ctx.setLineDash([4 / scale, 4 / scale]);
+    const mainY = centerY - b_px / 2;
+    ctx.rect(topLeft.x, mainY, width_px, b_px);
+    ctx.fill();
     ctx.stroke();
 
-    ctx.setLineDash([]);
+    // Рисуем ответвление (вертикальная труба) - Т-образная форма
+    ctx.beginPath();
+    const branchX = centerX - branchWidth_px / 2;
+    const branchTop = topLeft.y;
+    const branchBottom = topLeft.y + height_px;
+    const mainTop = mainY;
+    const mainBottom = mainY + b_px;
+
+    // Верхняя часть ответвления (над основной магистралью)
+    if (branchTop < mainTop) {
+      ctx.rect(branchX, branchTop, branchWidth_px, mainTop - branchTop);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Центральная часть ответвления (боковые стороны вокруг основной магистрали)
+    // Левая половина
+    ctx.beginPath();
+    ctx.rect(branchX, mainTop, branchWidth_px / 2, b_px);
+    ctx.fill();
+    ctx.stroke();
+
+    // Правая половина
+    ctx.beginPath();
+    ctx.rect(branchX + branchWidth_px / 2, mainTop, branchWidth_px / 2, b_px);
+    ctx.fill();
+    ctx.stroke();
+
+    // Нижняя часть ответвления (под основной магистралью)
+    if (mainBottom < branchBottom) {
+      ctx.beginPath();
+      ctx.rect(branchX, mainBottom, branchWidth_px, branchBottom - mainBottom);
+      ctx.fill();
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+    // Рисуем основной контур
     this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
+
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
   }
 
+  drawCenterLines(ctx, scale, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+
+    // Горизонтальная центральная линия (основная магистраль)
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+
+    // Вертикальная центральная линия (ответвление)
+    ctx.moveTo(centerX, topLeft.y);
+    ctx.lineTo(centerX, topLeft.y + height_px);
+
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   hitTest(worldX, worldY, ctx) {
+    if (!this._a || this._a <= 0) {
+      return false;
+    }
+
     if (ctx) {
       this.createPath(ctx);
       return ctx.isPointInPath(worldX, worldY);
     }
+
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
     this.createPath(tempCtx);
@@ -565,216 +773,17 @@ export class Tee extends DuctBase {
   }
 
   toJSON() {
+    const base = super.toJSON();
     return {
-      ...super.toJSON(),
-      length_mm: this._lengthHorizontal_mm,
-      branchHeight_mm: this._branchHeight_mm
+      ...base,
+      type: 'tee',
+      b: this._b,
+      branchLength_mm: this._branchLength_mm,
+      mainLength_mm: this._mainLength_mm,
     };
   }
 }
 
-// ========== КРЕСТОВИНА ==========
-export class Cross extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', a = 100) {
-    super(id, 'cross', x_px, y_px, `Крестовина ${id}`, sectionType, a);
-    this._lengthHorizontal_mm = 300;
-    this._lengthVertical_mm = 150;
-  }
-
-  get lengthHorizontal_mm() { return this._lengthHorizontal_mm; }
-  get lengthVertical_mm() { return this._lengthVertical_mm; }
-
-  set lengthHorizontal_mm(newLength) {
-    if (this._lengthHorizontal_mm === newLength) return;
-    this._lengthHorizontal_mm = newLength;
-    this.updatePorts();
-  }
-
-  set lengthVertical_mm(newLength) {
-    if (this._lengthVertical_mm === newLength) return;
-    this._lengthVertical_mm = newLength;
-    this.updatePorts();
-  }
-
-  getWidth() {
-    return this.mmToPx(this._lengthHorizontal_mm);
-  }
-
-  getHeight() {
-    return this.mmToPx(this._a) + this.mmToPx(this._lengthVertical_mm) * 2;
-  }
-
-  getTopLeft() {
-    return {
-      x: this.x - this.getWidth() / 2,
-      y: this.y - this.getHeight() / 2
-    };
-  }
-
-  getParameters() {
-    return [
-      ...super.getParameters(),
-      {
-        name: 'lengthHorizontal_mm',
-        label: 'Длина горизонтальная',
-        type: 'number',
-        step: 10,
-        min: 50,
-        value: this._lengthHorizontal_mm,
-        unit: 'мм'
-      },
-      {
-        name: 'lengthVertical_mm',
-        label: 'Длина вертикальная',
-        type: 'number',
-        step: 10,
-        min: 20,
-        value: this._lengthVertical_mm,
-        unit: 'мм'
-      },
-    ];
-  }
-
-  getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
-
-    const inletPos = this.rotatePoint(topLeft.x, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, height_px / 2, inletPos.x, inletPos.y
-    ));
-
-    const outletPos = this.rotatePoint(topLeft.x + width_px, centerY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', width_px, height_px / 2, outletPos.x, outletPos.y
-    ));
-
-    const branchPos = this.rotatePoint(centerX, centerY + verticalLength_px, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'branch')?.id || Date.now() + Math.random(),
-      this.id, 'branch', 'bottom', width_px / 2, height_px / 2 + verticalLength_px, branchPos.x, branchPos.y
-    ));
-
-    const topPos = this.rotatePoint(centerX, centerY - verticalLength_px, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'top')?.id || Date.now() + Math.random(),
-      this.id, 'top', 'top', width_px / 2, height_px / 2 - verticalLength_px, topPos.x, topPos.y
-    ));
-
-    return ports;
-  }
-
-  createPath(ctx) {
-    const rotation = this.rotation || 0;
-    const width_px = this.getWidth();
-    const size_px = this.getSizePx();
-    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-
-    const leftX = topLeft.x;
-    const rightX = topLeft.x + width_px;
-    const mainTopY = centerY - size_px / 2;
-    const mainBottomY = centerY + size_px / 2;
-    const branchLeftX = centerX - size_px / 2;
-    const branchRightX = centerX + size_px / 2;
-    const topY = centerY - verticalLength_px;
-    const bottomY = centerY + verticalLength_px;
-
-    ctx.moveTo(branchLeftX, topY);
-    ctx.lineTo(branchRightX, topY);
-    ctx.lineTo(branchRightX, mainTopY);
-    ctx.lineTo(rightX, mainTopY);
-    ctx.lineTo(rightX, mainBottomY);
-    ctx.lineTo(branchRightX, mainBottomY);
-    ctx.lineTo(branchRightX, bottomY);
-    ctx.lineTo(branchLeftX, bottomY);
-    ctx.lineTo(branchLeftX, mainBottomY);
-    ctx.lineTo(leftX, mainBottomY);
-    ctx.lineTo(leftX, mainTopY);
-    ctx.lineTo(branchLeftX, mainTopY);
-    ctx.lineTo(branchLeftX, topY);
-    ctx.closePath();
-
-    ctx.restore();
-  }
-
-  drawCenterLines(ctx, scale, isDarkTheme) {
-    const centerX = this.x;
-    const centerY = this.y;
-    const rotation = this.rotation || 0;
-    const verticalLength_px = this.mmToPx(this._lengthVertical_mm);
-    const topLeft = this.getTopLeft();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-    ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + this.getWidth(), centerY);
-
-    const topY = centerY - verticalLength_px;
-    const bottomY = centerY + verticalLength_px;
-    ctx.moveTo(centerX, topY);
-    ctx.lineTo(centerX, bottomY);
-
-    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
-    ctx.lineWidth = Math.max(0.5, 1 / scale);
-    ctx.setLineDash([4 / scale, 4 / scale]);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
-    if (showElementAxes) {
-      this.drawCenterLines(ctx, scale, isDarkTheme);
-    }
-  }
-
-  hitTest(worldX, worldY, ctx) {
-    if (ctx) {
-      this.createPath(ctx);
-      return ctx.isPointInPath(worldX, worldY);
-    }
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    this.createPath(tempCtx);
-    return tempCtx.isPointInPath(worldX, worldY);
-  }
-
-  toJSON() {
-    return {
-      ...super.toJSON(),
-      lengthHorizontal_mm: this._lengthHorizontal_mm,
-      lengthVertical_mm: this._lengthVertical_mm
-    };
-  }
-}
 
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {

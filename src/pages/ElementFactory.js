@@ -1,6 +1,7 @@
-import { Tee, Cross, Group } from './Elements.js';
+import { Tee, Group } from './Elements.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Elbow } from './Elbow.js';
+import { Cross } from './Cross.js';
 import { Fan } from './Fan.js';
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
