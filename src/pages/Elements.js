@@ -496,32 +496,21 @@ export class Group extends BaseElement {
     return allPorts;
   }
 
+  // В классе BaseElement добавьте метод move
   move(deltaX, deltaY) {
-    if (!this.elements || this.elements.length === 0) return;
+    this.x += deltaX;
+    this.y += deltaY;
 
-    if (isNaN(deltaX) || isNaN(deltaY) || !isFinite(deltaX) || !isFinite(deltaY)) {
-      console.warn('Invalid delta in group move:', deltaX, deltaY);
-      return;
+    // Обновляем мировые координаты портов
+    this.updatePortsWorldCoordinates();
+
+    // Обновляем позиции выносок
+    if (this.callouts && this.callouts.length > 0) {
+      this.callouts.forEach(callout => {
+        callout.x += deltaX;
+        callout.y += deltaY;
+      });
     }
-
-    this.elements.forEach(element => {
-      if (element) {
-        element.x += deltaX;
-        element.y += deltaY;
-
-        if (element.callouts && element.callouts.length > 0) {
-          element.callouts.forEach(callout => {
-            callout.x += deltaX;
-            callout.y += deltaY;
-          });
-        }
-
-        if (element.updatePorts) element.updatePorts();
-        if (element.updateCalloutText) element.updateCalloutText();
-      }
-    });
-
-    this.updateBounds();
   }
 
   createPath(ctx) { }

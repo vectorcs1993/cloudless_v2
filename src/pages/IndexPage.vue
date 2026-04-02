@@ -1,161 +1,200 @@
 <template>
   <div class="app" :class="{ 'dark-theme': isDarkTheme }">
-    <!-- Тулбар -->
-    <div class="toolbar">
-      <h3>HVAC Editor</h3>
-      <div class="tab-settings">
-        <div class="settings-grid">
+    <q-splitter :dark="isDarkTheme" v-model="splitterModel" class="full-height-splitter" :limits="[15, 85]">
+      <template v-slot:before>
+        <div class="toolbar">
+          <h3>HVAC Editor</h3>
+          <div class="tab-settings">
+            <div class="settings-grid">
+              <label>Масштаб размеров (мм/px):</label>
+              <div>
+                <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined class="inline-input"
+                  debounce="500" />
+                <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+              </div>
 
+              <label>Масштаб сетки:</label>
+              <div>
+                <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined class="inline-input"
+                  debounce="300" @update:model-value="onGridStepChange" />
+                <span class="hint-text">px</span>
+              </div>
 
-          <label>Масштаб размеров (мм/px):</label>
-          <div>
-            <input type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" />
-            (1px = {{ mmPerPx }} мм)
-          </div>
+              <label>Темная тема:</label>
+              <div><q-toggle v-model="isDarkTheme" /></div>
 
-          <label>Масштаб:</label>
-          <div><input type="number" v-model.number="gridStepM" step="10" min="50" max="500" />px</div>
+              <label>Сетка:</label>
+              <div><q-toggle v-model="showGrid" /></div>
 
-          <label>Темная тема:</label>
-          <div><input type="checkbox" v-model="isDarkTheme" /></div>
+              <label>Показать порты:</label>
+              <div><q-toggle v-model="showPorts" /></div>
 
-          <label>Сетка:</label>
-          <div><input type="checkbox" v-model="showGrid" /></div>
+              <template v-if="showPorts">
+                <label>Привязка к портам:</label>
+                <div><q-toggle v-model="snapToPorts" /></div>
+              </template>
 
-          <label>Показать порты:</label>
-          <div><input type="checkbox" v-model="showPorts" /></div>
+              <template v-if="showPorts && snapToPorts">
+                <label>Автообновление связей:</label>
+                <div><q-toggle v-model="autoUpdateConnections" /></div>
+              </template>
 
-          <template v-if="showPorts">
-            <label>Привязка к портам:</label>
-            <div><input type="checkbox" v-model="snapToPorts" /></div>
-          </template>
+              <label>Показать выноски:</label>
+              <div><q-toggle v-model="showCallouts" /></div>
 
-          <template v-if="showPorts && snapToPorts">
-            <label>Автообновление связей:</label>
-            <div><input type="checkbox" v-model="autoUpdateConnections" /></div>
-          </template>
+              <label>Показывать цвета:</label>
+              <div><q-toggle v-model="showColors" /></div>
 
-          <label>Показать выноски:</label>
-          <div><input type="checkbox" v-model="showCallouts" /></div>
-
-          <label>Показывать цвета:</label>
-          <div><input type="checkbox" v-model="showColors" /></div>
-
-          <label>Показывать оси элементов:</label>
-          <div><input type="checkbox" v-model="showElementAxes" /></div>
-        </div>
-      </div>
-
-      <!-- Панель drag-and-drop элементов -->
-      <div class="drag-panel">
-        <div class="drag-items">
-          <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
-            @dragend="onDragEnd">
-            <div class="drag-item-preview" v-html="item.svg"></div>
-            <span class="drag-item-label">{{ item.label }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Кнопки управления сохранением -->
-      <div class="save-controls">
-        <button @click="saveToLocalStorage" class="cl-btn">💾 Сохранить</button>
-        <button @click="resetToDefault" class="cl-btn">↺ Сброс</button>
-        <button @click="updateAllPortsAndConnections" class="cl-btn">🔄 Обновить все порты и связи</button>
-        <button @click="copySelected" class="cl-btn" :disabled="selectedElements.length === 0">📋 Копировать ({{
-          selectedElements.length }})</button>
-        <button @click="pasteElements" class="cl-btn" :disabled="!clipboardElements.length">📋 Вставить</button>
-      </div>
-
-    </div>
-    <!-- Канвас для рендеринга элементов -->
-    <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-      @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
-    </canvas>
-    <!-- Информация о выбранных элементах -->
-    <div class="selected-info" v-if="selectedElements.length > 0">
-      <h5>Выбрано элементов: {{ selectedElements.length }}</h5>
-
-      <div v-if="selectedElements.length === 1" class="single-element-info">
-        <p>ID: {{ selectedElement?.id }}</p>
-        <p>Тип: {{ getElementTypeName(selectedElement) }}</p>
-        <p v-if="!isGroupSelected">Поворот: {{ selectedElement?.rotation || 0 }}°</p>
-
-        <div class="element-params">
-          <table class="params-table">
-            <thead>
-              <tr>
-                <th>Параметр</th>
-                <th>Значение</th>
-                <th>Ед. изм.</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="param in getElementParameters(selectedElement)" :key="param.name">
-                <td class="param-label">{{ param.label }}: </td>
-                <td class="param-input">
-                  <select v-if="param.type === 'select'" :value="getParamValue(selectedElement, param.name)"
-                    @change="onParameterChange($event, param.name)" class="param-select">
-                    <option v-for="option in param.options" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                  <input v-else :type="param.type" :value="getParamValue(selectedElement, param.name)" :step="param.step" :min="param.min"
-                    @change="onParameterChange($event, param.name)" />
-                </td>
-                <td class="param-unit">
-                  <span v-if="param.unit">{{ param.unit }}</span>
-                  <span v-else class="empty-unit">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div v-if="selectedElement?.ports && selectedElement.ports.length > 0">
-          <h5>Cвязи:</h5>
-          <div v-for="port in selectedElement.ports" :key="port.id"
-            :class="['connection-info', { 'connected': port.isConnected && port.isConnected(), 'disconnected': !port.isConnected || !port.isConnected() }]">
-            <div v-if="port.isConnected && port.isConnected()">
-              🔗 {{ port.side }} ({{ port.getDirectionName?.() || port.direction }}) → ID {{ port.connectedElementId }}
-            </div>
-            <div v-else>
-              ⭕ {{ port.side }} ({{ port.getDirectionName?.() || port.direction }}) - не подключен
+              <label>Показывать оси элементов:</label>
+              <div><q-toggle v-model="showElementAxes" /></div>
             </div>
           </div>
-        </div>
 
-        <div v-if="!isGroupSelected" class="rotation-controls">
-          <button @click="rotateLeft" class="rotate-btn">↺ 90°</button>
-          <button @click="rotateRight" class="rotate-btn">↻ 90°</button>
-        </div>
+          <!-- Панель drag-and-drop элементов -->
+          <div class="drag-panel">
+            <div class="drag-items">
+              <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
+                @dragend="onDragEnd">
+                <div class="drag-item-preview" v-html="item.svg"></div>
+                <span class="drag-item-label">{{ item.label }}</span>
+              </div>
+            </div>
+          </div>
 
-        <div class="layer-controls">
-          <button @click="moveToTop" class="layer-btn">⬆️ Вверх</button>
-          <button @click="moveToBottom" class="layer-btn">⬇️ Вниз</button>
-          <button @click="moveUp" class="layer-btn">⬆️ Выше</button>
-          <button @click="moveDown" class="layer-btn">⬇️ Ниже</button>
+          <!-- Кнопки управления сохранением -->
+          <div class="save-controls">
+            <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
+            <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
+            <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" label="Обновить связи" dense />
+            <q-btn @click="copySelected" color="secondary" :disable="selectedElements.length === 0" dense>
+              <q-icon name="content_copy" />
+              <span class="q-ml-xs">Копировать ({{ selectedElements.length }})</span>
+            </q-btn>
+            <q-btn @click="pasteElements" color="secondary" :disable="!clipboardElements.length" dense>
+              <q-icon name="content_paste" />
+              <span class="q-ml-xs">Вставить</span>
+            </q-btn>
+          </div>
         </div>
-      </div>
+      </template>
 
-      <div v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls">
-        <button @click="groupSelected" class="group-btn" :disabled="selectedElements.length < 2">
-          📦 Сгруппировать ({{ selectedElements.length }})
-        </button>
-        <button @click="ungroupSelected" class="ungroup-btn" :disabled="!isGroupSelected">
-          🔓 Разгруппировать
-        </button>
-      </div>
-      <div v-if="selectedElements.length > 1" class="multi-selection-info">
-        <button @click="deleteSelected" class="delete-btn">Удалить выбранные ({{ selectedElements.length }})</button>
-      </div>
-      <button v-if="selectedElements.length === 1" @click="deleteSelected" class="delete-btn">Удалить</button>
-    </div>
+      <template v-slot:after>
+        <div class="canvas-container">
+          <!-- Канвас для рендеринга элементов -->
+          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
+            @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
+          </canvas>
+
+          <!-- Информация о выбранных элементах -->
+          <q-card :dark="isDarkTheme" v-if="selectedElements.length > 0" class="selected-info-card" flat bordered>
+            <q-card-section>
+              <div class="row items-center justify-between">
+                <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
+                <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
+              </div>
+
+              <q-separator class="q-mt-sm q-mb-md" />
+
+              <div v-if="selectedElements.length === 1" class="single-element-info">
+                <q-list :dark="isDarkTheme" dense>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>ID</q-item-label>
+                      <q-item-label>{{ selectedElement?.id }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Тип</q-item-label>
+                      <q-item-label>{{ getElementTypeName(selectedElement) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+
+                <div class="element-params">
+                  <div class="text-subtitle2 q-mt-md q-mb-sm">Параметры</div>
+                  <q-separator class="q-mb-sm" />
+
+                  <q-list dense>
+                    <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
+                      <q-item-section class="param-label-col">
+                        <q-item-label>{{ param.label }}:</q-item-label>
+                      </q-item-section>
+                      <q-item-section>
+                        <q-select :dark="isDarkTheme" v-if="param.type === 'select'" :model-value="selectedElement[param.name]"
+                          :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                          @update:model-value="(val) => onParameterChange(val, param.name)" />
+                        <q-input :dark="isDarkTheme" v-else :type="param.type" v-model="selectedElement[param.name]" :step="param.step"
+                          :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                      </q-item-section>
+                      <q-item-section side class="param-unit-col">
+                        <span v-if="param.unit">{{ param.unit }}</span>
+                        <span v-else>—</span>
+                      </q-item-section>
+                    </q-item>
+                  </q-list>
+                </div>
+
+                <div v-if="selectedElement?.ports && selectedElement.ports.length > 0" class="connections-info">
+                  <div class="text-subtitle2 q-mt-md q-mb-sm">Связи</div>
+                  <q-separator class="q-mb-sm" />
+
+                  <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
+                    <q-icon :name="port.isConnected && port.isConnected() ? 'link' : 'link_off'"
+                      :color="port.isConnected && port.isConnected() ? 'positive' : 'negative'" size="16px" />
+                    <span class="q-ml-sm">
+                      {{ port.side }} ({{ port.getDirectionName?.() || port.direction }})
+                    </span>
+                    <span v-if="port.isConnected && port.isConnected()" class="q-ml-auto">
+                      → ID {{ port.connectedElementId }}
+                    </span>
+                    <span v-else class="q-ml-auto text-negative">не подключен</span>
+                  </div>
+                </div>
+
+                <div v-if="!isGroupSelected" class="rotation-controls q-mt-md">
+                  <div class="text-subtitle2 q-mb-sm">Поворот</div>
+                  <q-btn-group spread>
+                    <q-btn label="↺ 90°" @click="rotateLeft" color="primary" />
+                    <q-btn label="↻ 90°" @click="rotateRight" color="primary" />
+                  </q-btn-group>
+                </div>
+
+                <div class="layer-controls q-mt-md">
+                  <div class="text-subtitle2 q-mb-sm">Слои</div>
+                  <q-btn-group>
+                    <q-btn icon="vertical_align_top" @click="moveToTop" label="Вверх" />
+                    <q-btn icon="arrow_upward" @click="moveUp" label="Выше" />
+                    <q-btn icon="arrow_downward" @click="moveDown" label="Ниже" />
+                    <q-btn icon="vertical_align_bottom" @click="moveToBottom" label="Вниз" />
+                  </q-btn-group>
+                </div>
+              </div>
+
+              <div v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
+                <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
+                <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
+                  class="full-width q-mb-sm" />
+                <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
+                  class="full-width" />
+              </div>
+
+              <div class="delete-controls q-mt-md">
+                <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
+                <span v-if="selectedElements.length > 1" class="q-ml-sm text-caption">
+                  ({{ selectedElements.length }} элементов)
+                </span>
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </template>
+    </q-splitter>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
@@ -170,6 +209,15 @@ import { Tee } from './Tee.js';
 import { Fan } from './Fan.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
+
+// Функция для уведомлений (fallback если Quasar не загружен)
+const showNotify = (options) => {
+  if (typeof window !== 'undefined' && window.Quasar && window.Quasar.Notify) {
+    window.Quasar.Notify.create(options);
+  } else {
+    console.log(options.message);
+  }
+};
 
 // Элементы для drag and drop
 const dragItems = [
@@ -234,6 +282,7 @@ const dragItems = [
 ];
 
 // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
+const splitterModel = ref(15);
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
 const showPorts = ref(true);
@@ -242,8 +291,12 @@ const showColors = ref(true);
 const showElementAxes = ref(false);
 const snapToPorts = ref(true);
 const gridStepM = ref(50);
-const mmPerPx = ref(2); // 1px = 1мм по умолчанию
+const mmPerPx = ref(2);
 const autoUpdateConnections = ref(true);
+
+// Флаг для предотвращения множественных перерисовок
+let redrawTimeout = null;
+
 // Canvas
 const mainCanvas = ref(null);
 let renderer = null;
@@ -264,19 +317,18 @@ let nextGroupId = 1000;
 // Для копирования/вставки
 const clipboardElements = ref([]);
 
-// Для drag and drop и призрака
+// Для drag and drop
 let dragType = null;
 let dragItemData = null;
-let ghostElement = null; // Временный элемент для призрака
+let ghostElement = null;
 let isDragging = false;
 let ghostWorldPos = { x: 0, y: 0 };
 
-// Вычисляемое свойство для текущего выбранного элемента
+// Вычисляемые свойства
 const selectedElement = computed(() => {
   return selectedElements.value.length === 1 ? selectedElements.value[0] : null;
 });
 
-// Вычисляемое свойство для проверки, выбрана ли группа
 const isGroupSelected = computed(() => {
   return selectedElement.value && selectedElement.value instanceof Group;
 });
@@ -299,13 +351,38 @@ const renderOptions = {
   mouseWorldPos,
 };
 
-// Вспомогательные функции для безопасного доступа к методам элемента
+// Оптимизированная функция перерисовки с debounce
+const debouncedDraw = () => {
+  if (redrawTimeout) {
+    clearTimeout(redrawTimeout);
+  }
+  redrawTimeout = setTimeout(() => {
+    renderer?.draw();
+    redrawTimeout = null;
+  }, 16); // ~60fps
+};
+
+// Обработчик изменения масштаба сетки с оптимизацией
+const onGridStepChange = (value) => {
+  // Валидация значения
+  let newValue = parseInt(value);
+  if (isNaN(newValue)) newValue = 50;
+  if (newValue < 50) newValue = 50;
+  if (newValue > 500) newValue = 500;
+
+  if (gridStepM.value !== newValue) {
+    gridStepM.value = newValue;
+    // Используем debounced перерисовку
+    debouncedDraw();
+  }
+};
+
+// Вспомогательные функции
 const getElementTypeName = (element) => {
   if (!element) return 'Неизвестно';
   if (typeof element.getTypeName === 'function') {
     return element.getTypeName();
   }
-  // Если элемент - простой объект (например, после загрузки)
   const types = BaseElement.getAvailableTypes();
   return types[element.type] || element.type || 'Неизвестно';
 };
@@ -315,7 +392,6 @@ const getElementParameters = (element) => {
   if (typeof element.getParameters === 'function') {
     return element.getParameters();
   }
-  // Базовые параметры для простого объекта
   return [
     { name: 'name', label: 'Имя', type: 'text', value: element.name },
     { name: 'x', label: 'X (центр)', type: 'number', step: 1, min: 20, value: element.x, unit: 'px' },
@@ -334,16 +410,9 @@ const setParamValue = (element, paramName, value) => {
   element[paramName] = value;
 };
 
-const onParameterChange = (event, paramName) => {
+const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
-
-  let value = event.target.value;
-  if (event.target.type === 'number') {
-    value = parseFloat(value);
-  }
-
   setParamValue(selectedElement.value, paramName, value);
-
   if (typeof selectedElement.value.updatePorts === 'function') {
     selectedElement.value.updatePorts();
   }
@@ -353,11 +422,17 @@ const onParameterChange = (event, paramName) => {
   renderer?.draw();
 };
 
-// ========== Функции копирования и вставки ==========
+const clearSelection = () => {
+  selectedElements.value = [];
+  if (renderer && typeof renderer.setSelectedElements === 'function') {
+    renderer.setSelectedElements([]);
+  }
+  renderer?.draw();
+};
+
+// Функции копирования и вставки
 const copySelected = () => {
   if (selectedElements.value.length === 0) return;
-
-  // Сохраняем копии выбранных элементов в буфер обмена
   clipboardElements.value = selectedElements.value.map(element => {
     if (typeof element.toJSON === 'function') {
       const json = element.toJSON();
@@ -366,29 +441,20 @@ const copySelected = () => {
     }
     return element;
   });
-
-  // Показываем уведомление
-  const copyBtn = document.querySelector('.cl-btn:has(> 📋 Копировать)');
-  if (copyBtn) {
-    const originalText = copyBtn.textContent;
-    copyBtn.textContent = `✓ Скопировано ${clipboardElements.value.length} элементов!`;
-    setTimeout(() => { if (copyBtn) copyBtn.textContent = originalText; }, 1000);
-  }
-
-  console.log(`Скопировано ${clipboardElements.value.length} элементов`);
+  showNotify({
+    type: 'positive',
+    message: `Скопировано ${clipboardElements.value.length} элементов`,
+    position: 'bottom-right',
+    timeout: 1000
+  });
 };
 
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
-
-  // Снимаем выделение со всех элементов
   selectedElements.value = [];
-
   const newElements = [];
-  const offset = 50; // Смещение для вставки, чтобы не накладывались на оригинал
-
+  const offset = 50;
   clipboardElements.value.forEach(json => {
-    // Создаем новый элемент на основе сохраненного JSON
     const newElement = ElementFactory.createFromJSON({
       ...json,
       id: ++nextElementId,
@@ -402,90 +468,65 @@ const pasteElements = () => {
       })),
       callouts: []
     });
-
-    // Обновляем имя, чтобы не было дубликатов
     if (newElement.name) {
       const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
       newElement.name = `${baseName} (копия)`;
     }
-
-    // Обновляем порты
     if (typeof newElement.updatePorts === 'function') {
       newElement.updatePorts();
     }
-
-    // Добавляем ОДНУ выноску для нового элемента
     const calloutX = newElement.x;
     const calloutY = newElement.y - 150;
     if (typeof newElement.addCallout === 'function') {
       newElement.addCallout(calloutX, calloutY);
     }
-
     elements.value.push(newElement);
     newElements.push(newElement);
   });
-
-  // Выделяем вставленные элементы
   selectedElements.value = newElements;
   if (renderer && typeof renderer.setSelectedElements === 'function') {
     renderer.setSelectedElements(newElements);
   }
   renderer?.draw();
-
-  // Показываем уведомление
-  const pasteBtn = document.querySelector('.cl-btn:has(> 📋 Вставить)');
-  if (pasteBtn) {
-    const originalText = pasteBtn.textContent;
-    pasteBtn.textContent = `✓ Вставлено ${newElements.length} элементов!`;
-    setTimeout(() => { if (pasteBtn) pasteBtn.textContent = originalText; }, 1000);
-  }
-
-  console.log(`Вставлено ${newElements.length} элементов`);
+  showNotify({
+    type: 'positive',
+    message: `Вставлено ${newElements.length} элементов`,
+    position: 'bottom-right',
+    timeout: 1000
+  });
 };
 
 // Обработчик горячих клавиш
 const handleKeyDown = (e) => {
-  // Проверяем нажатие Ctrl+C (копирование) - используем e.code вместо e.key
   if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyC')) {
     e.preventDefault();
     copySelected();
-  }
-  // Ctrl+V (вставка)
-  else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyV')) {
+  } else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyV')) {
     e.preventDefault();
     pasteElements();
-  }
-  // Delete (удаление)
-  else if (e.key === 'Delete' || e.key === 'Del') {
+  } else if (e.key === 'Delete' || e.key === 'Del') {
     e.preventDefault();
     deleteSelected();
-  }
-  // Escape (снятие выделения)
-  else if (e.key === 'Escape' || e.code === 'Escape') {
+  } else if (e.key === 'Escape' || e.code === 'Escape') {
     e.preventDefault();
-    selectedElements.value = [];
-    if (renderer && typeof renderer.setSelectedElements === 'function') {
-      renderer.setSelectedElements([]);
-    }
-    renderer?.draw();
+    clearSelection();
   }
-}
+};
 
 const saveToLocalStorage = () => {
   if (storageManager && typeof storageManager.save === 'function') {
     storageManager.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
   }
-  const saveBtn = document.querySelector('.save-btn');
-  if (saveBtn) {
-    const originalText = saveBtn.textContent;
-    saveBtn.textContent = '✓ Сохранено!';
-    setTimeout(() => { if (saveBtn) saveBtn.textContent = originalText; }, 1000);
-  }
+  showNotify({
+    type: 'positive',
+    message: 'Сохранено!',
+    position: 'bottom-right',
+    timeout: 1000
+  });
 };
 
 const loadFromLocalStorage = () => {
   if (!storageManager || typeof storageManager.load !== 'function') return;
-
   const data = storageManager.load();
   if (!data) {
     elements.value = [];
@@ -500,13 +541,7 @@ const loadFromLocalStorage = () => {
     return;
   }
   try {
-    console.log('Загружены данные:', data);
-    console.log('Количество элементов:', data.elements.length);
-    elements.value = data.elements.map(json => {
-      const element = ElementFactory.createFromJSON(json);
-      console.log('Создан элемент:', element.type, element.id);
-      return element;
-    });
+    elements.value = data.elements.map(json => ElementFactory.createFromJSON(json));
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
     nextGroupId = data.nextGroupId || 1000;
@@ -531,7 +566,6 @@ const loadFromLocalStorage = () => {
       renderer.setSelectedElements([]);
     }
     renderer?.draw();
-    console.log('Элементы после загрузки:', elements.value.length);
   } catch (error) {
     console.error('Error loading data:', error);
     elements.value = [];
@@ -558,6 +592,11 @@ const resetToDefault = () => {
       renderer.setSelectedElements([]);
     }
     renderer?.draw();
+    showNotify({
+      type: 'info',
+      message: 'Сброс выполнен',
+      position: 'bottom-right'
+    });
   }
 };
 
@@ -565,48 +604,33 @@ const updateAllPortsAndConnections = () => {
   if (connectionManager && typeof connectionManager.updateAllPortsAndConnections === 'function') {
     const restored = connectionManager.updateAllPortsAndConnections(5);
     renderer?.draw();
-
-    const btn = document.querySelector('.update-ports-btn');
-    if (btn) {
-      const original = btn.textContent;
-      btn.textContent = `✓ Восстановлено ${restored} связей!`;
-      setTimeout(() => { if (btn) btn.textContent = original; }, 2000);
-    }
+    showNotify({
+      type: 'positive',
+      message: `Восстановлено ${restored} связей!`,
+      position: 'bottom-right',
+      timeout: 2000
+    });
   }
 };
 
 const addElement = (ElementClass, params = [], x = null, y = null, centerOffset = true) => {
   const newId = ++nextElementId;
-
-  // Если координаты не переданы, используем значения по умолчанию
   let posX = x !== null ? x : 100;
   let posY = y !== null ? y : 300;
-
-  // Создаем элемент
   const newElement = new ElementClass(newId, posX, posY, ...params);
-
-  // Если нужно центрировать относительно курсора
   if (centerOffset && x !== null && y !== null) {
-    // Получаем размеры элемента
-    const width = newElement.getWidth?.() || 64;
-    const height = newElement.getHeight?.() || 64;
-
-    // Корректируем позицию, чтобы центр элемента был в точке курсора
     newElement.x = posX;
     newElement.y = posY;
   }
-
   elements.value.push(newElement);
   if (typeof newElement.updatePorts === 'function') {
     newElement.updatePorts();
   }
-
   const calloutX = newElement.x;
   const calloutY = newElement.y - 150;
   if (typeof newElement.addCallout === 'function') {
     newElement.addCallout(calloutX, calloutY);
   }
-
   selectedElements.value = [newElement];
   if (renderer && typeof renderer.setSelectedElements === 'function') {
     renderer.setSelectedElements([newElement]);
@@ -615,32 +639,19 @@ const addElement = (ElementClass, params = [], x = null, y = null, centerOffset 
   return newElement;
 };
 
-// Создание временного элемента для призрака
 const createGhostElement = (itemType, worldX, worldY) => {
   let ghost = null;
   switch (itemType) {
-    case 'duct':
-      ghost = new DuctDirect(-1, worldX, worldY);
-      break;
-    case 'fan':
-      ghost = new Fan(-1, worldX, worldY);
-      break;
-    case 'tee':
-      ghost = new Tee(-1, worldX, worldY);
-      break;
-    case 'elbow':
-      ghost = new Elbow(-1, worldX, worldY);
-      break;
-    case 'cross':
-      ghost = new Cross(-1, worldX, worldY);
-      break;
-    default:
-      return null;
+    case 'duct': ghost = new DuctDirect(-1, worldX, worldY); break;
+    case 'fan': ghost = new Fan(-1, worldX, worldY); break;
+    case 'tee': ghost = new Tee(-1, worldX, worldY); break;
+    case 'elbow': ghost = new Elbow(-1, worldX, worldY); break;
+    case 'cross': ghost = new Cross(-1, worldX, worldY); break;
+    default: return null;
   }
   return ghost;
 };
 
-// Обновление позиции призрака
 const updateGhostPosition = (worldX, worldY) => {
   if (ghostElement) {
     ghostElement.x = worldX;
@@ -655,17 +666,12 @@ const onDragStart = (e, item) => {
   dragType = item.type;
   dragItemData = item;
   isDragging = true;
-
-  // Получаем текущую мировую позицию курсора
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
   }
-
   e.dataTransfer.setData('text/plain', item.type);
   e.dataTransfer.effectAllowed = 'copy';
-
-  // Создаем прозрачное изображение для drag preview
   const dragIcon = document.createElement('div');
   dragIcon.style.opacity = '0';
   document.body.appendChild(dragIcon);
@@ -684,7 +690,6 @@ const onDragEnd = (e) => {
 const onDragOver = (e) => {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
-
   if (isDragging && ghostElement) {
     const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
     if (worldPos) {
@@ -695,33 +700,18 @@ const onDragOver = (e) => {
 
 const onDrop = (e) => {
   e.preventDefault();
-
   if (!dragType) return;
-
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
-
   if (worldPos) {
     switch (dragType) {
-      case 'duct':
-        addElement(DuctDirect, [], worldPos.x, worldPos.y, true);
-        break;
-      case 'fan':
-        addElement(Fan, [], worldPos.x, worldPos.y, true);
-        break;
-      case 'tee':
-        addElement(Tee, [], worldPos.x, worldPos.y, true);
-        break;
-      case 'elbow':
-        addElement(Elbow, [], worldPos.x, worldPos.y, true);
-        break;
-      case 'cross':
-        addElement(Cross, [], worldPos.x, worldPos.y, true);
-        break;
-      default:
-        console.warn('Unknown drag type:', dragType);
+      case 'duct': addElement(DuctDirect, [], worldPos.x, worldPos.y, true); break;
+      case 'fan': addElement(Fan, [], worldPos.x, worldPos.y, true); break;
+      case 'tee': addElement(Tee, [], worldPos.x, worldPos.y, true); break;
+      case 'elbow': addElement(Elbow, [], worldPos.x, worldPos.y, true); break;
+      case 'cross': addElement(Cross, [], worldPos.x, worldPos.y, true); break;
+      default: console.warn('Unknown drag type:', dragType);
     }
   }
-
   ghostElement = null;
   isDragging = false;
   dragType = null;
@@ -761,27 +751,33 @@ const rotateRight = () => {
 const moveToTop = () => {
   if (selectedElement.value && layerManager && typeof layerManager.moveToTop === 'function') {
     layerManager.moveToTop(selectedElement.value);
+    renderer?.draw();
   }
 };
+
 const moveToBottom = () => {
   if (selectedElement.value && layerManager && typeof layerManager.moveToBottom === 'function') {
     layerManager.moveToBottom(selectedElement.value);
+    renderer?.draw();
   }
 };
+
 const moveUp = () => {
   if (selectedElement.value && layerManager && typeof layerManager.moveUp === 'function') {
     layerManager.moveUp(selectedElement.value);
+    renderer?.draw();
   }
 };
+
 const moveDown = () => {
   if (selectedElement.value && layerManager && typeof layerManager.moveDown === 'function') {
     layerManager.moveDown(selectedElement.value);
+    renderer?.draw();
   }
 };
 
 const deleteSelected = () => {
   if (selectedElements.value.length === 0) return;
-
   selectedElements.value.forEach(element => {
     if (connectionManager && typeof connectionManager.disconnectElement === 'function') {
       connectionManager.disconnectElement(element);
@@ -791,30 +787,23 @@ const deleteSelected = () => {
       elements.value.splice(index, 1);
     }
   });
-
-  selectedElements.value = [];
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements([]);
-  }
+  clearSelection();
   renderer?.draw();
 };
 
 const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
-
   const groupId = ++nextGroupId;
   const group = new Group(groupId, [...selectedElements.value]);
   if (typeof group.updatePorts === 'function') {
     group.updatePorts();
   }
-
   selectedElements.value.forEach(element => {
     const index = elements.value.findIndex(el => el.id === element.id);
     if (index !== -1) {
       elements.value.splice(index, 1);
     }
   });
-
   elements.value.push(group);
   selectedElements.value = [group];
   if (renderer && typeof renderer.setSelectedElements === 'function') {
@@ -825,21 +814,16 @@ const groupSelected = () => {
 
 const ungroupSelected = () => {
   if (!isGroupSelected.value) return;
-
   const group = selectedElement.value;
   if (!(group instanceof Group)) return;
-
   const groupElements = group.getElements();
-
   const groupIndex = elements.value.findIndex(el => el.id === group.id);
   if (groupIndex !== -1) {
     elements.value.splice(groupIndex, 1);
   }
-
   groupElements.forEach(element => {
     elements.value.push(element);
   });
-
   selectedElements.value = groupElements;
   if (renderer && typeof renderer.setSelectedElements === 'function') {
     renderer.setSelectedElements(groupElements);
@@ -851,7 +835,6 @@ const ungroupSelected = () => {
 const onCanvasMouseDown = (e) => {
   if (isDragging) return;
   interactionManager?.onMouseDown(e);
-
   if (renderer?.selectedElements) {
     selectedElements.value = [...renderer.selectedElements];
   } else {
@@ -862,13 +845,11 @@ const onCanvasMouseDown = (e) => {
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
-
   if (isDragging && ghostElement) {
     updateGhostPosition(worldPos.x, worldPos.y);
   } else {
     interactionManager?.onMouseMove(e);
   }
-
   if (renderer?.selectedElements) {
     selectedElements.value = [...renderer.selectedElements];
   }
@@ -944,7 +925,6 @@ onMounted(() => {
   }
 
   layerManager = new LayerManager(elements, renderer);
-
   loadFromLocalStorage();
 
   const resizeObserver = new ResizeObserver(() => renderer?.draw());
@@ -953,27 +933,234 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
   mainCanvas.value.setAttribute('tabindex', '0');
   mainCanvas.value.focus();
-
   renderer.draw();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  if (redrawTimeout) {
+    clearTimeout(redrawTimeout);
+  }
 });
 
-watch(showGrid, () => renderer?.draw());
-watch(showPorts, () => renderer?.draw());
-watch(showCallouts, () => renderer?.draw());
-watch(showColors, () => renderer?.draw());
-watch(isDarkTheme, () => renderer?.draw());
-watch(showElementAxes, () => renderer?.draw());
-watch(gridStepM, () => renderer?.draw());
+// Оптимизированные watchers с debounce
+watch(showGrid, () => debouncedDraw());
+watch(showPorts, () => debouncedDraw());
+watch(showCallouts, () => debouncedDraw());
+watch(showColors, () => debouncedDraw());
+watch(isDarkTheme, () => debouncedDraw());
+watch(showElementAxes, () => debouncedDraw());
 watch(mmPerPx, (newVal) => {
-  globalScale.setMmPerPx(newVal)
+  globalScale.setMmPerPx(newVal);
   elements.value.forEach(el => {
     if (typeof el.updatePorts === 'function') el.updatePorts();
     if (typeof el.updateCalloutText === 'function') el.updateCalloutText();
   });
-  renderer?.draw();
+  debouncedDraw();
 });
+
+// Убираем прямой watch для gridStepM, используем onGridStepChange
 </script>
+
+<style lang="scss" scoped>
+.app {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+
+  &.dark-theme {
+    background-color: #1e1e1e;
+  }
+}
+
+.full-height-splitter {
+  height: 100vh;
+  width: 100%;
+}
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.main-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #f0f0f0;
+  cursor: default;
+  user-select: none;
+  outline: none;
+
+  .dark-theme & {
+    background: #2a2a2a;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.selected-info-card {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: max-content;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  z-index: 100;
+
+  .dark-theme & {
+    background: #2d2d2d;
+    color: #e0e0e0;
+  }
+}
+
+.toolbar {
+  height: 100%;
+  padding: 20px;
+  background: #f5f5f5;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  .dark-theme & {
+    background: #2d2d2d;
+    color: #e0e0e0;
+  }
+
+  h3 {
+    margin: 0 0 10px 0;
+  }
+}
+
+.tab-settings {
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+
+  .dark-theme & {
+    background: #3d3d3d;
+    border-color: #555;
+  }
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 16px;
+  align-items: center;
+
+  label {
+    font-weight: 500;
+    white-space: nowrap;
+    margin: 0;
+  }
+}
+
+.inline-input {
+  width: 80px;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: #666;
+
+  .dark-theme & {
+    color: #aaa;
+  }
+}
+
+.drag-panel {
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+
+  .dark-theme & {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.drag-items {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.drag-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: grab;
+  transition: transform 0.2s;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:hover {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.drag-item-preview {
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+
+.drag-item-label {
+  font-size: 12px;
+  margin-top: 5px;
+  text-align: center;
+}
+
+.save-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.single-element-info {
+  .param-label-col {
+    flex: 0 0 100px;
+  }
+
+  .param-unit-col {
+    flex: 0 0 40px;
+    font-size: 12px;
+    color: #666;
+
+    .dark-theme & {
+      color: #aaa;
+    }
+  }
+}
+
+.connection-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #f0f0f0;
+
+  .dark-theme & {
+    border-bottom-color: #404040;
+  }
+}
+
+.full-width {
+  width: 100%;
+}
+</style>
