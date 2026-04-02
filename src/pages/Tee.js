@@ -1,13 +1,14 @@
 import { BaseElement, DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
-// ========== КРЕСТОВИНА ==========
-export class Cross extends DuctBase {
+// ========== ТРОЙНИК ==========
+export class Tee extends DuctBase {
   constructor(id, x_px, y_px, sectionType = 'round', a = 125) {
-    super(id, 'cross', x_px, y_px, `${BaseElement.getAvailableTypes().cross} ${id}`, sectionType, a);
+    super(id, 'tee', x_px, y_px, `${BaseElement.getAvailableTypes().tee} ${id}`, sectionType, a);
     this._b = 100;                   // Высота для прямоугольного сечения (только для расчета эквивалентного диаметра)
-    this._l1 = 250;                  // Горизонтальная длина крестовины
-    this._l2 = 250;                  // Вертикальная длина крестовины
+    this._l1 = 250;                  // Длина основной магистрали (горизонталь)
+    this._l2 = 250;                  // Длина ответвления (вертикаль)
+    this._l3 = 0;                    // Смещение ответвления от центра (0 - по центру)
   }
 
   // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ДИНАМИЧЕСКИХ ОГРАНИЧЕНИЙ ==========
@@ -17,17 +18,27 @@ export class Cross extends DuctBase {
   }
 
   getMaxL1() {
-    // Максимальная горизонтальная длина - 5000 мм или 20 * A
+    // Максимальная длина магистрали - 5000 мм или 20 * A
     return Math.min(5000, this._a * 20);
   }
 
   getMinL2() {
-    return this._a * 2;
+    return this._a;
   }
 
   getMaxL2() {
-    // Максимальная вертикальная длина - 5000 мм или 20 * A
-    return Math.min(5000, this._a * 20);
+    // Максимальная длина ответвления - 3000 мм или 15 * A
+    return Math.min(3000, this._a * 15);
+  }
+
+  getMinL3() {
+    // Минимальное смещение (отрицательное)
+    return -(this._l1 / 2 - this._a / 2);
+  }
+
+  getMaxL3() {
+    // Максимальное смещение (положительное)
+    return this._l1 / 2 - this._a / 2;
   }
 
   // ========== ГЕТТЕРЫ И СЕТТЕРЫ ==========
@@ -40,11 +51,15 @@ export class Cross extends DuctBase {
     // Приводим значение к числу и ограничиваем глобальными пределами
     let newValue = Math.max(20, Math.min(1000, value));
 
-    // Проверка: A не может быть больше половины горизонтальной длины
-    if (newValue > this._l1 / 2) return;
+    // Проверка: A не может быть больше длины ответвления
+    if (newValue > this._l2) return;
 
-    // Проверка: A не может быть больше половины вертикальной длины
-    if (newValue > this._l2 / 2) return;
+    // Проверка: A не может быть больше половины длины магистрали (с учетом смещения)
+    const maxAllowedA = (this._l1 / 2 - Math.abs(this._l3)) * 2;
+    if (newValue > maxAllowedA) return;
+
+    // Проверка: A должен быть меньше половины длины магистрали
+    if (newValue > this._l1 / 2) return;
 
     this._a = newValue;
     this.updatePorts();
@@ -58,41 +73,38 @@ export class Cross extends DuctBase {
     this.updateCalloutText();
   }
 
-  // Геттеры и сеттеры для горизонтальной длины (L1)
+  // Геттеры и сеттеры для длины основной магистрали (L1)
   get l1() { return this._l1; }
 
   set l1(newLength) {
     if (this._l1 === newLength) return;
-
+    // Проверяем, не выходит ли смещение за пределы при новой длине
+    if ((Math.abs(this._l3) + this._a / 2) > newLength / 2) return;
     const minVal = this.getMinL1();
     const maxVal = this.getMaxL1();
-    let newValue = Math.max(minVal, Math.min(maxVal, newLength));
-
-    // Проверка: A не может быть больше половины новой длины
-    if (this._a > newValue / 2) {
-      newValue = this._a * 2;
-    }
-
-    this._l1 = newValue;
+    this._l1 = Math.max(minVal, Math.min(maxVal, newLength));
     this.updatePorts();
   }
 
-  // Геттеры и сеттеры для вертикальной длины (L2)
+  // Геттеры и сеттеры для длины ответвления (L2)
   get l2() { return this._l2; }
 
   set l2(newLength) {
     if (this._l2 === newLength) return;
-
     const minVal = this.getMinL2();
     const maxVal = this.getMaxL2();
-    let newValue = Math.max(minVal, Math.min(maxVal, newLength));
+    this._l2 = Math.max(minVal, Math.min(maxVal, newLength));
+    this.updatePorts();
+  }
 
-    // Проверка: A не может быть больше половины новой длины
-    if (this._a > newValue / 2) {
-      newValue = this._a * 2;
-    }
+  // Геттеры и сеттеры для смещения ответвления (L3)
+  get l3() { return this._l3; }
 
-    this._l2 = newValue;
+  set l3(newOffset) {
+    if (this._l3 === newOffset) return;
+    const minVal = this.getMinL3();
+    const maxVal = this.getMaxL3();
+    this._l3 = Math.max(minVal, Math.min(maxVal, newOffset));
     this.updatePorts();
   }
 
@@ -119,10 +131,9 @@ export class Cross extends DuctBase {
   getCalloutText() {
     const baseText = `${super.getCalloutText()}`;
     if (this._sectionType === 'round') {
-      return `${baseText}\nL1: ${this._l1} мм\nL2: ${this._l2} мм`;
+      return `${baseText}\nL1: ${this._l1} мм\nL2: ${this._l2} мм\nL3: ${this._l3} мм`;
     } else {
-      // Для прямоугольного сечения показываем параметр B для информации
-      return `${baseText}\nB: ${this._b} мм\nL1: ${this._l1} мм\nL2: ${this._l2} мм`;
+      return `${baseText}\nB: ${this._b} мм\nL1: ${this._l1} мм\nL2: ${this._l2} мм\nL3: ${this._l3} мм`;
     }
   }
 
@@ -150,6 +161,16 @@ export class Cross extends DuctBase {
           min: this.getMinL2(),
           max: this.getMaxL2(),
           value: this._l2,
+          unit: 'мм'
+        },
+        {
+          name: 'l3',
+          label: 'L3',
+          type: 'number',
+          step: 10,
+          min: this.getMinL3(),
+          max: this.getMaxL3(),
+          value: this._l3,
           unit: 'мм'
         }
       ];
@@ -185,6 +206,16 @@ export class Cross extends DuctBase {
           max: this.getMaxL2(),
           value: this._l2,
           unit: 'мм'
+        },
+        {
+          name: 'l3',
+          label: 'L3',
+          type: 'number',
+          step: 10,
+          min: this.getMinL3(),
+          max: this.getMaxL3(),
+          value: this._l3,
+          unit: 'мм'
         }
       ];
     }
@@ -198,7 +229,7 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const size_px = this.getSizePx(); // Ширина воздуховода (параметр A)
+    const offset_px = this.mmToPx(this._l3);
 
     // Левый порт
     const leftX = topLeft.x;
@@ -218,22 +249,14 @@ export class Cross extends DuctBase {
       this.id, 'right', 'right', width_px, height_px / 2, rightPos.x, rightPos.y
     ));
 
-    // Верхний порт
-    const topX = centerX;
+    // Верхний порт (ответвление)
+    const branchCenterX = centerX + offset_px;
+    const topX = branchCenterX;
     const topY = topLeft.y;
     const topPos = this.rotatePoint(topX, topY, centerX, centerY, rotation);
     ports.push(new Port(
-      this.ports?.find(p => p.direction === 'top')?.id || `port_${this.id}_top`,
-      this.id, 'top', 'top', width_px / 2, 0, topPos.x, topPos.y
-    ));
-
-    // Нижний порт
-    const bottomX = centerX;
-    const bottomY = topLeft.y + height_px;
-    const bottomPos = this.rotatePoint(bottomX, bottomY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports?.find(p => p.direction === 'bottom')?.id || `port_${this.id}_bottom`,
-      this.id, 'bottom', 'bottom', width_px / 2, height_px, bottomPos.x, bottomPos.y
+      this.ports?.find(p => p.direction === 'branch')?.id || `port_${this.id}_branch`,
+      this.id, 'branch', 'top', width_px / 2 + offset_px, 0, topPos.x, topPos.y
     ));
 
     return ports;
@@ -241,22 +264,22 @@ export class Cross extends DuctBase {
 
   createPath(ctx) {
     if (this._sectionType === 'round') {
-      this._createRoundCross(ctx);
+      this._createRoundTee(ctx);
     } else {
-      this._createRectangularCross(ctx);
+      this._createRectangularTee(ctx);
     }
   }
 
-  // Круглая крестовина
-  _createRoundCross(ctx) {
+  // Круглый Т-образный тройник
+  _createRoundTee(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
-    const height_px = this.getHeight();
-    const size_px = this.getSizePx();  // Диаметр круглого сечения (параметр A)
+    const size_px = this.getSizePx();
     const radius_px = size_px / 2;
+    const offset_px = this.mmToPx(this._l3);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -265,13 +288,18 @@ export class Cross extends DuctBase {
 
     ctx.beginPath();
 
-    // Горизонтальная труба (круглое сечение)
+    // Горизонтальная труба
     const horizontalY = centerY - radius_px;
     ctx.rect(topLeft.x, horizontalY, width_px, size_px);
 
-    // Вертикальная труба (круглое сечение)
-    const verticalX = centerX - radius_px;
-    ctx.rect(verticalX, topLeft.y, size_px, height_px);
+    // Ответвление вверх от верхней стенки
+    const branchX = centerX + offset_px - radius_px;
+    const branchTop = topLeft.y;
+    const connectionY = horizontalY;
+
+    if (branchTop < connectionY) {
+      ctx.rect(branchX, branchTop, size_px, connectionY - branchTop);
+    }
 
     ctx.closePath();
     ctx.fill();
@@ -279,16 +307,15 @@ export class Cross extends DuctBase {
     ctx.restore();
   }
 
-  // Прямоугольная крестовина
-  _createRectangularCross(ctx) {
+  // Прямоугольный Т-образный тройник
+  _createRectangularTee(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
-    const height_px = this.getHeight();
-    const a_px = this.getSizePx();  // Ширина прямоугольного сечения (параметр A)
-    // Параметр B НЕ используется для отрисовки ширины!
+    const a_px = this.getSizePx();
+    const offset_px = this.mmToPx(this._l3);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -297,13 +324,18 @@ export class Cross extends DuctBase {
 
     ctx.beginPath();
 
-    // Горизонтальная труба (ширина = A, высота = A)
+    // Горизонтальная труба
     const horizontalY = centerY - a_px / 2;
     ctx.rect(topLeft.x, horizontalY, width_px, a_px);
 
-    // Вертикальная труба (ширина = A, высота = A)
-    const verticalX = centerX - a_px / 2;
-    ctx.rect(verticalX, topLeft.y, a_px, height_px);
+    // Ответвление вверх от верхней стенки
+    const branchX = centerX + offset_px - a_px / 2;
+    const branchTop = topLeft.y;
+    const connectionY = horizontalY;
+
+    if (branchTop < connectionY) {
+      ctx.rect(branchX, branchTop, a_px, connectionY - branchTop);
+    }
 
     ctx.closePath();
     ctx.fill();
@@ -312,7 +344,6 @@ export class Cross extends DuctBase {
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    // Рисуем основной контур
     this.createPath(ctx);
     if (showColors) {
       this.setFillStyle(ctx, isSelected, false);
@@ -330,7 +361,8 @@ export class Cross extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
-    const height_px = this.getHeight();
+    const size_px = this.getSizePx();
+    const offset_px = this.mmToPx(this._l3);
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -346,9 +378,11 @@ export class Cross extends DuctBase {
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width_px, centerY);
 
-    // Вертикальная центральная линия
-    ctx.moveTo(centerX, topLeft.y);
-    ctx.lineTo(centerX, topLeft.y + height_px);
+    // Вертикальная центральная линия ответвления
+    const branchCenterX = centerX + offset_px;
+    const horizontalTop = centerY - size_px / 2;
+    ctx.moveTo(branchCenterX, horizontalTop);
+    ctx.lineTo(branchCenterX, topLeft.y);
 
     ctx.stroke();
     ctx.setLineDash([]);
@@ -377,6 +411,7 @@ export class Cross extends DuctBase {
       b: this._b,
       l1: this._l1,
       l2: this._l2,
+      l3: this._l3,
     };
   }
 }
