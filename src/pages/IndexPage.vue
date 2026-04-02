@@ -121,10 +121,10 @@
                         <q-item-label>{{ param.label }}:</q-item-label>
                       </q-item-section>
                       <q-item-section>
-                        <q-select :dark="isDarkTheme" v-if="param.type === 'select'" :model-value="selectedElement[param.name]"
-                          :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                        <q-select :dark="isDarkTheme" v-if="param.type === 'select'" v-model="selectedElement[param.name]" :options="param.options"
+                          option-label="label" option-value="value" dense outlined emit-value map-options
                           @update:model-value="(val) => onParameterChange(val, param.name)" />
-                        <q-input :dark="isDarkTheme" v-else :type="param.type" v-model="selectedElement[param.name]" :step="param.step"
+                        <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
                           :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
                       </q-item-section>
                       <q-item-section side class="param-unit-col">
@@ -392,17 +392,7 @@ const getElementParameters = (element) => {
   if (typeof element.getParameters === 'function') {
     return element.getParameters();
   }
-  return [
-    { name: 'name', label: 'Имя', type: 'text', value: element.name },
-    { name: 'x', label: 'X (центр)', type: 'number', step: 1, min: 20, value: element.x, unit: 'px' },
-    { name: 'y', label: 'Y (центр)', type: 'number', step: 1, min: 20, value: element.y, unit: 'px' },
-    { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: element.rotation || 0, unit: '°' },
-  ];
-};
-
-const getParamValue = (element, paramName) => {
-  if (!element) return null;
-  return element[paramName];
+  return [];
 };
 
 const setParamValue = (element, paramName, value) => {
