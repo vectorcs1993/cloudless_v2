@@ -530,11 +530,12 @@ const loadFromLocalStorage = () => {
     renderer?.draw();
     return;
   }
+
   try {
-    elements.value = data.elements.map(json => ElementFactory.createFromJSON(json));
-    nextElementId = data.nextElementId || 100;
-    nextPortId = data.nextPortId || 1000;
-    nextGroupId = data.nextGroupId || 1000;
+    // Сначала создаем все элементы
+    const loadedElements = data.elements.map(json => ElementFactory.createFromJSON(json));
+
+    // Обновляем глобальные настройки ДО обновления портов
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
@@ -548,14 +549,42 @@ const loadFromLocalStorage = () => {
     showCallouts.value = data.showCallouts !== undefined ? data.showCallouts : false;
     gridStepM.value = data.gridStepM !== undefined ? data.gridStepM : 50;
     mmPerPx.value = data.mmPerPx !== undefined ? data.mmPerPx : 2;
-    elements.value.forEach(el => {
-      if (typeof el.updatePorts === 'function') el.updatePorts();
+
+    // ========== КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Обновляем все порты и границы групп ==========
+    // Сначала обновляем порты всех элементов (это пересчитает их мировые координаты)
+    loadedElements.forEach(el => {
+      if (typeof el.updatePorts === 'function') {
+        el.updatePorts();
+      }
     });
+
+    // Затем обновляем границы всех групп (теперь порты элементов актуальны)
+    loadedElements.forEach(el => {
+      if (el.type === 'group' && typeof el.updateBounds === 'function') {
+        el.updateBounds();
+      }
+    });
+
+    // Обновляем выноски
+    loadedElements.forEach(el => {
+      if (typeof el.updateCalloutText === 'function') {
+        el.updateCalloutText();
+      }
+    });
+
+    elements.value = loadedElements;
+    nextElementId = data.nextElementId || 100;
+    nextPortId = data.nextPortId || 1000;
+    nextGroupId = data.nextGroupId || 1000;
+
     selectedElements.value = [];
     if (renderer && typeof renderer.setSelectedElements === 'function') {
       renderer.setSelectedElements([]);
     }
     renderer?.draw();
+
+    console.log('Загружено элементов:', elements.value.length);
+
   } catch (error) {
     console.error('Error loading data:', error);
     elements.value = [];
@@ -942,215 +971,22 @@ watch(isDarkTheme, () => debouncedDraw());
 watch(showElementAxes, () => debouncedDraw());
 watch(mmPerPx, (newVal) => {
   globalScale.setMmPerPx(newVal);
+
+  // Обновляем порты всех элементов
   elements.value.forEach(el => {
     if (typeof el.updatePorts === 'function') el.updatePorts();
     if (typeof el.updateCalloutText === 'function') el.updateCalloutText();
   });
+
+  // Обновляем границы всех групп
+  elements.value.forEach(el => {
+    if (el.type === 'group' && typeof el.updateBounds === 'function') {
+      el.updateBounds();
+    }
+  });
+
   debouncedDraw();
 });
 
 // Убираем прямой watch для gridStepM, используем onGridStepChange
 </script>
-
-<style lang="scss" scoped>
-.app {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-
-  &.dark-theme {
-    background-color: #1e1e1e;
-  }
-}
-
-.full-height-splitter {
-  height: 100vh;
-  width: 100%;
-}
-
-.canvas-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.main-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-  background: #f0f0f0;
-  cursor: default;
-  user-select: none;
-  outline: none;
-
-  .dark-theme & {
-    background: #2a2a2a;
-  }
-
-  &:active {
-    cursor: grabbing;
-  }
-}
-
-.selected-info-card {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: max-content;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  z-index: 100;
-
-  .dark-theme & {
-    background: #2d2d2d;
-    color: #e0e0e0;
-  }
-}
-
-.toolbar {
-  height: 100%;
-  padding: 20px;
-  background: #f5f5f5;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-
-  .dark-theme & {
-    background: #2d2d2d;
-    color: #e0e0e0;
-  }
-
-  h3 {
-    margin: 0 0 10px 0;
-  }
-}
-
-.tab-settings {
-  padding: 15px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-
-  .dark-theme & {
-    background: #3d3d3d;
-    border-color: #555;
-  }
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 12px 16px;
-  align-items: center;
-
-  label {
-    font-weight: 500;
-    white-space: nowrap;
-    margin: 0;
-  }
-}
-
-.inline-input {
-  width: 80px;
-  display: inline-block;
-  margin-right: 8px;
-}
-
-.hint-text {
-  font-size: 12px;
-  color: #666;
-
-  .dark-theme & {
-    color: #aaa;
-  }
-}
-
-.drag-panel {
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-
-  .dark-theme & {
-    background: rgba(255, 255, 255, 0.05);
-  }
-}
-
-.drag-items {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.drag-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: grab;
-  transition: transform 0.2s;
-  padding: 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  &:hover {
-    transform: scale(1.05);
-    background: rgba(255, 255, 255, 0.2);
-  }
-}
-
-.drag-item-preview {
-  width: 64px;
-  height: 64px;
-  pointer-events: none;
-}
-
-.drag-item-label {
-  font-size: 12px;
-  margin-top: 5px;
-  text-align: center;
-}
-
-.save-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.single-element-info {
-  .param-label-col {
-    flex: 0 0 100px;
-  }
-
-  .param-unit-col {
-    flex: 0 0 40px;
-    font-size: 12px;
-    color: #666;
-
-    .dark-theme & {
-      color: #aaa;
-    }
-  }
-}
-
-.connection-item {
-  display: flex;
-  align-items: center;
-  padding: 6px 0;
-  font-size: 12px;
-  border-bottom: 1px solid #f0f0f0;
-
-  .dark-theme & {
-    border-bottom-color: #404040;
-  }
-}
-
-.full-width {
-  width: 100%;
-}
-</style>

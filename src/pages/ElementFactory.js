@@ -69,70 +69,62 @@ export class ElementFactory {
     }
   }
 
-  static createFromJSON(jsonData) {
-    let element = this.createElement(
-      jsonData.type,
-      jsonData.id,
-      jsonData.x,
-      jsonData.y,
-      {
-        sectionType: jsonData.sectionType,
-        a: jsonData.a !== undefined ? jsonData.a : jsonData.size,
-        b: jsonData.b !== undefined ? jsonData.b : jsonData.length,
-        // Для тройника (Tee)
-        l1: jsonData.l1,
-        l2: jsonData.l2,
-        l3: jsonData.l3,
-        // Для крестовины (Cross)
-        l1: jsonData.l1,
-        l2: jsonData.l2,
-        // Для отвода (Elbow)
-        radius_mm: jsonData.radius_mm !== undefined ? jsonData.radius_mm : jsonData.radius,
-        // Для вентилятора (Fan)
-        length_mm: jsonData.length_mm,
-        flow: jsonData.flow,
-        pressure: jsonData.pressure,
-        // Общие параметры
-        rotation: jsonData.rotation,
-        elements: jsonData.elements,
-        name: jsonData.name,
-        color: jsonData.color,
-        callouts: jsonData.callouts
-      }
-    );
-
-    // Дополнительная проверка для совместимости со старыми сохранениями
-    if (element.type === 'cross') {
-      // Если в JSON есть старые поля, конвертируем их
-      if (jsonData.horizontalLength_mm !== undefined && element.l1 === undefined) {
-        element.l1 = jsonData.horizontalLength_mm;
-      }
-      if (jsonData.verticalLength_mm !== undefined && element.l2 === undefined) {
-        element.l2 = jsonData.verticalLength_mm;
-      }
+static createFromJSON(jsonData) {
+  let element = this.createElement(
+    jsonData.type,
+    jsonData.id,
+    jsonData.x,
+    jsonData.y,
+    {
+      sectionType: jsonData.sectionType,
+      a: jsonData.a !== undefined ? jsonData.a : jsonData.size,
+      b: jsonData.b !== undefined ? jsonData.b : jsonData.length,
+      l1: jsonData.l1,
+      l2: jsonData.l2,
+      l3: jsonData.l3,
+      radius_mm: jsonData.radius_mm !== undefined ? jsonData.radius_mm : jsonData.radius,
+      length_mm: jsonData.length_mm,
+      flow: jsonData.flow,
+      pressure: jsonData.pressure,
+      rotation: jsonData.rotation,
+      elements: jsonData.elements,
+      name: jsonData.name,
+      color: jsonData.color,
+      callouts: jsonData.callouts
     }
+  );
 
-    if (jsonData.ports) {
-      element.ports = jsonData.ports.map(p => new Port(
-        p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
-      ));
+  // Восстанавливаем порты
+  if (jsonData.ports) {
+    element.ports = jsonData.ports.map(p => new Port(
+      p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
+    ));
 
-      element.ports.forEach(port => {
-        const foundPort = jsonData.ports.find(op => op.id === port.id);
-        if (foundPort) {
-          port.connectedElementId = foundPort.connectedElementId || null;
-          port.connectedPortId = foundPort.connectedPortId || null;
-        }
-      });
-    }
-
-    if (jsonData.callouts && jsonData.callouts.length > 0 && element.type !== 'group') {
-      element.callouts = [];
-      element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
-    } else if (element.type !== 'group') {
-      element.callouts = [];
-    }
-
-    return element;
+    element.ports.forEach(port => {
+      const foundPort = jsonData.ports.find(op => op.id === port.id);
+      if (foundPort) {
+        port.connectedElementId = foundPort.connectedElementId || null;
+        port.connectedPortId = foundPort.connectedPortId || null;
+      }
+    });
   }
+
+  // Восстанавливаем выноски
+  if (jsonData.callouts && jsonData.callouts.length > 0 && element.type !== 'group') {
+    element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+  } else if (element.type !== 'group') {
+    element.callouts = [];
+  }
+
+  // ========== ВАЖНО: Обновляем порты и координаты после загрузки ==========
+  if (typeof element.updatePorts === 'function') {
+    element.updatePorts();
+  }
+
+  if (typeof element.updateCalloutText === 'function') {
+    element.updateCalloutText();
+  }
+
+  return element;
+}
 }

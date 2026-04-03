@@ -396,38 +396,50 @@ export class Group extends BaseElement {
     this.updateBounds();
   }
 
-  updateBounds() {
-    if (!this.elements || this.elements.length === 0) {
-      this.x = 0;
-      this.y = 0;
-      this.width = 0;
-      this.height = 0;
-      return;
+updateBounds() {
+  if (!this.elements || this.elements.length === 0) {
+    this.x = 0;
+    this.y = 0;
+    this.width = 0;
+    this.height = 0;
+    return;
+  }
+
+  let minX = Infinity, minY = Infinity;
+  let maxX = -Infinity, maxY = -Infinity;
+
+  for (const element of this.elements) {
+    if (!element) continue;
+
+    // Убеждаемся, что порты элемента актуальны
+    if (typeof element.updatePorts === 'function') {
+      element.updatePorts();
     }
 
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
+    const topLeft = element.getTopLeft();
+    const elementMinX = topLeft.x;
+    const elementMinY = topLeft.y;
+    const elementMaxX = topLeft.x + element.getWidth();
+    const elementMaxY = topLeft.y + element.getHeight();
 
-    this.elements.forEach(element => {
-      if (!element) return;
-      const topLeft = element.getTopLeft();
-      const elementMinX = topLeft.x;
-      const elementMinY = topLeft.y;
-      const elementMaxX = topLeft.x + element.getWidth();
-      const elementMaxY = topLeft.y + element.getHeight();
+    minX = Math.min(minX, elementMinX);
+    minY = Math.min(minY, elementMinY);
+    maxX = Math.max(maxX, elementMaxX);
+    maxY = Math.max(maxY, elementMaxY);
+  }
 
-      minX = Math.min(minX, elementMinX);
-      minY = Math.min(minY, elementMinY);
-      maxX = Math.max(maxX, elementMaxX);
-      maxY = Math.max(maxY, elementMaxY);
-    });
-
-    // Центр группы - это центр ограничивающего прямоугольника
+  // Проверяем, что границы валидны
+  if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
     this.x = (minX + maxX) / 2;
     this.y = (minY + maxY) / 2;
     this.width = maxX - minX;
     this.height = maxY - minY;
+  } else {
+    console.warn('Invalid bounds for group:', this.id, { minX, maxX, minY, maxY });
+    this.width = 0;
+    this.height = 0;
   }
+}
 
   getTopLeft() {
     return {
@@ -496,21 +508,32 @@ export class Group extends BaseElement {
     return allPorts;
   }
 
-  // В классе BaseElement добавьте метод move
   move(deltaX, deltaY) {
-    this.x += deltaX;
-    this.y += deltaY;
+    if (!this.elements || this.elements.length === 0) return;
 
-    // Обновляем мировые координаты портов
-    this.updatePortsWorldCoordinates();
-
-    // Обновляем позиции выносок
-    if (this.callouts && this.callouts.length > 0) {
-      this.callouts.forEach(callout => {
-        callout.x += deltaX;
-        callout.y += deltaY;
-      });
+    if (isNaN(deltaX) || isNaN(deltaY) || !isFinite(deltaX) || !isFinite(deltaY)) {
+      console.warn('Invalid delta in group move:', deltaX, deltaY);
+      return;
     }
+
+    this.elements.forEach(element => {
+      if (element) {
+        element.x += deltaX;
+        element.y += deltaY;
+
+        if (element.callouts && element.callouts.length > 0) {
+          element.callouts.forEach(callout => {
+            callout.x += deltaX;
+            callout.y += deltaY;
+          });
+        }
+
+        if (element.updatePorts) element.updatePorts();
+        if (element.updateCalloutText) element.updateCalloutText();
+      }
+    });
+
+    this.updateBounds();
   }
 
   createPath(ctx) { }
