@@ -50,7 +50,6 @@
             </div>
           </div>
 
-          <!-- Панель drag-and-drop элементов -->
           <div class="drag-panel">
             <div class="drag-items">
               <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
@@ -61,7 +60,6 @@
             </div>
           </div>
 
-          <!-- Кнопки управления сохранением -->
           <div class="save-controls">
             <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
             <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
@@ -80,12 +78,10 @@
 
       <template v-slot:after>
         <div class="canvas-container">
-          <!-- Канвас для рендеринга элементов -->
           <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
             @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
           </canvas>
 
-          <!-- Информация о выбранных элементах -->
           <q-card :dark="isDarkTheme" v-if="selectedElements.length > 0" class="selected-info-card" flat bordered>
             <q-card-section>
               <div class="row items-center justify-between">
@@ -194,7 +190,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, shallowRef, readonly } from 'vue';
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
@@ -210,7 +206,6 @@ import { Fan } from './Fan.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
 
-// Функция для уведомлений (fallback если Quasar не загружен)
 const showNotify = (options) => {
   if (typeof window !== 'undefined' && window.Quasar && window.Quasar.Notify) {
     window.Quasar.Notify.create(options);
@@ -219,8 +214,7 @@ const showNotify = (options) => {
   }
 };
 
-// Элементы для drag and drop
-const dragItems = [
+const dragItems = Object.freeze([
   {
     type: 'duct',
     label: 'Воздуховод',
@@ -279,9 +273,9 @@ const dragItems = [
       <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
     </svg>`
   }
-];
+]);
 
-// ========== ОСНОВНОЙ КОМПОНЕНТ ==========
+// Состояние
 const splitterModel = ref(15);
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
@@ -294,11 +288,19 @@ const gridStepM = ref(50);
 const mmPerPx = ref(2);
 const autoUpdateConnections = ref(true);
 
-// Флаг для предотвращения множественных перерисовок
+// Оптимизационные флаги
 let redrawTimeout = null;
+let isUpdatingSelection = false;
+let renderFrameRequest = null;
 
-// Canvas
+// Refs
 const mainCanvas = ref(null);
+const elements = shallowRef([]);
+const selectedElements = shallowRef([]);
+const mouseWorldPos = ref(null);
+const clipboardElements = shallowRef([]);
+
+// Менеджеры
 let renderer = null;
 let connectionManager = null;
 let interactionManager = null;
@@ -306,130 +308,145 @@ let selectionManager = null;
 let layerManager = null;
 let storageManager = null;
 
-// Данные
-const elements = ref([]);
-const selectedElements = ref([]);
-const mouseWorldPos = ref(null);
+// ID счетчики
 let nextElementId = 100;
 let nextPortId = 1000;
 let nextGroupId = 1000;
 
-// Для копирования/вставки
-const clipboardElements = ref([]);
-
-// Для drag and drop
+// Drag and drop состояние
 let dragType = null;
-let dragItemData = null;
 let ghostElement = null;
-let isDragging = false;
-let ghostWorldPos = { x: 0, y: 0 };
 
 // Вычисляемые свойства
 const selectedElement = computed(() => {
-  return selectedElements.value.length === 1 ? selectedElements.value[0] : null;
+  const selected = selectedElements.value;
+  return selected.length === 1 ? selected[0] : null;
 });
 
 const isGroupSelected = computed(() => {
-  return selectedElement.value && selectedElement.value instanceof Group;
+  const el = selectedElement.value;
+  return el && el instanceof Group;
 });
 
-// Параметры для рендерера
+// Параметры рендерера
 const renderOptions = {
   scale: ref(1),
   panX: ref(0),
   panY: ref(0),
-  showGrid,
-  showPorts,
-  showColors,
-  showCallouts,
-  snapToPorts,
-  showElementAxes,
-  autoUpdateConnections,
-  isDarkTheme,
-  gridStepM,
-  mmPerPx,
+  showGrid: readonly(showGrid),
+  showPorts: readonly(showPorts),
+  showColors: readonly(showColors),
+  showCallouts: readonly(showCallouts),
+  snapToPorts: readonly(snapToPorts),
+  showElementAxes: readonly(showElementAxes),
+  isDarkTheme: readonly(isDarkTheme),
+  gridStepM: readonly(gridStepM),
+  mmPerPx: readonly(mmPerPx),
   mouseWorldPos,
 };
 
-// Оптимизированная функция перерисовки с debounce
-const debouncedDraw = () => {
-  if (redrawTimeout) {
-    clearTimeout(redrawTimeout);
-  }
-  redrawTimeout = setTimeout(() => {
+// ========== ОПТИМИЗИРОВАННЫЕ ФУНКЦИИ ==========
+
+const scheduleRender = () => {
+  if (renderFrameRequest) return;
+  renderFrameRequest = requestAnimationFrame(() => {
     renderer?.draw();
-    redrawTimeout = null;
-  }, 16); // ~60fps
+    renderFrameRequest = null;
+  });
 };
 
-// Обработчик изменения масштаба сетки с оптимизацией
+const debouncedDraw = () => {
+  if (redrawTimeout) clearTimeout(redrawTimeout);
+  redrawTimeout = setTimeout(scheduleRender, 16);
+};
+
+const updateSelection = (newSelection, skipRender = false) => {
+  if (isUpdatingSelection) return;
+  isUpdatingSelection = true;
+
+  try {
+    const currentIds = selectedElements.value.map(el => el?.id).join(',');
+    const newIds = newSelection.map(el => el?.id).join(',');
+
+    if (currentIds !== newIds) {
+      selectedElements.value = newSelection;
+      renderer?.setSelectedElements(newSelection);
+      if (!skipRender) scheduleRender();
+    }
+  } finally {
+    isUpdatingSelection = false;
+  }
+};
+
+// ========== РИСОВАНИЕ ПРИЗРАКА ==========
+const drawGhost = () => {
+  if (!ghostElement || !renderer) return;
+
+  const ctx = renderer.canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.save();
+  ctx.translate(renderOptions.panX.value, renderOptions.panY.value);
+  ctx.scale(renderOptions.scale.value, renderOptions.scale.value);
+  ctx.globalAlpha = 0.6;
+  ghostElement.draw(ctx, renderOptions.scale.value, false, isDarkTheme.value, showPorts.value, showColors.value, showElementAxes.value);
+  ctx.globalAlpha = 1.0;
+  ctx.restore();
+};
+
+// Патчим метод draw рендерера для отрисовки призрака
+const patchRendererDraw = () => {
+  if (!renderer) return;
+
+  const originalDraw = renderer.draw.bind(renderer);
+  renderer.draw = () => {
+    originalDraw();
+    drawGhost();
+  };
+};
+
+// ========== ОБРАБОТЧИКИ ==========
+
 const onGridStepChange = (value) => {
-  // Валидация значения
   let newValue = parseInt(value);
   if (isNaN(newValue)) newValue = 50;
-  if (newValue < 50) newValue = 50;
-  if (newValue > 500) newValue = 500;
-
+  newValue = Math.min(500, Math.max(50, newValue));
   if (gridStepM.value !== newValue) {
     gridStepM.value = newValue;
-    // Используем debounced перерисовку
     debouncedDraw();
   }
 };
 
-// Вспомогательные функции
 const getElementTypeName = (element) => {
   if (!element) return 'Неизвестно';
-  if (typeof element.getTypeName === 'function') {
-    return element.getTypeName();
-  }
-  const types = BaseElement.getAvailableTypes();
-  return types[element.type] || element.type || 'Неизвестно';
+  return typeof element.getTypeName === 'function' ? element.getTypeName() :
+         (BaseElement.getAvailableTypes()[element.type] || element.type || 'Неизвестно');
 };
 
 const getElementParameters = (element) => {
-  if (!element) return [];
-  if (typeof element.getParameters === 'function') {
-    return element.getParameters();
-  }
-  return [];
-};
-
-const setParamValue = (element, paramName, value) => {
-  if (!element) return;
-  element[paramName] = value;
+  return element && typeof element.getParameters === 'function' ? element.getParameters() : [];
 };
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
-  setParamValue(selectedElement.value, paramName, value);
-  if (typeof selectedElement.value.updatePorts === 'function') {
-    selectedElement.value.updatePorts();
-  }
-  if (typeof selectedElement.value.updateCalloutText === 'function') {
-    selectedElement.value.updateCalloutText();
-  }
-  renderer?.draw();
+  selectedElement.value[paramName] = value;
+  selectedElement.value.updatePorts?.();
+  selectedElement.value.updateCalloutText?.();
+  scheduleRender();
 };
 
 const clearSelection = () => {
-  selectedElements.value = [];
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements([]);
-  }
-  renderer?.draw();
+  updateSelection([], true);
+  scheduleRender();
 };
 
-// Функции копирования и вставки
+// ========== КОПИРОВАНИЕ/ВСТАВКА ==========
+
 const copySelected = () => {
   if (selectedElements.value.length === 0) return;
   clipboardElements.value = selectedElements.value.map(element => {
-    if (typeof element.toJSON === 'function') {
-      const json = element.toJSON();
-      json.callouts = [];
-      return json;
-    }
-    return element;
+    const json = element.toJSON?.() || element;
+    return { ...json, callouts: [] };
   });
   showNotify({
     type: 'positive',
@@ -441,9 +458,10 @@ const copySelected = () => {
 
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
-  selectedElements.value = [];
+
   const newElements = [];
   const offset = 50;
+
   clipboardElements.value.forEach(json => {
     const newElement = ElementFactory.createFromJSON({
       ...json,
@@ -458,26 +476,21 @@ const pasteElements = () => {
       })),
       callouts: []
     });
+
     if (newElement.name) {
       const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
       newElement.name = `${baseName} (копия)`;
     }
-    if (typeof newElement.updatePorts === 'function') {
-      newElement.updatePorts();
-    }
-    const calloutX = newElement.x;
-    const calloutY = newElement.y - 150;
-    if (typeof newElement.addCallout === 'function') {
-      newElement.addCallout(calloutX, calloutY);
-    }
-    elements.value.push(newElement);
+
+    newElement.updatePorts?.();
+    newElement.addCallout?.(newElement.x, newElement.y - 150);
     newElements.push(newElement);
   });
-  selectedElements.value = newElements;
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements(newElements);
-  }
-  renderer?.draw();
+
+  elements.value = [...elements.value, ...newElements];
+  updateSelection(newElements);
+  scheduleRender();
+
   showNotify({
     type: 'positive',
     message: `Вставлено ${newElements.length} элементов`,
@@ -486,90 +499,66 @@ const pasteElements = () => {
   });
 };
 
-// Обработчик горячих клавиш
+// ========== HOTKEYS ==========
+
 const handleKeyDown = (e) => {
-  if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyC')) {
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') {
     e.preventDefault();
     copySelected();
-  } else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyV')) {
+  } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') {
     e.preventDefault();
     pasteElements();
   } else if (e.key === 'Delete' || e.key === 'Del') {
     e.preventDefault();
     deleteSelected();
-  } else if (e.key === 'Escape' || e.code === 'Escape') {
+  } else if (e.key === 'Escape') {
     e.preventDefault();
     clearSelection();
   }
 };
 
+// ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
+
 const saveToLocalStorage = () => {
-  if (storageManager && typeof storageManager.save === 'function') {
-    storageManager.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
-  }
-  showNotify({
-    type: 'positive',
-    message: 'Сохранено!',
-    position: 'bottom-right',
-    timeout: 1000
-  });
+  storageManager?.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
+  showNotify({ type: 'positive', message: 'Сохранено!', position: 'bottom-right', timeout: 1000 });
 };
 
 const loadFromLocalStorage = () => {
-  if (!storageManager || typeof storageManager.load !== 'function') return;
+  if (!storageManager?.load) return;
+
   const data = storageManager.load();
   if (!data) {
     elements.value = [];
     nextElementId = 100;
     nextPortId = 1000;
     nextGroupId = 1000;
-    selectedElements.value = [];
-    if (renderer && typeof renderer.setSelectedElements === 'function') {
-      renderer.setSelectedElements([]);
-    }
-    renderer?.draw();
+    updateSelection([]);
+    scheduleRender();
     return;
   }
 
   try {
-    // Сначала создаем все элементы
     const loadedElements = data.elements.map(json => ElementFactory.createFromJSON(json));
 
-    // Обновляем глобальные настройки ДО обновления портов
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
-    showColors.value = data.showColors !== undefined ? data.showColors : true;
-    showElementAxes.value = data.showElementAxes !== undefined ? data.showElementAxes : false;
-    isDarkTheme.value = data.isDarkTheme !== undefined ? data.isDarkTheme : false;
-    showGrid.value = data.showGrid !== undefined ? data.showGrid : false;
-    showPorts.value = data.showPorts !== undefined ? data.showPorts : false;
-    snapToPorts.value = data.snapToPorts !== undefined ? data.snapToPorts : false;
-    autoUpdateConnections.value = data.autoUpdateConnections !== undefined ? data.autoUpdateConnections : false;
-    showCallouts.value = data.showCallouts !== undefined ? data.showCallouts : false;
-    gridStepM.value = data.gridStepM !== undefined ? data.gridStepM : 50;
-    mmPerPx.value = data.mmPerPx !== undefined ? data.mmPerPx : 2;
+    showColors.value = data.showColors ?? true;
+    showElementAxes.value = data.showElementAxes ?? false;
+    isDarkTheme.value = data.isDarkTheme ?? false;
+    showGrid.value = data.showGrid ?? false;
+    showPorts.value = data.showPorts ?? false;
+    snapToPorts.value = data.snapToPorts ?? false;
+    autoUpdateConnections.value = data.autoUpdateConnections ?? false;
+    showCallouts.value = data.showCallouts ?? false;
+    gridStepM.value = data.gridStepM ?? 50;
+    mmPerPx.value = data.mmPerPx ?? 2;
 
-    // ========== КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Обновляем все порты и границы групп ==========
-    // Сначала обновляем порты всех элементов (это пересчитает их мировые координаты)
     loadedElements.forEach(el => {
-      if (typeof el.updatePorts === 'function') {
-        el.updatePorts();
-      }
-    });
-
-    // Затем обновляем границы всех групп (теперь порты элементов актуальны)
-    loadedElements.forEach(el => {
-      if (el.type === 'group' && typeof el.updateBounds === 'function') {
-        el.updateBounds();
-      }
-    });
-
-    // Обновляем выноски
-    loadedElements.forEach(el => {
-      if (typeof el.updateCalloutText === 'function') {
-        el.updateCalloutText();
-      }
+      el.updatePorts?.();
+      if (el.type === 'group') el.updateBounds?.();
+      el.updateCalloutText?.();
     });
 
     elements.value = loadedElements;
@@ -577,25 +566,13 @@ const loadFromLocalStorage = () => {
     nextPortId = data.nextPortId || 1000;
     nextGroupId = data.nextGroupId || 1000;
 
-    selectedElements.value = [];
-    if (renderer && typeof renderer.setSelectedElements === 'function') {
-      renderer.setSelectedElements([]);
-    }
-    renderer?.draw();
-
-    console.log('Загружено элементов:', elements.value.length);
-
+    updateSelection([]);
+    scheduleRender();
   } catch (error) {
     console.error('Error loading data:', error);
     elements.value = [];
-    nextElementId = 100;
-    nextPortId = 1000;
-    nextGroupId = 1000;
-    selectedElements.value = [];
-    if (renderer && typeof renderer.setSelectedElements === 'function') {
-      renderer.setSelectedElements([]);
-    }
-    renderer?.draw();
+    updateSelection([]);
+    scheduleRender();
   }
 };
 
@@ -605,90 +582,46 @@ const resetToDefault = () => {
     nextElementId = 100;
     nextPortId = 1000;
     nextGroupId = 1000;
-    selectedElements.value = [];
+    updateSelection([]);
     clipboardElements.value = [];
-    if (renderer && typeof renderer.setSelectedElements === 'function') {
-      renderer.setSelectedElements([]);
-    }
-    renderer?.draw();
-    showNotify({
-      type: 'info',
-      message: 'Сброс выполнен',
-      position: 'bottom-right'
-    });
+    scheduleRender();
+    showNotify({ type: 'info', message: 'Сброс выполнен', position: 'bottom-right' });
   }
 };
 
 const updateAllPortsAndConnections = () => {
-  if (connectionManager && typeof connectionManager.updateAllPortsAndConnections === 'function') {
-    const restored = connectionManager.updateAllPortsAndConnections(5);
-    renderer?.draw();
-    showNotify({
-      type: 'positive',
-      message: `Восстановлено ${restored} связей!`,
-      position: 'bottom-right',
-      timeout: 2000
-    });
-  }
+  const restored = connectionManager?.updateAllPortsAndConnections?.(5) || 0;
+  scheduleRender();
+  showNotify({
+    type: 'positive',
+    message: `Восстановлено ${restored} связей!`,
+    position: 'bottom-right',
+    timeout: 2000
+  });
 };
 
-const addElement = (ElementClass, params = [], x = null, y = null, centerOffset = true) => {
-  const newId = ++nextElementId;
-  let posX = x !== null ? x : 100;
-  let posY = y !== null ? y : 300;
-  const newElement = new ElementClass(newId, posX, posY, ...params);
-  if (centerOffset && x !== null && y !== null) {
-    newElement.x = posX;
-    newElement.y = posY;
-  }
-  elements.value.push(newElement);
-  if (typeof newElement.updatePorts === 'function') {
-    newElement.updatePorts();
-  }
-  const calloutX = newElement.x;
-  const calloutY = newElement.y - 150;
-  if (typeof newElement.addCallout === 'function') {
-    newElement.addCallout(calloutX, calloutY);
-  }
-  selectedElements.value = [newElement];
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements([newElement]);
-  }
-  renderer?.draw();
-  return newElement;
-};
+// ========== DRAG & DROP ==========
 
 const createGhostElement = (itemType, worldX, worldY) => {
-  let ghost = null;
   switch (itemType) {
-    case 'duct': ghost = new DuctDirect(-1, worldX, worldY); break;
-    case 'fan': ghost = new Fan(-1, worldX, worldY); break;
-    case 'tee': ghost = new Tee(-1, worldX, worldY); break;
-    case 'elbow': ghost = new Elbow(-1, worldX, worldY); break;
-    case 'cross': ghost = new Cross(-1, worldX, worldY); break;
+    case 'duct': return new DuctDirect(-1, worldX, worldY);
+    case 'fan': return new Fan(-1, worldX, worldY);
+    case 'tee': return new Tee(-1, worldX, worldY);
+    case 'elbow': return new Elbow(-1, worldX, worldY);
+    case 'cross': return new Cross(-1, worldX, worldY);
     default: return null;
   }
-  return ghost;
 };
 
-const updateGhostPosition = (worldX, worldY) => {
-  if (ghostElement) {
-    ghostElement.x = worldX;
-    ghostElement.y = worldY;
-    ghostWorldPos = { x: ghostElement.x, y: ghostElement.y };
-    renderer?.draw();
-  }
-};
-
-// Drag and drop handlers
 const onDragStart = (e, item) => {
   dragType = item.type;
-  dragItemData = item;
-  isDragging = true;
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
+    patchRendererDraw(); // Обновляем патч после создания призрака
+    scheduleRender();
   }
+
   e.dataTransfer.setData('text/plain', item.type);
   e.dataTransfer.effectAllowed = 'copy';
   const dragIcon = document.createElement('div');
@@ -698,21 +631,22 @@ const onDragStart = (e, item) => {
   setTimeout(() => document.body.removeChild(dragIcon), 0);
 };
 
-const onDragEnd = (e) => {
+const onDragEnd = () => {
   dragType = null;
-  dragItemData = null;
-  isDragging = false;
   ghostElement = null;
-  renderer?.draw();
+  patchRendererDraw(); // Обновляем патч после удаления призрака
+  scheduleRender();
 };
 
 const onDragOver = (e) => {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
-  if (isDragging && ghostElement) {
-    const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
+  if (ghostElement && renderer) {
+    const worldPos = renderer.screenToWorld(e.clientX, e.clientY);
     if (worldPos) {
-      updateGhostPosition(worldPos.x, worldPos.y);
+      ghostElement.x = worldPos.x;
+      ghostElement.y = worldPos.y;
+      scheduleRender();
     }
   }
 };
@@ -720,273 +654,204 @@ const onDragOver = (e) => {
 const onDrop = (e) => {
   e.preventDefault();
   if (!dragType) return;
+
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
-    switch (dragType) {
-      case 'duct': addElement(DuctDirect, [], worldPos.x, worldPos.y, true); break;
-      case 'fan': addElement(Fan, [], worldPos.x, worldPos.y, true); break;
-      case 'tee': addElement(Tee, [], worldPos.x, worldPos.y, true); break;
-      case 'elbow': addElement(Elbow, [], worldPos.x, worldPos.y, true); break;
-      case 'cross': addElement(Cross, [], worldPos.x, worldPos.y, true); break;
-      default: console.warn('Unknown drag type:', dragType);
+    const elementCreators = {
+      duct: () => new DuctDirect(++nextElementId, worldPos.x, worldPos.y),
+      fan: () => new Fan(++nextElementId, worldPos.x, worldPos.y),
+      tee: () => new Tee(++nextElementId, worldPos.x, worldPos.y),
+      elbow: () => new Elbow(++nextElementId, worldPos.x, worldPos.y),
+      cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y)
+    };
+
+    const creator = elementCreators[dragType];
+    if (creator) {
+      const newElement = creator();
+      newElement.updatePorts?.();
+      newElement.addCallout?.(newElement.x, newElement.y - 150);
+      elements.value = [...elements.value, newElement];
+      updateSelection([newElement]);
+      scheduleRender();
     }
   }
   ghostElement = null;
-  isDragging = false;
   dragType = null;
-  renderer?.draw();
+  patchRendererDraw();
+  scheduleRender();
 };
 
-const rotateLeft = () => {
+// ========== ОПЕРАЦИИ С ЭЛЕМЕНТАМИ ==========
+
+const rotateElement = (direction) => {
   if (!selectedElement.value) return;
-  if (connectionManager && typeof connectionManager.disconnectElement === 'function') {
-    connectionManager.disconnectElement(selectedElement.value);
-  }
-  selectedElement.value.rotation = ((selectedElement.value.rotation || 0) - 90 + 360) % 360;
-  if (typeof selectedElement.value.updatePorts === 'function') {
-    selectedElement.value.updatePorts();
-  }
-  if (typeof selectedElement.value.updateCalloutText === 'function') {
-    selectedElement.value.updateCalloutText();
-  }
-  renderer?.draw();
+  connectionManager?.disconnectElement(selectedElement.value);
+  const delta = direction === 'left' ? -90 : 90;
+  selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
+  selectedElement.value.updatePorts?.();
+  selectedElement.value.updateCalloutText?.();
+  scheduleRender();
 };
 
-const rotateRight = () => {
-  if (!selectedElement.value) return;
-  if (connectionManager && typeof connectionManager.disconnectElement === 'function') {
-    connectionManager.disconnectElement(selectedElement.value);
-  }
-  selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + 90) % 360;
-  if (typeof selectedElement.value.updatePorts === 'function') {
-    selectedElement.value.updatePorts();
-  }
-  if (typeof selectedElement.value.updateCalloutText === 'function') {
-    selectedElement.value.updateCalloutText();
-  }
-  renderer?.draw();
-};
+const rotateLeft = () => rotateElement('left');
+const rotateRight = () => rotateElement('right');
 
 const moveToTop = () => {
-  if (selectedElement.value && layerManager && typeof layerManager.moveToTop === 'function') {
-    layerManager.moveToTop(selectedElement.value);
-    renderer?.draw();
+  if (selectedElement.value) {
+    layerManager?.moveToTop(selectedElement.value);
+    scheduleRender();
   }
 };
 
 const moveToBottom = () => {
-  if (selectedElement.value && layerManager && typeof layerManager.moveToBottom === 'function') {
-    layerManager.moveToBottom(selectedElement.value);
-    renderer?.draw();
+  if (selectedElement.value) {
+    layerManager?.moveToBottom(selectedElement.value);
+    scheduleRender();
   }
 };
 
 const moveUp = () => {
-  if (selectedElement.value && layerManager && typeof layerManager.moveUp === 'function') {
-    layerManager.moveUp(selectedElement.value);
-    renderer?.draw();
+  if (selectedElement.value) {
+    layerManager?.moveUp(selectedElement.value);
+    scheduleRender();
   }
 };
 
 const moveDown = () => {
-  if (selectedElement.value && layerManager && typeof layerManager.moveDown === 'function') {
-    layerManager.moveDown(selectedElement.value);
-    renderer?.draw();
+  if (selectedElement.value) {
+    layerManager?.moveDown(selectedElement.value);
+    scheduleRender();
   }
 };
 
 const deleteSelected = () => {
   if (selectedElements.value.length === 0) return;
-  selectedElements.value.forEach(element => {
-    if (connectionManager && typeof connectionManager.disconnectElement === 'function') {
-      connectionManager.disconnectElement(element);
-    }
-    const index = elements.value.findIndex(el => el.id === element.id);
-    if (index !== -1) {
-      elements.value.splice(index, 1);
-    }
-  });
-  clearSelection();
-  renderer?.draw();
+
+  const toDeleteIds = new Set(selectedElements.value.map(el => el.id));
+  selectedElements.value.forEach(element => connectionManager?.disconnectElement(element));
+  elements.value = elements.value.filter(el => !toDeleteIds.has(el.id));
+  updateSelection([]);
+  scheduleRender();
 };
 
 const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
-  const groupId = ++nextGroupId;
-  const group = new Group(groupId, [...selectedElements.value]);
-  if (typeof group.updatePorts === 'function') {
-    group.updatePorts();
-  }
-  selectedElements.value.forEach(element => {
-    const index = elements.value.findIndex(el => el.id === element.id);
-    if (index !== -1) {
-      elements.value.splice(index, 1);
-    }
-  });
-  elements.value.push(group);
-  selectedElements.value = [group];
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements([group]);
-  }
-  renderer?.draw();
+
+  const group = new Group(++nextGroupId, [...selectedElements.value]);
+  group.updatePorts?.();
+
+  const toRemoveIds = new Set(selectedElements.value.map(el => el.id));
+  elements.value = [...elements.value.filter(el => !toRemoveIds.has(el.id)), group];
+  updateSelection([group]);
+  scheduleRender();
 };
 
 const ungroupSelected = () => {
   if (!isGroupSelected.value) return;
+
   const group = selectedElement.value;
-  if (!(group instanceof Group)) return;
   const groupElements = group.getElements();
-  const groupIndex = elements.value.findIndex(el => el.id === group.id);
-  if (groupIndex !== -1) {
-    elements.value.splice(groupIndex, 1);
-  }
-  groupElements.forEach(element => {
-    elements.value.push(element);
-  });
-  selectedElements.value = groupElements;
-  if (renderer && typeof renderer.setSelectedElements === 'function') {
-    renderer.setSelectedElements(groupElements);
-  }
-  renderer?.draw();
+  elements.value = [...elements.value.filter(el => el.id !== group.id), ...groupElements];
+  updateSelection(groupElements);
+  scheduleRender();
 };
 
-// Обработчики событий canvas
+// ========== CANVAS СОБЫТИЯ ==========
+
 const onCanvasMouseDown = (e) => {
-  if (isDragging) return;
+  if (dragType) return;
   interactionManager?.onMouseDown(e);
-  if (renderer?.selectedElements) {
-    selectedElements.value = [...renderer.selectedElements];
-  } else {
-    selectedElements.value = [];
-  }
+  updateSelection([...renderer?.selectedElements || []]);
 };
 
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
-  if (isDragging && ghostElement) {
-    updateGhostPosition(worldPos.x, worldPos.y);
+
+  if (dragType && ghostElement) {
+    ghostElement.x = worldPos.x;
+    ghostElement.y = worldPos.y;
+    scheduleRender();
   } else {
     interactionManager?.onMouseMove(e);
-  }
-  if (renderer?.selectedElements) {
-    selectedElements.value = [...renderer.selectedElements];
+    if (renderer?.selectedElements && !isUpdatingSelection) {
+      updateSelection([...renderer.selectedElements], true);
+    }
   }
 };
 
 const onCanvasMouseUp = (e) => {
-  if (isDragging) return;
+  if (dragType) return;
   interactionManager?.onMouseUp(e);
-  if (renderer?.selectedElements) {
-    selectedElements.value = [...renderer.selectedElements];
-  }
+  updateSelection([...renderer?.selectedElements || []]);
+  scheduleRender();
 };
 
-const onWheel = (e) => interactionManager?.onWheel(e);
+const onWheel = (e) => {
+  interactionManager?.onWheel(e);
+  scheduleRender();
+};
 
-// Инициализация
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+
 onMounted(() => {
   globalScale.setMmPerPx(mmPerPx.value);
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme === 'dark') isDarkTheme.value = true;
+
+  if (localStorage.getItem('theme') === 'dark') isDarkTheme.value = true;
 
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
   selectionManager = new SelectionManager(elements, renderer);
-
-  const originalDraw = renderer.draw.bind(renderer);
-  renderer.draw = () => {
-    originalDraw();
-    if (isDragging && ghostElement) {
-      const ctx = renderer.canvas.getContext('2d');
-      ctx.save();
-      ctx.translate(renderOptions.panX.value, renderOptions.panY.value);
-      ctx.scale(renderOptions.scale.value, renderOptions.scale.value);
-      ctx.globalAlpha = 0.6;
-      ghostElement.draw(ctx, renderOptions.scale.value, false, isDarkTheme.value, showPorts.value, showColors.value, showElementAxes.value);
-      ctx.globalAlpha = 1.0;
-      ctx.restore();
-    }
-  };
-
   interactionManager = new InteractionManager(
-    mainCanvas.value,
-    elements,
-    renderer,
-    connectionManager,
-    selectionManager,
-    {
-      snapToPorts,
-      showPorts,
-      showCallouts,
-      panX: renderOptions.panX,
-      panY: renderOptions.panY,
-      scale: renderOptions.scale
-    }
+    mainCanvas.value, elements, renderer, connectionManager, selectionManager,
+    { snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale }
   );
+  layerManager = new LayerManager(elements, renderer);
 
-  if (interactionManager && typeof interactionManager.setAutoUpdateConnections === 'function') {
-    interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
-  }
-
-  watch(autoUpdateConnections, (newVal) => {
-    interactionManager?.setAutoUpdateConnections(newVal);
+  interactionManager?.setAutoUpdateConnections(autoUpdateConnections.value);
+  interactionManager?.setOnElementMoveCallback?.((movingElements) => {
+    if (!isUpdatingSelection) updateSelection(movingElements, true);
   });
 
-  if (interactionManager && typeof interactionManager.setOnElementMoveCallback === 'function') {
-    interactionManager.setOnElementMoveCallback((elements) => {
-      selectedElements.value = elements;
-      if (selectionManager && typeof selectionManager.setSelectedElements === 'function') {
-        selectionManager.setSelectedElements(elements);
-      }
-    });
-  }
+  watch(autoUpdateConnections, (newVal) => interactionManager?.setAutoUpdateConnections(newVal));
 
-  layerManager = new LayerManager(elements, renderer);
+  // Патчим рендерер для отрисовки призрака
+  patchRendererDraw();
+
   loadFromLocalStorage();
 
-  const resizeObserver = new ResizeObserver(() => renderer?.draw());
+  const resizeObserver = new ResizeObserver(() => scheduleRender());
   resizeObserver.observe(mainCanvas.value);
 
   window.addEventListener('keydown', handleKeyDown);
   mainCanvas.value.setAttribute('tabindex', '0');
   mainCanvas.value.focus();
-  renderer.draw();
+
+  scheduleRender();
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeyDown);
+    resizeObserver.disconnect();
+    if (redrawTimeout) clearTimeout(redrawTimeout);
+    if (renderFrameRequest) cancelAnimationFrame(renderFrameRequest);
+  });
 });
 
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeyDown);
-  if (redrawTimeout) {
-    clearTimeout(redrawTimeout);
-  }
-});
+// ========== WATCHERS ==========
 
-// Оптимизированные watchers с debounce
-watch(showGrid, () => debouncedDraw());
-watch(showPorts, () => debouncedDraw());
-watch(showCallouts, () => debouncedDraw());
-watch(showColors, () => debouncedDraw());
-watch(isDarkTheme, () => debouncedDraw());
-watch(showElementAxes, () => debouncedDraw());
+watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
+
 watch(mmPerPx, (newVal) => {
   globalScale.setMmPerPx(newVal);
-
-  // Обновляем порты всех элементов
   elements.value.forEach(el => {
-    if (typeof el.updatePorts === 'function') el.updatePorts();
-    if (typeof el.updateCalloutText === 'function') el.updateCalloutText();
+    el.updatePorts?.();
+    el.updateCalloutText?.();
+    if (el.type === 'group') el.updateBounds?.();
   });
-
-  // Обновляем границы всех групп
-  elements.value.forEach(el => {
-    if (el.type === 'group' && typeof el.updateBounds === 'function') {
-      el.updateBounds();
-    }
-  });
-
   debouncedDraw();
 });
 
-// Убираем прямой watch для gridStepM, используем onGridStepChange
+watch(elements, () => debouncedDraw(), { deep: false });
+
 </script>
