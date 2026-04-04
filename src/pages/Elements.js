@@ -396,50 +396,67 @@ export class Group extends BaseElement {
     this.updateBounds();
   }
 
-updateBounds() {
-  if (!this.elements || this.elements.length === 0) {
-    this.x = 0;
-    this.y = 0;
-    this.width = 0;
-    this.height = 0;
-    return;
-  }
-
-  let minX = Infinity, minY = Infinity;
-  let maxX = -Infinity, maxY = -Infinity;
-
-  for (const element of this.elements) {
-    if (!element) continue;
-
-    // Убеждаемся, что порты элемента актуальны
-    if (typeof element.updatePorts === 'function') {
-      element.updatePorts();
+  updateBounds() {
+    if (!this.elements || this.elements.length === 0) {
+      this.x = 0;
+      this.y = 0;
+      this.width = 0;
+      this.height = 0;
+      return;
     }
 
-    const topLeft = element.getTopLeft();
-    const elementMinX = topLeft.x;
-    const elementMinY = topLeft.y;
-    const elementMaxX = topLeft.x + element.getWidth();
-    const elementMaxY = topLeft.y + element.getHeight();
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
 
-    minX = Math.min(minX, elementMinX);
-    minY = Math.min(minY, elementMinY);
-    maxX = Math.max(maxX, elementMaxX);
-    maxY = Math.max(maxY, elementMaxY);
-  }
+    for (const element of this.elements) {
+      if (!element) continue;
 
-  // Проверяем, что границы валидны
-  if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
-    this.x = (minX + maxX) / 2;
-    this.y = (minY + maxY) / 2;
-    this.width = maxX - minX;
-    this.height = maxY - minY;
-  } else {
-    console.warn('Invalid bounds for group:', this.id, { minX, maxX, minY, maxY });
-    this.width = 0;
-    this.height = 0;
+      // Убеждаемся, что порты элемента актуальны
+      if (typeof element.updatePorts === 'function') {
+        element.updatePorts();
+      }
+
+      // Получаем углы элемента с учетом поворота
+      const centerX = element.x;
+      const centerY = element.y;
+      const width = element.getWidth();
+      const height = element.getHeight();
+      const rotation = (element.rotation || 0) * Math.PI / 180;
+
+      // Четыре угла элемента в локальных координатах (относительно центра)
+      const corners = [
+        { x: -width / 2, y: -height / 2 }, // верхний левый
+        { x: width / 2, y: -height / 2 }, // верхний правый
+        { x: width / 2, y: height / 2 }, // нижний правый
+        { x: -width / 2, y: height / 2 }  // нижний левый
+      ];
+
+      // Поворачиваем каждый угол и преобразуем в мировые координаты
+      for (const corner of corners) {
+        const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
+        const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
+        const worldX = centerX + rotatedX;
+        const worldY = centerY + rotatedY;
+
+        minX = Math.min(minX, worldX);
+        minY = Math.min(minY, worldY);
+        maxX = Math.max(maxX, worldX);
+        maxY = Math.max(maxY, worldY);
+      }
+    }
+
+    // Проверяем, что границы валидны
+    if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
+      this.x = (minX + maxX) / 2;
+      this.y = (minY + maxY) / 2;
+      this.width = maxX - minX;
+      this.height = maxY - minY;
+    } else {
+      console.warn('Invalid bounds for group:', this.id, { minX, maxX, minY, maxY });
+      this.width = 0;
+      this.height = 0;
+    }
   }
-}
 
   getTopLeft() {
     return {

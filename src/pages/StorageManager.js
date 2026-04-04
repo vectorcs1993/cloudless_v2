@@ -5,6 +5,8 @@ export class StorageManager {
   }
 
   save(elements, nextElementId, nextPortId, nextGroupId, render) {
+    console.log(render);
+
     const data = {
       elements: elements.map(el => el.toJSON()),
       nextElementId,

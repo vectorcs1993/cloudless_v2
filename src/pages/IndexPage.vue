@@ -338,6 +338,7 @@ const renderOptions = {
   showColors: readonly(showColors),
   showCallouts: readonly(showCallouts),
   snapToPorts: readonly(snapToPorts),
+  autoUpdateConnections: readonly(autoUpdateConnections),
   showElementAxes: readonly(showElementAxes),
   isDarkTheme: readonly(isDarkTheme),
   gridStepM: readonly(gridStepM),
@@ -420,7 +421,7 @@ const onGridStepChange = (value) => {
 const getElementTypeName = (element) => {
   if (!element) return 'Неизвестно';
   return typeof element.getTypeName === 'function' ? element.getTypeName() :
-         (BaseElement.getAvailableTypes()[element.type] || element.type || 'Неизвестно');
+    (BaseElement.getAvailableTypes()[element.type] || element.type || 'Неизвестно');
 };
 
 const getElementParameters = (element) => {
