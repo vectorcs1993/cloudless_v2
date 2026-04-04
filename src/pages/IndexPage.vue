@@ -686,11 +686,25 @@ const onDrop = (e) => {
 
 const rotateElement = (direction) => {
   if (!selectedElement.value) return;
-  connectionManager?.disconnectElement(selectedElement.value);
+
   const delta = direction === 'left' ? -90 : 90;
   selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
+
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
+
+  // Вызываем обновление всех связей
+  if (connectionManager) {
+    connectionManager.updateAllPortsAndConnections(40);
+  }
+
+  // Принудительно обновляем UI
+  const currentElement = selectedElement.value;
+  updateSelection([]);
+  setTimeout(() => {
+    updateSelection([currentElement]);
+  }, 10);
+
   scheduleRender();
 };
 
