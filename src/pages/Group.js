@@ -436,7 +436,50 @@ export class Group extends BaseElement {
     this.callouts.push(callout);
     return callout;
   }
+  clone(newId = null, newElementIdCounter = null, newPortIdCounter = null) {
+    // Клонируем все элементы
+    const clonedElements = this.elements.map(el => {
+      if (el.clone) {
+        return el.clone(newElementIdCounter?.(), newPortIdCounter?.());
+      }
+      // Fallback через JSON
+      const json = el.toJSON();
+      json.id = newElementIdCounter ? newElementIdCounter() : Date.now();
+      if (json.ports) {
+        json.ports = json.ports.map(p => ({
+          ...p,
+          id: newPortIdCounter ? newPortIdCounter() : Date.now(),
+          connectedElementId: null,
+          connectedPortId: null
+        }));
+      }
+      return ElementFactory.createFromJSON(json);
+    });
 
+    const newGroup = new Group(newId || this.id, clonedElements, this.width, this.height);
+    newGroup.name = `${this.name} (копия)`;
+    newGroup.color = this.color;
+    newGroup.rotation = this.rotation;
+    newGroup._x = this.x;
+    newGroup._y = this.y;
+    newGroup._showCallout = this.showCallout;
+
+    // Клонируем выноски
+    if (this.callouts && this.callouts.length > 0) {
+      newGroup.callouts = this.callouts.map(c => new Callout(
+        Date.now() + Math.random(),
+        newGroup.id,
+        c.text,
+        c.x,
+        c.y
+      ));
+    }
+
+    newGroup.updateBounds();
+    newGroup.updateCalloutText();
+
+    return newGroup;
+  }
   toJSON() {
     return {
       ...super.toJSON(),

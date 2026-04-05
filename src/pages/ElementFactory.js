@@ -53,7 +53,7 @@ export class ElementFactory {
         return cross;
       case 'elbow':
         const elbow = new Elbow(id, x_px, y_px, sectionType, a);
-        if (params.radius_mm !== undefined) elbow.radius_mm = params.radius_mm;
+        if (params.r !== undefined) elbow.r = params.r;
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
         if (params.name) elbow.name = params.name;
         if (params.color) elbow.color = params.color;
@@ -111,7 +111,7 @@ export class ElementFactory {
         l2: jsonData.l2,
         l3: jsonData.l3,
         showCallout: jsonData.showCallout !== undefined ? jsonData.showCallout : true,
-        radius_mm: jsonData.radius_mm !== undefined ? jsonData.radius_mm : jsonData.radius,
+        r: jsonData.r,
         length_mm: jsonData.length_mm,
         flow: jsonData.flow,
         pressure: jsonData.pressure,

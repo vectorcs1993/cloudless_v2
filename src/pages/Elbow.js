@@ -6,7 +6,7 @@ export class Elbow extends DuctBase {
   constructor(id, x_px, y_px, sectionType = 'round', a = 125) {
     super(id, 'elbow', x_px, y_px, `${BaseElement.getAvailableTypes().elbow} ${id}`, sectionType, a);
     this._b = 100;                   // Высота отвода (B параметр)
-    this._radius_mm = 125;           // Радиус изгиба (для обоих типов)
+    this._r = 125;           // Радиус изгиба (для обоих типов)
     this._segments = 4;              // Количество сегментов для круглого отвода
   }
 
@@ -19,11 +19,11 @@ export class Elbow extends DuctBase {
   }
 
   // Геттеры и сеттеры для радиуса
-  get radius_mm() { return this._radius_mm; }
+  get r() { return this._r; }
 
-  set radius_mm(newRadius) {
-    if (this._radius_mm === newRadius) return;
-    this._radius_mm = newRadius;
+  set r(newR) {
+    if (this._r === newR) return;
+    this._r = newR;
     this.updatePorts();
   }
 
@@ -35,11 +35,11 @@ export class Elbow extends DuctBase {
   }
 
   getWidth() {
-    return this.mmToPx(this._radius_mm) + this.getSizePx();
+    return this.mmToPx(this._r) + this.getSizePx();
   }
 
   getHeight() {
-    return this.mmToPx(this._radius_mm) + this.getSizePx();
+    return this.mmToPx(this._r) + this.getSizePx();
   }
 
   getTopLeft() {
@@ -52,9 +52,9 @@ export class Elbow extends DuctBase {
   getCalloutText() {
     const baseText = `${super.getCalloutText()}`;
     if (this._sectionType === 'round') {
-      return `${baseText}\nR: ${this._radius_mm} мм`;
+      return `${baseText}\nR: ${this._r} мм`;
     } else {
-      return `${baseText}\nB: ${this._b} мм\nR: ${this._radius_mm} мм`;
+      return `${baseText}\nB: ${this._b} мм\nR: ${this._r} мм`;
     }
   }
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
@@ -74,12 +74,12 @@ export class Elbow extends DuctBase {
       return [
         ...baseParams,
         {
-          name: 'radius_mm',
+          name: 'r',
           label: 'R',
           type: 'number',
           step: 5,
           min: 30,
-          value: this._radius_mm,
+          value: this._r,
           unit: 'мм'
         },
         {
@@ -106,12 +106,12 @@ export class Elbow extends DuctBase {
           unit: 'мм'
         },
         {
-          name: 'radius_mm',
+          name: 'r',
           label: 'R',
           type: 'number',
           step: 5,
           min: 30,
-          value: this._radius_mm,
+          value: this._r,
           unit: 'мм'
         }
       ];
@@ -127,7 +127,7 @@ export class Elbow extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._radius_mm);
+    const radius_px = this.mmToPx(this._r);
     const centerRadius_px = radius_px + size_px / 2;
 
     // Входной порт (слева)
@@ -166,7 +166,7 @@ export class Elbow extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._radius_mm);
+    const radius_px = this.mmToPx(this._r);
     const bendCenterX = topLeft.x;
     const bendCenterY = topLeft.y + this.getHeight();
     const outerRadius_px = radius_px + size_px;
@@ -196,7 +196,7 @@ export class Elbow extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._radius_mm);
+    const radius_px = this.mmToPx(this._r);
     const bendCenterX = topLeft.x;
     const bendCenterY = topLeft.y + this.getHeight();
     const outerRadius_px = radius_px + size_px;
@@ -245,7 +245,7 @@ export class Elbow extends DuctBase {
     const centerY = this.y;
     const rotation = this.rotation || 0;
     const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._radius_mm);
+    const radius_px = this.mmToPx(this._r);
     const topLeft = this.getTopLeft();
     const bendCenterX = topLeft.x;
     const bendCenterY = topLeft.y + this.getHeight();
@@ -300,7 +300,7 @@ export class Elbow extends DuctBase {
   }
 
   hitTest(worldX, worldY, ctx) {
-    if (!this._a || !this._radius_mm || this._a <= 0 || this._radius_mm <= 0) {
+    if (!this._a || !this._r || this._a <= 0 || this._r <= 0) {
       return false;
     }
 
@@ -331,7 +331,7 @@ export class Elbow extends DuctBase {
       const centerY = this.y;
       const topLeft = this.getTopLeft();
       const size_px = this.getSizePx();
-      const radius_px = this.mmToPx(this._radius_mm);
+      const radius_px = this.mmToPx(this._r);
       const bendCenterX = topLeft.x;
       const bendCenterY = topLeft.y + this.getHeight();
       const outerRadius_px = radius_px + size_px;
@@ -376,7 +376,7 @@ export class Elbow extends DuctBase {
     return {
       ...base,
       type: 'elbow',
-      radius_mm: this._radius_mm,
+      r: this._r,
       segments: this._segments,
     };
   }

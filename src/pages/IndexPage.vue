@@ -204,6 +204,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, onBeforeUnmount, shallowRef, readonly } from 'vue';
+import { Notify } from 'quasar'
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
@@ -222,11 +223,7 @@ import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
 
 const showNotify = (options) => {
-  if (typeof window !== 'undefined' && window.Quasar && window.Quasar.Notify) {
-    window.Quasar.Notify.create(options);
-  } else {
-    console.log(options.message);
-  }
+  Notify.create(options);
 };
 
 const dragItems = Object.freeze([
@@ -489,14 +486,35 @@ const clearSelection = () => {
 
 const copySelected = () => {
   if (selectedElements.value.length === 0) return;
+
   clipboardElements.value = selectedElements.value.map(element => {
-    const json = element.toJSON?.() || element;
-    return { ...json, callouts: [] };
+    // Получаем полный JSON с сохранением всех данных
+    const json = element.toJSON();
+
+    // Для группы - убеждаемся, что элементы сохранены
+    if (element instanceof Group) {
+      return {
+        ...json,
+        type: 'group',
+        elements: element.elements?.map(el => el.toJSON()) || [],
+        callouts: element.callouts?.map(c => ({
+          id: c.id,
+          elementId: c.elementId,
+          text: c.text,
+          x: c.x,
+          y: c.y
+        })) || []
+      };
+    }
+
+    // Для обычных элементов
+    return json;
   });
+
   showNotify({
     type: 'positive',
     message: `Скопировано ${clipboardElements.value.length} элементов`,
-    position: 'bottom-right',
+    position: 'top',
     timeout: 1000
   });
 };
@@ -504,44 +522,95 @@ const copySelected = () => {
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
 
-  // Проверяем, есть ли среди вставляемых элементов группы
-  const hasGroup = clipboardElements.value.some(el => el.type === 'group');
-
-  if (hasGroup) {
-    showNotify({
-      type: 'warning',
-      message: 'Нельзя вставлять группы!',
-      position: 'bottom-right',
-      timeout: 3000
-    });
-    return;
-  }
-
   const newElements = [];
   const offset = 50;
 
   clipboardElements.value.forEach(json => {
-    const newElement = ElementFactory.createFromJSON({
-      ...json,
-      id: ++nextElementId,
-      x: json.x + offset,
-      y: json.y + offset,
-      ports: (json.ports || []).map(port => ({
-        ...port,
-        id: ++nextPortId,
-        connectedElementId: null,
-        connectedPortId: null
-      })),
-      callouts: []
-    });
+    let newElement;
 
-    if (newElement.name) {
-      const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
-      newElement.name = `${baseName} (копия)`;
+    // Для группы - создаем через фабрику с новыми ID для всех элементов
+    if (json.type === 'group') {
+      // Создаем копию JSON с новыми ID для группы и всех её элементов
+      const newJson = {
+        ...json,
+        id: ++nextElementId,
+        x: json.x + offset,
+        y: json.y + offset,
+        callouts: (json.callouts || []).map(c => ({
+          ...c,
+          id: Date.now() + Math.random(),
+          elementId: null // Будет установлено при создании
+        }))
+      };
+
+      // Рекурсивно обновляем ID всех элементов внутри группы
+      if (newJson.elements) {
+        const updateIdsRecursive = (element) => {
+          const newEl = { ...element };
+          newEl.id = ++nextElementId;
+
+          if (newEl.ports) {
+            newEl.ports = newEl.ports.map(port => ({
+              ...port,
+              id: ++nextPortId,
+              connectedElementId: null,
+              connectedPortId: null
+            }));
+          }
+
+          if (newEl.callouts) {
+            newEl.callouts = newEl.callouts.map(c => ({
+              ...c,
+              id: Date.now() + Math.random(),
+              elementId: newEl.id
+            }));
+          }
+
+          if (newEl.type === 'group' && newEl.elements) {
+            newEl.elements = newEl.elements.map(updateIdsRecursive);
+          }
+
+          return newEl;
+        };
+
+        newJson.elements = newJson.elements.map(updateIdsRecursive);
+      }
+
+      newElement = ElementFactory.createFromJSON(newJson);
+
+      // Обновляем имя группы
+      if (newElement.name) {
+        const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
+        newElement.name = `${baseName} (копия)`;
+      }
+
+    } else {
+      // Для обычных элементов
+      const newJson = {
+        ...json,
+        id: ++nextElementId,
+        x: json.x + offset,
+        y: json.y + offset,
+        ports: (json.ports || []).map(port => ({
+          ...port,
+          id: ++nextPortId,
+          connectedElementId: null,
+          connectedPortId: null
+        })),
+        callouts: []
+      };
+
+      newElement = ElementFactory.createFromJSON(newJson);
+
+      if (newElement.name) {
+        const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
+        newElement.name = `${baseName} (копия)`;
+      }
+
+      newElement.updatePorts?.();
+      newElement.addCallout?.(newElement.x, newElement.y - 150);
     }
 
-    newElement.updatePorts?.();
-    newElement.addCallout?.(newElement.x, newElement.y - 150);
     newElements.push(newElement);
   });
 
@@ -552,7 +621,7 @@ const pasteElements = () => {
   showNotify({
     type: 'positive',
     message: `Вставлено ${newElements.length} элементов`,
-    position: 'bottom-right',
+    position: 'top',
     timeout: 1000
   });
 };
@@ -579,7 +648,7 @@ const handleKeyDown = (e) => {
 
 const saveToLocalStorage = () => {
   storageManager?.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
-  showNotify({ type: 'positive', message: 'Сохранено!', position: 'bottom-right', timeout: 1000 });
+  showNotify({ type: 'positive', message: 'Сохранено!', position: 'top', timeout: 1000 });
 };
 
 const loadFromLocalStorage = () => {
@@ -655,7 +724,7 @@ const updateAllPortsAndConnections = () => {
   showNotify({
     type: 'positive',
     message: `Восстановлено ${restored} связей!`,
-    position: 'bottom-right',
+    position: 'top',
     timeout: 2000
   });
 };
@@ -884,7 +953,7 @@ const groupSelected = () => {
     showNotify({
       type: 'warning',
       message: 'Нельзя создавать группы из групп! Выберите только обычные элементы.',
-      position: 'bottom-right',
+      position: 'top',
       timeout: 3000
     });
     return;
@@ -911,7 +980,7 @@ const ungroupSelected = () => {
     showNotify({
       type: 'warning',
       message: 'Нельзя разгруппировать группу, содержащую другие группы! Сначала разгруппируйте вложенные группы.',
-      position: 'bottom-right',
+      position: 'top',
       timeout: 3000
     });
     return;
@@ -950,6 +1019,23 @@ const onCanvasMouseMove = (e) => {
 const onCanvasMouseUp = (e) => {
   if (dragType) return;
   interactionManager?.onMouseUp(e);
+
+  // Принудительно обновляем выбранные элементы
+  const currentSelected = selectedElements.value;
+  if (currentSelected.length > 0) {
+    // Создаем копии, чтобы Vue увидел изменения
+    selectedElements.value = [...currentSelected];
+
+    // Обновляем параметры каждого элемента
+    currentSelected.forEach((el) => {
+      if (el.x !== undefined) {
+        // Триггерим обновление
+        el.x = el.x;
+        el.y = el.y;
+      }
+    });
+  }
+
   updateSelection([...renderer?.selectedElements || []]);
   scheduleRender();
 };
