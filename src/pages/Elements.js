@@ -409,30 +409,32 @@ export class Group extends BaseElement {
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
 
-    for (const element of this.elements) {
-      if (!element) continue;
+    const getElementBounds = (element) => {
+      if (!element) return;
 
-      // Убеждаемся, что порты элемента актуальны
-      if (typeof element.updatePorts === 'function') {
-        element.updatePorts();
+      // Для группы рекурсивно получаем границы её элементов
+      if (element.type === 'group') {
+        if (element.elements) {
+          element.elements.forEach(getElementBounds);
+        }
+        return;
       }
 
-      // Получаем углы элемента с учетом поворота
+      // Получаем реальные границы элемента с учетом поворота
       const centerX = element.x;
       const centerY = element.y;
       const width = element.getWidth();
       const height = element.getHeight();
       const rotation = (element.rotation || 0) * Math.PI / 180;
 
-      // Четыре угла элемента в локальных координатах (относительно центра)
+      // Четыре угла элемента
       const corners = [
-        { x: -width / 2, y: -height / 2 }, // верхний левый
-        { x: width / 2, y: -height / 2 }, // верхний правый
-        { x: width / 2, y: height / 2 }, // нижний правый
-        { x: -width / 2, y: height / 2 }  // нижний левый
+        { x: -width / 2, y: -height / 2 },
+        { x: width / 2, y: -height / 2 },
+        { x: width / 2, y: height / 2 },
+        { x: -width / 2, y: height / 2 }
       ];
 
-      // Поворачиваем каждый угол и преобразуем в мировые координаты
       for (const corner of corners) {
         const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
         const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
@@ -444,16 +446,18 @@ export class Group extends BaseElement {
         maxX = Math.max(maxX, worldX);
         maxY = Math.max(maxY, worldY);
       }
-    }
+    };
 
-    // Проверяем, что границы валидны
+    // Обрабатываем все элементы
+    this.elements.forEach(getElementBounds);
+
     if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
       this.x = (minX + maxX) / 2;
       this.y = (minY + maxY) / 2;
       this.width = maxX - minX;
       this.height = maxY - minY;
     } else {
-      console.warn('Invalid bounds for group:', this.id, { minX, maxX, minY, maxY });
+      console.warn('Invalid bounds for group:', this.id);
       this.width = 0;
       this.height = 0;
     }
@@ -534,39 +538,52 @@ export class Group extends BaseElement {
       return;
     }
 
-    this.elements.forEach(element => {
-      if (element) {
-        element.x += deltaX;
-        element.y += deltaY;
+    // Рекурсивная функция для перемещения элемента и всех его вложенных групп
+    const moveElementRecursive = (element) => {
+      if (!element) return;
 
-        if (element.callouts && element.callouts.length > 0) {
-          element.callouts.forEach(callout => {
-            callout.x += deltaX;
-            callout.y += deltaY;
-          });
-        }
+      // Перемещаем текущий элемент
+      element.x += deltaX;
+      element.y += deltaY;
 
-        if (element.updatePorts) element.updatePorts();
-        if (element.updateCalloutText) element.updateCalloutText();
+      // Перемещаем выноски
+      if (element.callouts && element.callouts.length > 0) {
+        element.callouts.forEach(callout => {
+          callout.x += deltaX;
+          callout.y += deltaY;
+        });
       }
-    });
 
+      // Обновляем порты и текст
+      if (element.updatePorts) element.updatePorts();
+      if (element.updateCalloutText) element.updateCalloutText();
+
+      // Если элемент - группа, рекурсивно перемещаем все её элементы
+      if (element.type === 'group' && element.elements && element.elements.length > 0) {
+        element.elements.forEach(child => moveElementRecursive(child));
+        // Обновляем границы вложенной группы
+        if (element.updateBounds) element.updateBounds();
+      }
+    };
+
+    // Перемещаем все элементы верхнего уровня и их содержимое
+    this.elements.forEach(element => moveElementRecursive(element));
+
+    // Обновляем границы текущей группы
     this.updateBounds();
   }
 
   createPath(ctx) { }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
+    // Сначала рисуем все элементы группы и их выноски
     if (this.elements) {
       this.elements.forEach(element => {
         if (element && element.draw) {
           element.draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors);
         }
-      });
-    }
 
-    if (this.elements) {
-      this.elements.forEach(element => {
+        // Рисуем выноски элемента
         if (element && element.callouts && element.callouts.length > 0) {
           for (const callout of element.callouts) {
             callout.draw(ctx, scale, isDarkTheme, element);
@@ -575,22 +592,23 @@ export class Group extends BaseElement {
       });
     }
 
-    ctx.save();
-    ctx.lineWidth = Math.max(2, 3 / scale);
-    if (isSelected && this.width > 0 && this.height > 0) {
-      ctx.strokeStyle = '#ff6600';
-    } else {
-      ctx.strokeStyle = '#444444';
+    // Потом рисуем рамку группы
+    if (this.width > 0 && this.height > 0) {
+      ctx.save();
+      ctx.lineWidth = Math.max(2, 3 / scale);
+      ctx.strokeStyle = isSelected ? '#ff6600' : '#444444';
+      ctx.setLineDash([5 / scale, 5 / scale]);
+      const topLeft = this.getTopLeft();
+      ctx.strokeRect(topLeft.x, topLeft.y, this.width, this.height);
+      ctx.setLineDash([]);
+
+      // Рисуем имя группы
+      ctx.fillStyle = isDarkTheme ? '#ffffff' : '#000000';
+      ctx.font = `${Math.max(12, 14 / scale)}px Arial`;
+      ctx.textBaseline = 'top';
+      ctx.fillText(this.name, topLeft.x + 5, topLeft.y + 5);
+      ctx.restore();
     }
-    ctx.setLineDash([5 / scale, 5 / scale]);
-    const topLeft = this.getTopLeft();
-    ctx.strokeRect(topLeft.x, topLeft.y, this.width, this.height);
-    ctx.setLineDash([]);
-    ctx.fillStyle = isDarkTheme ? '#444444' : '#000';
-    ctx.font = `26px Arial`;
-    ctx.textBaseline = 'top';
-    ctx.fillText(this.name, topLeft.x + 10, topLeft.y + 16 / scale);
-    ctx.restore();
   }
 
   hitTest(worldX, worldY, ctx) {
