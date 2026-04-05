@@ -390,14 +390,21 @@ export class DuctBase extends BaseElement {
 
 // ========== КЛАСС ГРУППЫ ==========
 export class Group extends BaseElement {
-  constructor(id, elements) {
+  constructor(id, elements, savedWidth = 0, savedHeight = 0) {
     const groupId = (typeof id === 'number' && id !== undefined) ? id : Date.now() + Math.random();
     super(groupId, 'group', 0, 0, `Группа ${groupId}`);
     this.elements = elements || [];
-    this.updateBounds();
 
-    // Добавляем выноску для группы
-    if (this.width > 0 && this.height > 0) {
+    // Если есть сохраненные размеры, используем их
+    if (savedWidth > 0 && savedHeight > 0) {
+      this.width = savedWidth;
+      this.height = savedHeight;
+    } else {
+      this.updateBounds();
+    }
+
+    // Добавляем выноску для группы, только если её нет
+    if ((!this.callouts || this.callouts.length === 0) && this.width > 0 && this.height > 0) {
       const topLeft = this.getTopLeft();
       this.addCallout(this.x, topLeft.y - 50);
     }
@@ -419,6 +426,7 @@ export class Group extends BaseElement {
       if (!element) return;
 
       if (element.type === 'group') {
+        // Для группы используем её границы
         if (element.width > 0 && element.height > 0) {
           const halfW = element.width / 2;
           const halfH = element.height / 2;
@@ -437,6 +445,7 @@ export class Group extends BaseElement {
           }
         }
 
+        // Рекурсивно обрабатываем вложенные элементы группы
         if (element.elements) {
           element.elements.forEach(processElement);
         }
@@ -476,9 +485,7 @@ export class Group extends BaseElement {
       this.width = maxX - minX;
       this.height = maxY - minY;
 
-      // Обновляем позицию выноски, но НЕ создаем новую
       if (this.callouts && this.callouts.length > 0) {
-        // Просто обновляем текст, позицию не меняем автоматически
         this.updateCalloutText();
       }
     } else {
@@ -673,6 +680,15 @@ export class Group extends BaseElement {
     return false;
   }
 
+  updateAllPortsRecursive() {
+    const updateRecursive = (element) => {
+      if (element.updatePorts) element.updatePorts();
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(updateRecursive);
+      }
+    };
+    this.elements.forEach(updateRecursive);
+  }
 
   updatePorts() {
     if (this.elements) {
@@ -700,7 +716,6 @@ export class Group extends BaseElement {
   toJSON() {
     return {
       ...super.toJSON(),
-      type: 'group',
       elements: this.elements ? this.elements.map(el => el.toJSON()) : [],
       width: this.width,
       height: this.height

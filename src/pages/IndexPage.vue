@@ -739,38 +739,61 @@ const rotateElement = (direction) => {
     const centerY = group.y;
     const angleRad = delta * Math.PI / 180;
 
-    // Сохраняем позиции выносок
-    const calloutPositions = [];
-    group.elements.forEach(element => {
+    // Сохраняем позиции всех выносок (рекурсивно)
+    const savedCallouts = [];
+
+    const saveCalloutsRecursive = (element) => {
       if (element.callouts && element.callouts.length > 0) {
-        calloutPositions.push({
-          element,
+        savedCallouts.push({
           callout: element.callouts[0],
           x: element.callouts[0].x,
-          y: element.callouts[0].y
+          y: element.callouts[0].y,
+          element: element
         });
       }
-    });
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(saveCalloutsRecursive);
+      }
+    };
 
-    // Поворачиваем каждый элемент вокруг центра группы
-    group.elements.forEach(element => {
+    group.elements.forEach(saveCalloutsRecursive);
+
+    // Рекурсивная функция для поворота элементов
+    const rotateElementRecursive = (element) => {
+      if (!element) return;
+
+      // Вычисляем новую позицию элемента относительно центра группы
       const dx = element.x - centerX;
       const dy = element.y - centerY;
       element.x = centerX + (dx * Math.cos(angleRad) - dy * Math.sin(angleRad));
       element.y = centerY + (dx * Math.sin(angleRad) + dy * Math.cos(angleRad));
+
+      // Поворачиваем сам элемент
       element.rotation = (element.rotation + delta) % 360;
 
+      // Обновляем порты элемента
       if (element.updatePorts) element.updatePorts();
-    });
+
+      // Рекурсивно обрабатываем вложенные группы
+      if (element.type === 'group' && element.elements) {
+        element.elements.forEach(child => rotateElementRecursive(child));
+        if (element.updateBounds) element.updateBounds();
+      }
+    };
+
+    // Поворачиваем все элементы верхнего уровня
+    group.elements.forEach(rotateElementRecursive);
 
     // Восстанавливаем позиции выносок (они не должны поворачиваться)
-    calloutPositions.forEach(({ element, callout, x, y }) => {
-      if (element.callouts[0] === callout) {
-        callout.x = x;
-        callout.y = y;
+    savedCallouts.forEach(saved => {
+      saved.callout.x = saved.x;
+      saved.callout.y = saved.y;
+      if (saved.element.updateCalloutText) {
+        saved.element.updateCalloutText();
       }
     });
 
+    // Обновляем границы и выноску группы
     group.updateBounds();
     group.updateCalloutText();
   } else {
@@ -792,7 +815,6 @@ const rotateElement = (direction) => {
 
   scheduleRender();
 };
-
 const rotateLeft = () => rotateElement('left');
 const rotateRight = () => rotateElement('right');
 

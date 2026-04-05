@@ -17,7 +17,6 @@ export class ElementFactory {
     const c = params.c || 50;
     const a2 = params.a2 || 50;
 
-
     switch (type) {
       case 'duct':
         const duct = new DuctDirect(id, x_px, y_px, sectionType, a, b, c);
@@ -25,7 +24,7 @@ export class ElementFactory {
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
         return duct;
-      case 'transition':  // Добавьте этот case
+      case 'transition':
         const transition = new Transition(id, x_px, y_px, sectionType, a, a2, b, c);
         if (params.rotation !== undefined) transition.rotation = params.rotation;
         if (params.name) transition.name = params.name;
@@ -64,14 +63,26 @@ export class ElementFactory {
         if (params.color) fan.color = params.color;
         return fan;
       case 'group':
-        const elements = (params.elements || []).map(elJson => this.createFromJSON(elJson));
-        const group = new Group(params.id || Date.now() + Math.random(), elements);
+        // Сначала создаем группу без элементов
+        const group = new Group(id, []);
         group.name = params.name || group.name;
         group.color = params.color || group.color;
         group.rotation = params.rotation || 0;
         group.x = params.x || 0;
         group.y = params.y || 0;
-        group.callouts = (params.callouts || []).map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+        group.width = params.width || 0;
+        group.height = params.height || 0;
+
+        // Восстанавливаем выноски группы
+        if (params.callouts) {
+          group.callouts = params.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
+        }
+
+        // Восстанавливаем элементы группы (рекурсивно)
+        if (params.elements && params.elements.length > 0) {
+          group.elements = params.elements.map(elJson => this.createFromJSON(elJson));
+        }
+
         return group;
       default:
         throw new Error(`Unknown element type: ${type}`);
@@ -79,6 +90,7 @@ export class ElementFactory {
   }
 
   static createFromJSON(jsonData) {
+    // Создаем элемент через createElement
     let element = this.createElement(
       jsonData.type,
       jsonData.id,
@@ -101,12 +113,14 @@ export class ElementFactory {
         elements: jsonData.elements,
         name: jsonData.name,
         color: jsonData.color,
-        callouts: jsonData.callouts
+        callouts: jsonData.callouts,
+        width: jsonData.width,
+        height: jsonData.height
       }
     );
 
-    // Восстанавливаем порты
-    if (jsonData.ports) {
+    // Восстанавливаем порты (для не-групп)
+    if (element.type !== 'group' && jsonData.ports) {
       element.ports = jsonData.ports.map(p => new Port(
         p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
       ));
@@ -120,20 +134,25 @@ export class ElementFactory {
       });
     }
 
-    // Восстанавливаем выноски
-    if (jsonData.callouts && jsonData.callouts.length > 0 && element.type !== 'group') {
+    // Восстанавливаем выноски (для не-групп, у групп уже восстановлены)
+    if (element.type !== 'group' && jsonData.callouts && jsonData.callouts.length > 0) {
       element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
     } else if (element.type !== 'group') {
       element.callouts = [];
     }
 
-    // ========== ВАЖНО: Обновляем порты и координаты после загрузки ==========
+    // Обновляем порты и выноски после загрузки
     if (typeof element.updatePorts === 'function') {
       element.updatePorts();
     }
 
     if (typeof element.updateCalloutText === 'function') {
       element.updateCalloutText();
+    }
+
+    // Для группы обновляем границы
+    if (element.type === 'group' && typeof element.updateBounds === 'function') {
+      element.updateBounds();
     }
 
     return element;
