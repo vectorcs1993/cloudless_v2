@@ -12,10 +12,12 @@ import { Callout } from './Callout.js';
 export class ElementFactory {
   static createElement(type, id, x_px, y_px, params = {}) {
     const sectionType = params.sectionType || 'round';
+    const sectionType2 = params.sectionType2 || 'round';
     const a = params.a || 50;
     const b = params.b || 50;
     const c = params.c || 50;
     const a2 = params.a2 || 50;
+    const c2 = params.c2 || 50;
     const showCallout = params.showCallout;
     switch (type) {
       case 'duct':
@@ -26,7 +28,7 @@ export class ElementFactory {
         duct.showCallout = showCallout;
         return duct;
       case 'transition':
-        const transition = new Transition(id, x_px, y_px, sectionType, a, a2, b, c);
+        const transition = new Transition(id, x_px, y_px, sectionType, sectionType2, a, a2, b, c, c2);
         if (params.rotation !== undefined) transition.rotation = params.rotation;
         if (params.name) transition.name = params.name;
         if (params.color) transition.color = params.color;
@@ -103,10 +105,12 @@ export class ElementFactory {
       jsonData.y,
       {
         sectionType: jsonData.sectionType,
+        sectionType2: jsonData.sectionType2,
         a: jsonData.a,
         a2: jsonData.a2,
         b: jsonData.b,
         c: jsonData.c,
+        c2: jsonData.c2,
         l1: jsonData.l1,
         l2: jsonData.l2,
         l3: jsonData.l3,
@@ -165,24 +169,38 @@ export class ElementFactory {
 
   // Добавьте новый метод для обновления всех групп после загрузки
   static updateAllGroupsBounds(elements) {
+    if (!elements || !Array.isArray(elements)) return;
+
     const updateGroupRecursive = (element) => {
+      if (!element) return;
+
       if (element.type === 'group') {
         // Рекурсивно обновляем все вложенные группы
-        if (element.elements) {
+        if (element.elements && Array.isArray(element.elements)) {
           element.elements.forEach(updateGroupRecursive);
+        } else {
+          // Если elements нет или это не массив, инициализируем пустым массивом
+          element.elements = [];
         }
+
         // Затем обновляем границы текущей группы
         if (typeof element.updateBounds === 'function') {
           element.updateBounds();
         }
+
         // Обновляем выноску
         if (typeof element.updateCalloutText === 'function') {
           element.updateCalloutText();
         }
+
         // Создаем выноску если её нет
         if ((!element.callouts || element.callouts.length === 0) && element.width > 0 && element.height > 0) {
-          const topLeft = element.getTopLeft();
-          element.addCallout(element.x, topLeft.y - 50);
+          if (typeof element.getTopLeft === 'function') {
+            const topLeft = element.getTopLeft();
+            if (typeof element.addCallout === 'function') {
+              element.addCallout(element.x, topLeft.y - 50);
+            }
+          }
         }
       }
     };

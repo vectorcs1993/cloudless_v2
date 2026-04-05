@@ -118,16 +118,28 @@ export class BaseElement {
     ];
   }
 
+  getParametersPosition() {
+    return [
+      { name: 'x', label: 'X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
+      { name: 'y', label: 'Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
+      { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
+    ];
+  }
+
+
   getParameters() {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
-      { name: 'x', label: 'Позиция по X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
-      { name: 'y', label: 'Позиция по Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
-      { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
       { name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color },
+    ];
+  }
+
+  getParametersCallout() {
+    return [
       { name: 'showCallout', label: 'Показывать выноску', type: 'boolean', value: this.showCallout },
     ];
   }
+
 
   getRelativeCalloutEntryPoint() {
     return { x: this.getWidth() / 2, y: this.getHeight() / 2 };

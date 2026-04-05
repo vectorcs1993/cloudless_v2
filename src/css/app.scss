@@ -46,11 +46,6 @@
   max-height: calc(100vh - 40px);
   overflow-y: auto;
   z-index: 100;
-
-  .dark-theme & {
-    background: #2d2d2d;
-    color: #e0e0e0;
-  }
 }
 
 .toolbar {

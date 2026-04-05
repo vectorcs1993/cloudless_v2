@@ -3,11 +3,20 @@ import { Port } from './Port.js';
 
 // ========== ПЕРЕХОД ==========
 export class Transition extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', a1 = 125, a2 = 200, length = 500, height = 125) {
-    super(id, x_px, y_px, sectionType, a1, length, height);
+  constructor(id, x_px, y_px, sectionType = 'round', sectionType2 = 'round', a1 = 125, a2 = 200, b = 500, c = 125, c2 = 125) {
+    super(id, x_px, y_px, sectionType, a1, b, c);
     this.type = 'transition';
     this.name = `Переход ${id}`;
+    this._sectionType2 = sectionType2;
     this._a2 = a2;
+    this._c2 = c2;
+  }
+  get sectionType2() { return this._sectionType2; }
+  set sectionType2(value) {
+    if (this._sectionType2 === value) return;
+    this._sectionType2 = value;
+    this.updatePorts();
+    this.updateCalloutText();
   }
 
   get a2() { return this._a2; }
@@ -18,12 +27,20 @@ export class Transition extends DuctDirect {
     this.updateCalloutText();
   }
 
-  // ПЕРЕОПРЕДЕЛЯЕМ getWidth() - ширина перехода это его длина
+
+  get c2() { return this._c2; }
+  set a2(value) {
+    if (this._c2 === value) return;
+    this._c2 = value;
+    this.updatePorts();
+    this.updateCalloutText();
+  }
+
+
   getWidth() {
     return this.mmToPx(this._b); // _b это длина перехода
   }
 
-  // ПЕРЕОПРЕДЕЛЯЕМ getHeight() - высота перехода это максимальное сечение
   getHeight() {
     const maxSize = Math.max(this._a, this._a2);
     return this.mmToPx(maxSize);
@@ -50,12 +67,21 @@ export class Transition extends DuctDirect {
     const size2_m = this._a2 / 1000;
     const avgArea = ((size1_m + size2_m) / 2 * length_m).toFixed(2);
     const typeText = this._sectionType === 'round' ? '⌀' : '□';
-    return `${this.name}\n${typeText}${this._a} → ${typeText}${this._a2} мм\nL: ${this._b} мм\nSср: ${avgArea} м²`;
+    const typeText2 = this._sectionType2 === 'round' ? '⌀' : '□';
+    const s1 = this._sectionType === 'round' ? this._a : `${this._a}x${this.c}`;
+    const s2 = this._sectionType2 === 'round' ? this._a2 : `${this._a2}x${this.c}`;
+    return `${this.name}\n${typeText}${s1} → ${typeText2}${s2} мм\nL: ${this._b} мм\nSср: ${avgArea} м²`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
+      {
+        name: 'sectionType2', label: 'Тип сечения 2', type: 'select', options: [
+          { value: 'rectangular', label: 'Прямоугольное' },
+          { value: 'round', label: 'Круглое' }
+        ], value: this.sectionType2
+      },
       {
         name: 'a2',
         label: `A2`,
@@ -63,6 +89,15 @@ export class Transition extends DuctDirect {
         step: 10,
         min: 20,
         value: this._a2,
+        unit: 'мм'
+      },
+      {
+        name: 'c2',
+        label: `C2`,
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._c2,
         unit: 'мм'
       },
     ];
@@ -183,6 +218,8 @@ export class Transition extends DuctDirect {
     return {
       ...super.toJSON(),
       a2: this._a2,
+      c2: this._c2,
+      sectionType2: this._sectionType2,
     };
   }
 }

@@ -2,10 +2,10 @@ import { BaseElement, DuctBase } from './Elements.js';
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
 export class DuctDirect extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', width = 125, length = 3000, height = 125) {
-    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, width);
-    this._b = length;
-    this._c = height; // Высота для прямоугольного сечения (только для расчетов)
+  constructor(id, x_px, y_px, sectionType = 'round', a = 125, b = 3000, c = 125) {
+    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, a);
+    this._b = b; // Длина воздуховода
+    this._c = c; // Высота для прямоугольного сечения (только для расчетов экв. диаметра)
   }
 
   get b() { return this._b; }

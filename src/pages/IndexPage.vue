@@ -116,57 +116,99 @@
               </q-card-section>
               <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
                 <q-tab name="parameters" label="Параметры" />
+                <q-tab name="positions" label="Позиция" />
+                <q-tab name="callout" label="Выноска" />
                 <q-tab name="links" label="Связи" />
               </q-tabs>
               <q-tab-panels v-model="tabElement" :dark="isDarkTheme" animated>
                 <q-tab-panel name="parameters">
                   <div class="single-element-info">
-                    <div class="element-params">
-                      <q-list dense>
-                        <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
-                          <q-item-section class="param-label-col">
-                            <q-item-label>{{ param.label }}:</q-item-label>
-                          </q-item-section>
-                          <q-item-section>
-                            <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
-                              @update:model-value="val => onParameterChange(val, param.name)" />
-                            <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                              :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
-                              @update:model-value="(val) => onParameterChange(val, param.name)" />
-                            <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                              :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
-                          </q-item-section>
-                          <q-item-section side class="param-unit-col">
-                            <span v-if="param.unit">{{ param.unit }}</span>
-                            <span v-else>—</span>
-                          </q-item-section>
-                        </q-item>
-                      </q-list>
-                    </div>
-                    <div class="rotation-controls q-mt-md">
+                    <q-list dense>
+                      <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
+                        <q-item-section class="param-label-col">
+                          <q-item-label>{{ param.label }}:</q-item-label>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                            @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                        </q-item-section>
+                        <q-item-section side class="param-unit-col">
+                          <span v-if="param.unit">{{ param.unit }}</span>
+                          <span v-else>—</span>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </div>
+                </q-tab-panel>
+                <q-tab-panel name="positions">
+                  <div class="single-element-info">
+                    <q-list dense>
+                      <q-item v-for="param in getElementParametersPositions(selectedElement)" :key="param.name">
+                        <q-item-section class="param-label-col">
+                          <q-item-label>{{ param.label }}:</q-item-label>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                            @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                        </q-item-section>
+                        <q-item-section side class="param-unit-col">
+                          <span v-if="param.unit">{{ param.unit }}</span>
+                          <span v-else>—</span>
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                    <div class="q-mt-md">
                       <div class="text-subtitle2 q-mb-sm">Поворот</div>
-                      <q-btn-group spread>
-                        <q-btn label="↺ 90°" @click="rotateLeft" color="primary" />
-                        <q-btn label="↻ 90°" @click="rotateRight" color="primary" />
+                      <q-btn-group spread :dark="isDarkTheme">
+                        <q-btn :dark="isDarkTheme" label="↺ 90°" @click="rotateLeft90" />
+                        <q-btn :dark="isDarkTheme" label="↻ 90°" @click="rotateRight90" />
+                        <q-btn :dark="isDarkTheme" label="↺ 180°" @click="rotateLeft180" />
+                        <q-btn :dark="isDarkTheme" label="↻ 180°" @click="rotateRight180" />
                       </q-btn-group>
                     </div>
-
-                    <div class="layer-controls q-mt-md">
+                    <div class="q-mt-md">
                       <div class="text-subtitle2 q-mb-sm">Слои</div>
-                      <q-btn-group>
-                        <q-btn icon="vertical_align_top" @click="moveToTop" label="Вверх" />
-                        <q-btn icon="arrow_upward" @click="moveUp" label="Выше" />
-                        <q-btn icon="arrow_downward" @click="moveDown" label="Ниже" />
-                        <q-btn icon="vertical_align_bottom" @click="moveToBottom" label="Вниз" />
+                      <q-btn-group :dark="isDarkTheme">
+                        <q-btn :dark="isDarkTheme" icon="vertical_align_top" @click="moveToTop" label="Вверх" />
+                        <q-btn :dark="isDarkTheme" icon="arrow_upward" @click="moveUp" label="Выше" />
+                        <q-btn :dark="isDarkTheme" icon="arrow_downward" @click="moveDown" label="Ниже" />
+                        <q-btn :dark="isDarkTheme" icon="vertical_align_bottom" @click="moveToBottom" label="Вниз" />
                       </q-btn-group>
                     </div>
                   </div>
                 </q-tab-panel>
+                <q-tab-panel name="callout">
+                  <div class="single-element-info">
+                    <q-list dense>
+                      <q-item v-for="param in getElementParametersCallout(selectedElement)" :key="param.name">
+                        <q-item-section class="param-label-col">
+                          <q-item-label>{{ param.label }}:</q-item-label>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                            @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                        </q-item-section>
+                      </q-item>
+                    </q-list>
+                  </div>
+                </q-tab-panel>
                 <q-tab-panel name="links">
                   <div v-if="selectedElement?.ports && selectedElement.ports.length > 0" class="connections-info">
-                    <div class="text-subtitle2 q-mt-md q-mb-sm">Связи</div>
-                    <q-separator class="q-mb-sm" />
-
                     <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
                       <q-icon :name="port.isConnected && port.isConnected() ? 'link' : 'link_off'"
                         :color="port.isConnected && port.isConnected() ? 'positive' : 'negative'" size="16px" />
@@ -406,6 +448,25 @@ const updateSelection = (newSelection, skipRender = false) => {
   }
 };
 
+const updateParameters = () => {
+  // Принудительно обновляем выбранные элементы
+  const currentSelected = selectedElements.value;
+  if (currentSelected.length > 0) {
+    // Создаем копии, чтобы Vue увидел изменения
+    selectedElements.value = [...currentSelected];
+
+    // Обновляем параметры каждого элемента
+    currentSelected.forEach((el) => {
+      if (el.x !== undefined) {
+        // Триггерим обновление
+        el.x = el.x;
+        el.y = el.y;
+        el.rotation = el.rotation;
+      }
+    });
+  }
+}
+
 // ========== РИСОВАНИЕ ПРИЗРАКА ==========
 const drawGhost = () => {
   if (!ghostElement || !renderer) return;
@@ -455,6 +516,14 @@ const getElementParameters = (element) => {
   return element && typeof element.getParameters === 'function' ? element.getParameters() : [];
 };
 
+const getElementParametersPositions = (element) => {
+  return element && typeof element.getParametersPosition === 'function' ? element.getParametersPosition() : [];
+};
+
+const getElementParametersCallout = (element) => {
+  return element && typeof element.getParametersCallout === 'function' ? element.getParametersCallout() : [];
+};
+
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
 
@@ -487,28 +556,22 @@ const clearSelection = () => {
 const copySelected = () => {
   if (selectedElements.value.length === 0) return;
 
+  // Проверяем, есть ли среди выбранных элементов группы
+  const hasGroup = selectedElements.value.some(el => el instanceof Group);
+
+  if (hasGroup) {
+    showNotify({
+      type: 'warning',
+      message: 'Нельзя копировать группы! Сначала разгруппируйте их (кнопка "Разгруппировать")',
+      position: 'top',
+      timeout: 3000
+    });
+    return;
+  }
+
   clipboardElements.value = selectedElements.value.map(element => {
-    // Получаем полный JSON с сохранением всех данных
-    const json = element.toJSON();
-
-    // Для группы - убеждаемся, что элементы сохранены
-    if (element instanceof Group) {
-      return {
-        ...json,
-        type: 'group',
-        elements: element.elements?.map(el => el.toJSON()) || [],
-        callouts: element.callouts?.map(c => ({
-          id: c.id,
-          elementId: c.elementId,
-          text: c.text,
-          x: c.x,
-          y: c.y
-        })) || []
-      };
-    }
-
-    // Для обычных элементов
-    return json;
+    const json = element.toJSON?.() || element;
+    return { ...json, callouts: [] };
   });
 
   showNotify({
@@ -526,91 +589,30 @@ const pasteElements = () => {
   const offset = 50;
 
   clipboardElements.value.forEach(json => {
-    let newElement;
+    // Создаем новый JSON с новыми ID
+    const newJson = {
+      ...json,
+      id: ++nextElementId,
+      x: json.x + offset,
+      y: json.y + offset,
+      ports: (json.ports || []).map(port => ({
+        ...port,
+        id: ++nextPortId,
+        connectedElementId: null,
+        connectedPortId: null
+      })),
+      callouts: []
+    };
 
-    // Для группы - создаем через фабрику с новыми ID для всех элементов
-    if (json.type === 'group') {
-      // Создаем копию JSON с новыми ID для группы и всех её элементов
-      const newJson = {
-        ...json,
-        id: ++nextElementId,
-        x: json.x + offset,
-        y: json.y + offset,
-        callouts: (json.callouts || []).map(c => ({
-          ...c,
-          id: Date.now() + Math.random(),
-          elementId: null // Будет установлено при создании
-        }))
-      };
+    const newElement = ElementFactory.createFromJSON(newJson);
 
-      // Рекурсивно обновляем ID всех элементов внутри группы
-      if (newJson.elements) {
-        const updateIdsRecursive = (element) => {
-          const newEl = { ...element };
-          newEl.id = ++nextElementId;
-
-          if (newEl.ports) {
-            newEl.ports = newEl.ports.map(port => ({
-              ...port,
-              id: ++nextPortId,
-              connectedElementId: null,
-              connectedPortId: null
-            }));
-          }
-
-          if (newEl.callouts) {
-            newEl.callouts = newEl.callouts.map(c => ({
-              ...c,
-              id: Date.now() + Math.random(),
-              elementId: newEl.id
-            }));
-          }
-
-          if (newEl.type === 'group' && newEl.elements) {
-            newEl.elements = newEl.elements.map(updateIdsRecursive);
-          }
-
-          return newEl;
-        };
-
-        newJson.elements = newJson.elements.map(updateIdsRecursive);
-      }
-
-      newElement = ElementFactory.createFromJSON(newJson);
-
-      // Обновляем имя группы
-      if (newElement.name) {
-        const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
-        newElement.name = `${baseName} (копия)`;
-      }
-
-    } else {
-      // Для обычных элементов
-      const newJson = {
-        ...json,
-        id: ++nextElementId,
-        x: json.x + offset,
-        y: json.y + offset,
-        ports: (json.ports || []).map(port => ({
-          ...port,
-          id: ++nextPortId,
-          connectedElementId: null,
-          connectedPortId: null
-        })),
-        callouts: []
-      };
-
-      newElement = ElementFactory.createFromJSON(newJson);
-
-      if (newElement.name) {
-        const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
-        newElement.name = `${baseName} (копия)`;
-      }
-
-      newElement.updatePorts?.();
-      newElement.addCallout?.(newElement.x, newElement.y - 150);
+    if (newElement.name) {
+      const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
+      newElement.name = `${baseName} (копия)`;
     }
 
+    newElement.updatePorts?.();
+    newElement.addCallout?.(newElement.x, newElement.y - 150);
     newElements.push(newElement);
   });
 
@@ -814,10 +816,10 @@ const onDrop = (e) => {
 
 // ========== ОПЕРАЦИИ С ЭЛЕМЕНТАМИ ==========
 
-const rotateElement = (direction) => {
+const rotateElement = (direction, angle) => {
   if (!selectedElement.value) return;
 
-  const delta = direction === 'left' ? -90 : 90;
+  const delta = direction === 'left' ? -angle : angle;
 
   // Для группы - поворачиваем каждый элемент внутри
   if (selectedElement.value instanceof Group) {
@@ -895,15 +897,19 @@ const rotateElement = (direction) => {
   }
 
   const currentElement = selectedElement.value;
-  updateSelection([]);
-  setTimeout(() => {
-    updateSelection([currentElement]);
-  }, 10);
-
+  // updateSelection([]);
+  // setTimeout(() => {
+  //   updateSelection([currentElement]);
+  // }, 10);
+  updateParameters();
+  updateSelection([currentElement]);
   scheduleRender();
 };
-const rotateLeft = () => rotateElement('left');
-const rotateRight = () => rotateElement('right');
+const rotateLeft90 = () => rotateElement('left', 90);
+const rotateRight90 = () => rotateElement('right', 90);
+
+const rotateLeft180 = () => rotateElement('left', 180);
+const rotateRight180 = () => rotateElement('right', 180);
 
 const moveToTop = () => {
   if (selectedElement.value) {
@@ -1019,23 +1025,7 @@ const onCanvasMouseMove = (e) => {
 const onCanvasMouseUp = (e) => {
   if (dragType) return;
   interactionManager?.onMouseUp(e);
-
-  // Принудительно обновляем выбранные элементы
-  const currentSelected = selectedElements.value;
-  if (currentSelected.length > 0) {
-    // Создаем копии, чтобы Vue увидел изменения
-    selectedElements.value = [...currentSelected];
-
-    // Обновляем параметры каждого элемента
-    currentSelected.forEach((el) => {
-      if (el.x !== undefined) {
-        // Триггерим обновление
-        el.x = el.x;
-        el.y = el.y;
-      }
-    });
-  }
-
+  updateParameters();
   updateSelection([...renderer?.selectedElements || []]);
   scheduleRender();
 };
