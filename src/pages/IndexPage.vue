@@ -504,6 +504,19 @@ const copySelected = () => {
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
 
+  // Проверяем, есть ли среди вставляемых элементов группы
+  const hasGroup = clipboardElements.value.some(el => el.type === 'group');
+
+  if (hasGroup) {
+    showNotify({
+      type: 'warning',
+      message: 'Нельзя вставлять группы!',
+      position: 'bottom-right',
+      timeout: 3000
+    });
+    return;
+  }
+
   const newElements = [];
   const offset = 50;
 
@@ -864,6 +877,19 @@ const deleteSelected = () => {
 const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
 
+  // Проверяем, есть ли среди выбранных элементов группы
+  const hasGroup = selectedElements.value.some(el => el instanceof Group);
+
+  if (hasGroup) {
+    showNotify({
+      type: 'warning',
+      message: 'Нельзя создавать группы из групп! Выберите только обычные элементы.',
+      position: 'bottom-right',
+      timeout: 3000
+    });
+    return;
+  }
+
   const group = new Group(++nextGroupId, [...selectedElements.value]);
   group.updatePorts?.();
 
@@ -877,6 +903,20 @@ const ungroupSelected = () => {
   if (!isGroupSelected.value) return;
 
   const group = selectedElement.value;
+
+  // Проверяем, есть ли внутри группы другие группы
+  const hasNestedGroups = group.elements && group.elements.some(el => el instanceof Group);
+
+  if (hasNestedGroups) {
+    showNotify({
+      type: 'warning',
+      message: 'Нельзя разгруппировать группу, содержащую другие группы! Сначала разгруппируйте вложенные группы.',
+      position: 'bottom-right',
+      timeout: 3000
+    });
+    return;
+  }
+
   const groupElements = group.getElements();
   elements.value = [...elements.value.filter(el => el.id !== group.id), ...groupElements];
   updateSelection(groupElements);
