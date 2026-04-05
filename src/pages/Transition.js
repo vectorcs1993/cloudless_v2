@@ -1,0 +1,177 @@
+import { DuctDirect } from './DuctDirect.js';
+import { Port } from './Port.js';
+
+// ========== ПЕРЕХОД ==========
+export class Transition extends DuctDirect {
+  constructor(id, x_px, y_px, sectionType = 'round', a1 = 125, a2 = 200, length = 500, height = 125) {
+    super(id, x_px, y_px, sectionType, a1, length, height);
+    this.type = 'transition';
+    this.name = `Переход ${id}`;
+    this._a2 = a2;
+  }
+
+  get a2() { return this._a2; }
+  set a2(value) {
+    if (this._a2 === value) return;
+    this._a2 = value;
+    this.updatePorts();
+    this.updateCalloutText();
+  }
+
+  getHeight() {
+    const avgSize = (this._a + this._a2) / 2;
+    return this.mmToPx(avgSize);
+  }
+
+  getSizeAt(t) {
+    return this._a + (this._a2 - this._a) * t;
+  }
+
+  getCalloutText() {
+    const length_m = this._b / 1000;
+    const size1_m = this._a / 1000;
+    const size2_m = this._a2 / 1000;
+    const avgArea = ((size1_m + size2_m) / 2 * length_m).toFixed(2);
+    const typeText = this._sectionType === 'round' ? '⌀' : '□';
+    return `${this.name}\n${typeText}${this._a} → ${typeText}${this._a2} мм\nL: ${this._b} мм\nSср: ${avgArea} м²`;
+  }
+
+  getParameters() {
+    return [
+      ...super.getParameters(),
+      {
+        name: 'a2',
+        label: `A2`,
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._a2,
+        unit: 'мм'
+      },
+    ];
+  }
+
+  getPorts() {
+    const width_px = this.getWidth();
+    const height1_px = this.mmToPx(this._a);
+    const height2_px = this.mmToPx(this._a2);
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+
+    const ports = [];
+
+    const inletPos = this.rotatePoint(
+      topLeft.x,
+      centerY,
+      centerX, centerY, rotation
+    );
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.id, 'inlet', 'left', 0, height1_px / 2, inletPos.x, inletPos.y
+    ));
+
+    const outletPos = this.rotatePoint(
+      topLeft.x + width_px,
+      centerY,
+      centerX, centerY, rotation
+    );
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.id, 'outlet', 'right', width_px, height2_px / 2, outletPos.x, outletPos.y
+    ));
+
+    return ports;
+  }
+
+  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const width_px = this.getWidth();
+    const height1_px = this.mmToPx(this._a);
+    const height2_px = this.mmToPx(this._a2);
+    const topLeft = this.getTopLeft();
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+
+    // Унифицированная отрисовка - всегда используем centerY для оси
+    ctx.moveTo(topLeft.x, centerY - height1_px / 2);
+    ctx.lineTo(topLeft.x + width_px, centerY - height2_px / 2);
+    ctx.lineTo(topLeft.x + width_px, centerY + height2_px / 2);
+    ctx.lineTo(topLeft.x, centerY + height1_px / 2);
+    ctx.closePath();
+
+    if (showColors) {
+      this.setFillStyle(ctx, isSelected, isDarkTheme);
+    }
+    this.setStrokeStyle(ctx, scale, isSelected, isDarkTheme);
+
+    // Рисуем осевую линию
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+    ctx.strokeStyle = isDarkTheme ? '#888888' : '#aaaaaa';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([2 / scale, 4 / scale]);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    if (showElementAxes) {
+      this.drawCenterLines(ctx, scale, isDarkTheme);
+    }
+  }
+
+  drawCenterLines(ctx, scale, isDarkTheme) {
+    const width = this.getWidth();
+    const centerX = this.x;
+    const centerY = this.y;
+    const rotation = this.rotation || 0;
+    const topLeft = this.getTopLeft();
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width, centerY);
+
+    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  hitTest(worldX, worldY, ctx) {
+    const width_px = this.getWidth();
+    const height1_px = this.mmToPx(this._a);
+    const height2_px = this.mmToPx(this._a2);
+    const maxHeight = Math.max(height1_px, height2_px);
+
+    const local = this.transformToLocalCoords(worldX, worldY);
+    const topLeft = this.getTopLeft();
+
+    return local.x >= topLeft.x && local.x <= topLeft.x + width_px &&
+      local.y >= topLeft.y && local.y <= topLeft.y + maxHeight;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      a2: this._a2,
+    };
+  }
+}

@@ -67,7 +67,6 @@ export class Fan extends DuctDirect {
       type: 'fan',
       flow: this.flow,
       pressure: this.pressure,
-      length_mm: this._b
     };
   }
 }

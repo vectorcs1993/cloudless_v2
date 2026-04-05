@@ -4,61 +4,69 @@
       <template v-slot:before>
         <div class="toolbar">
           <h3>HVAC Editor</h3>
-          <div class="tab-settings">
-            <div class="settings-grid">
-              <label>Масштаб размеров (мм/px):</label>
-              <div>
-                <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined class="inline-input"
-                  debounce="500" />
-                <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
-              </div>
+          <q-card :dark="isDarkTheme" square>
+            <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
+              <q-tab name="library" label="Библиотека" />
+              <q-tab name="settings" label="Настройки" />
+            </q-tabs>
+            <q-separator />
+            <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" animated>
+              <q-tab-panel name="library">
+                <div class="drag-items">
+                  <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
+                    @dragend="onDragEnd">
+                    <div class="drag-item-preview" v-html="item.svg"></div>
+                    <span class="drag-item-label">{{ item.label }}</span>
+                  </div>
+                </div>
+              </q-tab-panel>
+              <q-tab-panel name="settings">
+                <div class="settings-grid">
+                  <label>Масштаб размеров (мм/px):</label>
+                  <div>
+                    <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
+                      class="inline-input" debounce="500" />
+                    <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+                  </div>
 
-              <label>Масштаб сетки:</label>
-              <div>
-                <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined class="inline-input"
-                  debounce="300" @update:model-value="onGridStepChange" />
-                <span class="hint-text">px</span>
-              </div>
+                  <label>Масштаб сетки:</label>
+                  <div>
+                    <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
+                      class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
+                    <span class="hint-text">px</span>
+                  </div>
 
-              <label>Темная тема:</label>
-              <div><q-toggle v-model="isDarkTheme" /></div>
+                  <label>Темная тема:</label>
+                  <div><q-toggle v-model="isDarkTheme" /></div>
 
-              <label>Сетка:</label>
-              <div><q-toggle v-model="showGrid" /></div>
+                  <label>Сетка:</label>
+                  <div><q-toggle v-model="showGrid" /></div>
 
-              <label>Показать порты:</label>
-              <div><q-toggle v-model="showPorts" /></div>
+                  <label>Показать порты:</label>
+                  <div><q-toggle v-model="showPorts" /></div>
 
-              <template v-if="showPorts">
-                <label>Привязка к портам:</label>
-                <div><q-toggle v-model="snapToPorts" /></div>
-              </template>
+                  <template v-if="showPorts">
+                    <label>Привязка к портам:</label>
+                    <div><q-toggle v-model="snapToPorts" /></div>
+                  </template>
 
-              <template v-if="showPorts && snapToPorts">
-                <label>Автообновление связей:</label>
-                <div><q-toggle v-model="autoUpdateConnections" /></div>
-              </template>
+                  <template v-if="showPorts && snapToPorts">
+                    <label>Автообновление связей:</label>
+                    <div><q-toggle v-model="autoUpdateConnections" /></div>
+                  </template>
 
-              <label>Показать выноски:</label>
-              <div><q-toggle v-model="showCallouts" /></div>
+                  <label>Показать выноски:</label>
+                  <div><q-toggle v-model="showCallouts" /></div>
 
-              <label>Показывать цвета:</label>
-              <div><q-toggle v-model="showColors" /></div>
+                  <label>Показывать цвета:</label>
+                  <div><q-toggle v-model="showColors" /></div>
 
-              <label>Показывать оси элементов:</label>
-              <div><q-toggle v-model="showElementAxes" /></div>
-            </div>
-          </div>
-
-          <div class="drag-panel">
-            <div class="drag-items">
-              <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
-                @dragend="onDragEnd">
-                <div class="drag-item-preview" v-html="item.svg"></div>
-                <span class="drag-item-label">{{ item.label }}</span>
-              </div>
-            </div>
-          </div>
+                  <label>Показывать оси элементов:</label>
+                  <div><q-toggle v-model="showElementAxes" /></div>
+                </div>
+              </q-tab-panel>
+            </q-tab-panels>
+          </q-card>
 
           <div class="save-controls">
             <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
@@ -82,14 +90,17 @@
             @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
           </canvas>
 
-          <q-card :dark="isDarkTheme" v-if="selectedElements.length > 0" class="selected-info-card" flat bordered>
-            <q-card-section>
-              <div class="row items-center justify-between">
-                <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
-                <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
-              </div>
+          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat bordered>
+            <q-card-section class="row items-center justify-between">
+              <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
+              <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
+            </q-card-section>
 
-              <q-separator class="q-mt-sm q-mb-md" />
+            <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
+              <q-tab name="parameters" label="Параметры" />
+              <q-tab name="links" label="Связи" />
+            </q-tabs>
+            <q-card-section>
 
               <div v-if="selectedElements.length === 1" class="single-element-info">
                 <q-list :dark="isDarkTheme" dense>
@@ -183,6 +194,9 @@
               </div>
             </q-card-section>
           </q-card>
+
+
+
         </div>
       </template>
     </q-splitter>
@@ -199,6 +213,7 @@ import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
 import { Group, BaseElement } from './Elements.js';
 import { DuctDirect } from './DuctDirect.js';
+import { Transition } from './Transition.js';
 import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
@@ -272,8 +287,21 @@ const dragItems = Object.freeze([
       <rect x="12" y="28" width="40" height="8" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
       <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
     </svg>`
+  },
+  {
+    type: 'transition',
+    label: 'Переход',
+    color: '#e67e22',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+      <polygon points="12,24 52,20 52,44 12,40" fill="#e67e22" stroke="#2c3e50" stroke-width="2"/>
+      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
+      <text x="32" y="54" font-size="8" text-anchor="middle" fill="#fff">${'⌀'}125→200</text>
+    </svg>`
   }
 ]);
+
 
 // Состояние
 const splitterModel = ref(15);
@@ -294,6 +322,8 @@ let isUpdatingSelection = false;
 let renderFrameRequest = null;
 
 // Refs
+const tabEditor = ref('library');
+const tabElement = ref('info');
 const mainCanvas = ref(null);
 const elements = shallowRef([]);
 const selectedElements = shallowRef([]);
@@ -430,9 +460,23 @@ const getElementParameters = (element) => {
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
+
+  console.log(`Изменяем ${paramName} на ${value}`);
   selectedElement.value[paramName] = value;
+
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
+
+  if (connectionManager && autoUpdateConnections.value) {
+    connectionManager.updateAllPortsAndConnections(40);
+  }
+
+  // Принудительно обновляем UI панели без сброса выделения
+  if (selectedElement.value) {
+    // Создаем новый массив, чтобы Vue увидел изменения
+    selectedElements.value = [...selectedElements.value];
+  }
+
   scheduleRender();
 };
 
@@ -610,6 +654,7 @@ const createGhostElement = (itemType, worldX, worldY) => {
     case 'tee': return new Tee(-1, worldX, worldY);
     case 'elbow': return new Elbow(-1, worldX, worldY);
     case 'cross': return new Cross(-1, worldX, worldY);
+    case 'transition': return new Transition(-1, worldX, worldY);
     default: return null;
   }
 };
@@ -663,7 +708,8 @@ const onDrop = (e) => {
       fan: () => new Fan(++nextElementId, worldPos.x, worldPos.y),
       tee: () => new Tee(++nextElementId, worldPos.x, worldPos.y),
       elbow: () => new Elbow(++nextElementId, worldPos.x, worldPos.y),
-      cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y)
+      cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y),
+      transition: () => new Transition(++nextElementId, worldPos.x, worldPos.y)
     };
 
     const creator = elementCreators[dragType];

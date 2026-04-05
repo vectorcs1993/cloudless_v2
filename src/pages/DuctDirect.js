@@ -2,17 +2,35 @@ import { BaseElement, DuctBase } from './Elements.js';
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
 export class DuctDirect extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', width = 125, length = 3000) {
+  constructor(id, x_px, y_px, sectionType = 'round', width = 125, length = 3000, height = 125) {
     super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, width);
     this._b = length;
+    this._c = height; // Высота для прямоугольного сечения (только для расчетов)
   }
 
   get b() { return this._b; }
-
   set b(value) {
     if (this._b === value) return;
     this._b = value;
     this.updatePorts();
+    this.updateCalloutText();
+  }
+
+  get c() { return this._c; }
+  set c(value) {
+    if (this._c === value) return;
+    this._c = value;
+    this.updateCalloutText();
+  }
+
+  // Расчет эквивалентного диаметра для прямоугольного сечения
+  getEquivalentDiameter() {
+    if (this._sectionType === 'round') {
+      return this._a;
+    } else {
+      // Формула: Dэкв = 2 * a * c / (a + c)
+      return (2 * this._a * this._c) / (this._a + this._c);
+    }
   }
 
   getWidth() {
@@ -20,18 +38,26 @@ export class DuctDirect extends DuctBase {
   }
 
   getHeight() {
+    // Для отрисовки используем ТОЛЬКО a (ширина/диаметр трубы)
+    // c используется только для расчетов
     return this.mmToPx(this._a);
   }
 
   getCalloutText() {
-    const length_m = this._b / 1000;
-    const size_m = this._a / 1000;
-    const area = (length_m * size_m).toFixed(2);
-    return `${super.getCalloutText()}\nB: ${this._b} мм\nS: ${area} м²`;
+    let text = `${super.getCalloutText()}\nB: ${this._b} мм`;
+
+    if (this._sectionType === 'rectangular') {
+      const eqDiameter = this.getEquivalentDiameter();
+      text += `\n${this._a}x${this._c} мм\nDэкв: ${eqDiameter.toFixed(0)} мм`;
+    } else {
+      text += `\n⌀${this._a} мм`;
+    }
+
+    return text;
   }
 
   getParameters() {
-    return [
+    const params = [
       ...super.getParameters(),
       {
         name: 'b',
@@ -43,13 +69,27 @@ export class DuctDirect extends DuctBase {
         unit: 'мм'
       },
     ];
+    if (this._sectionType === 'rectangular') {
+      params.push({
+        name: 'c',
+        label: 'C',
+        type: 'number',
+        step: 10,
+        min: 20,
+        value: this._c,
+        unit: 'мм'
+      });
+    }
+    return params;
   }
 
   getPorts() {
+    // Порты создаются на основе a (ширина трубы), а не c
     return this.createLinearPorts(this.getWidth(), this.getHeight());
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+    // Отрисовка использует a (ширина трубы), c игнорируется
     this.drawRectangular(ctx, this.getWidth(), this.getHeight(), isSelected, scale, showColors);
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
@@ -88,7 +128,8 @@ export class DuctDirect extends DuctBase {
   toJSON() {
     return {
       ...super.toJSON(),
-      b: this._b
+      b: this._b,
+      c: this._c
     };
   }
 }
