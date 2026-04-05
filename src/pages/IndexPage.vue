@@ -739,24 +739,40 @@ const rotateElement = (direction) => {
     const centerY = group.y;
     const angleRad = delta * Math.PI / 180;
 
+    // Сохраняем позиции выносок
+    const calloutPositions = [];
+    group.elements.forEach(element => {
+      if (element.callouts && element.callouts.length > 0) {
+        calloutPositions.push({
+          element,
+          callout: element.callouts[0],
+          x: element.callouts[0].x,
+          y: element.callouts[0].y
+        });
+      }
+    });
+
     // Поворачиваем каждый элемент вокруг центра группы
     group.elements.forEach(element => {
-      // Вычисляем новую позицию
       const dx = element.x - centerX;
       const dy = element.y - centerY;
       element.x = centerX + (dx * Math.cos(angleRad) - dy * Math.sin(angleRad));
       element.y = centerY + (dx * Math.sin(angleRad) + dy * Math.cos(angleRad));
-
-      // Поворачиваем сам элемент
       element.rotation = (element.rotation + delta) % 360;
 
-      // Обновляем
-      element.updatePorts?.();
-      element.updateCalloutText?.();
+      if (element.updatePorts) element.updatePorts();
     });
 
-    // Обновляем границы группы
+    // Восстанавливаем позиции выносок (они не должны поворачиваться)
+    calloutPositions.forEach(({ element, callout, x, y }) => {
+      if (element.callouts[0] === callout) {
+        callout.x = x;
+        callout.y = y;
+      }
+    });
+
     group.updateBounds();
+    group.updateCalloutText();
   } else {
     // Для обычного элемента
     selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
@@ -764,12 +780,10 @@ const rotateElement = (direction) => {
     selectedElement.value.updateCalloutText?.();
   }
 
-  // Обновляем связи
   if (connectionManager) {
     connectionManager.updateAllPortsAndConnections(40);
   }
 
-  // Обновляем UI
   const currentElement = selectedElement.value;
   updateSelection([]);
   setTimeout(() => {

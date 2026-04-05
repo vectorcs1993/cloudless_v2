@@ -583,7 +583,7 @@ export class Group extends BaseElement {
       return;
     }
 
-    // Перемещаем выноску группы (без трансформации)
+    // Перемещаем выноску группы
     if (this.callouts && this.callouts.length > 0) {
       this.callouts.forEach(callout => {
         callout.x += deltaX;
@@ -591,13 +591,14 @@ export class Group extends BaseElement {
       });
     }
 
-    // Рекурсивная функция для перемещения элемента
+    // Перемещаем все элементы и их выноски
     const moveElementRecursive = (element) => {
       if (!element) return;
 
       element.x += deltaX;
       element.y += deltaY;
 
+      // Перемещаем выноски элемента
       if (element.callouts && element.callouts.length > 0) {
         element.callouts.forEach(callout => {
           callout.x += deltaX;

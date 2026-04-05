@@ -34,24 +34,59 @@ export class InteractionManager {
 
   findElementAt(x, y) {
     const ctx = this.canvas.getContext('2d');
-    for (let i = this.elements.value.length - 1; i >= 0; i--) {
-      const element = this.elements.value[i];
+
+    const searchInElement = (element) => {
       if (element.hitTest(x, y, ctx)) {
         return element;
       }
+
+      // Если элемент - группа, проверяем её элементы
+      if (element.type === 'group' && element.elements) {
+        for (let i = element.elements.length - 1; i >= 0; i--) {
+          const result = searchInElement(element.elements[i]);
+          if (result) return result;
+        }
+      }
+
+      return null;
+    };
+
+    for (let i = this.elements.value.length - 1; i >= 0; i--) {
+      const result = searchInElement(this.elements.value[i]);
+      if (result) return result;
     }
+
     return null;
   }
 
   findCalloutAt(x, y) {
-    for (const element of this.elements.value) {
+    // Рекурсивная функция для поиска выноски во всех элементах, включая группы
+    const searchInElement = (element) => {
+      // Проверяем выноски текущего элемента
       for (const callout of element.callouts) {
         const hitResult = callout.hitTest(x, y, this.options.scale.value, element);
         if (hitResult.hit) {
           return { callout, element, isHandle: hitResult.isHandle };
         }
       }
+
+      // Если элемент - группа, рекурсивно ищем в её элементах
+      if (element.type === 'group' && element.elements) {
+        for (const child of element.elements) {
+          const result = searchInElement(child);
+          if (result) return result;
+        }
+      }
+
+      return null;
+    };
+
+    // Ищем во всех элементах
+    for (const element of this.elements.value) {
+      const result = searchInElement(element);
+      if (result) return result;
     }
+
     return null;
   }
 
@@ -76,10 +111,36 @@ export class InteractionManager {
     this.isDragging = true;
     this.draggingCallout = calloutHit;
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
-    this.dragStartElementPos = { x: calloutHit.callout.x, y: calloutHit.callout.y };
+    this.dragStartCalloutPos = { x: calloutHit.callout.x, y: calloutHit.callout.y };
     this.draggingCalloutElement = calloutHit.element;
     this.canvas.style.cursor = 'grabbing';
     this.renderer.draw();
+  }
+
+  // Добавьте метод для поиска родительской группы:
+  findParentGroup(element) {
+    for (const el of this.elements.value) {
+      if (el.type === 'group' && el.elements && el.elements.includes(element)) {
+        return el;
+      }
+      // Рекурсивный поиск во вложенных группах
+      if (el.type === 'group' && el.elements) {
+        const found = this.findParentGroupInChildren(el, element);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  findParentGroupInChildren(group, targetElement) {
+    for (const el of group.elements) {
+      if (el === targetElement) return group;
+      if (el.type === 'group' && el.elements) {
+        const found = this.findParentGroupInChildren(el, targetElement);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   startDrag(e) {
@@ -284,11 +345,16 @@ export class InteractionManager {
       const startWorldPos = this.renderer.screenToWorld(this.dragStartMouseScreen.x, this.dragStartMouseScreen.y);
       const deltaX = currentWorldPos.x - startWorldPos.x;
       const deltaY = currentWorldPos.y - startWorldPos.y;
-      this.draggingCallout.callout.x = this.dragStartElementPos.x + deltaX;
-      this.draggingCallout.callout.y = this.dragStartElementPos.y + deltaY;
+
+      // Перемещаем выноску
+      this.draggingCallout.callout.x = this.dragStartCalloutPos.x + deltaX;
+      this.draggingCallout.callout.y = this.dragStartCalloutPos.y + deltaY;
+
+      // Обновляем текст выноски (на случай если он изменился)
       if (this.draggingCalloutElement) {
         this.draggingCalloutElement.updateCalloutText();
       }
+
       this.renderer.draw();
       return;
     }
@@ -399,6 +465,8 @@ export class InteractionManager {
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
+      this.draggingCalloutParentGroup = null;
+
       if (this.canvas) this.canvas.style.cursor = '';
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const rect = this.canvas.getBoundingClientRect();
