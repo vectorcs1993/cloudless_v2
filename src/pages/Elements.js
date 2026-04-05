@@ -395,6 +395,12 @@ export class Group extends BaseElement {
     super(groupId, 'group', 0, 0, `Группа ${groupId}`);
     this.elements = elements || [];
     this.updateBounds();
+
+    // Добавляем выноску для группы
+    if (this.width > 0 && this.height > 0) {
+      const topLeft = this.getTopLeft();
+      this.addCallout(this.x, topLeft.y - 50);
+    }
   }
 
   updateBounds() {
@@ -409,55 +415,73 @@ export class Group extends BaseElement {
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
 
-    const getElementBounds = (element) => {
+    const processElement = (element) => {
       if (!element) return;
 
-      // Для группы рекурсивно получаем границы её элементов
       if (element.type === 'group') {
-        if (element.elements) {
-          element.elements.forEach(getElementBounds);
+        if (element.width > 0 && element.height > 0) {
+          const halfW = element.width / 2;
+          const halfH = element.height / 2;
+          const corners = [
+            { x: element.x - halfW, y: element.y - halfH },
+            { x: element.x + halfW, y: element.y - halfH },
+            { x: element.x + halfW, y: element.y + halfH },
+            { x: element.x - halfW, y: element.y + halfH }
+          ];
+
+          for (const corner of corners) {
+            minX = Math.min(minX, corner.x);
+            minY = Math.min(minY, corner.y);
+            maxX = Math.max(maxX, corner.x);
+            maxY = Math.max(maxY, corner.y);
+          }
         }
-        return;
-      }
 
-      // Получаем реальные границы элемента с учетом поворота
-      const centerX = element.x;
-      const centerY = element.y;
-      const width = element.getWidth();
-      const height = element.getHeight();
-      const rotation = (element.rotation || 0) * Math.PI / 180;
+        if (element.elements) {
+          element.elements.forEach(processElement);
+        }
+      } else {
+        const centerX = element.x;
+        const centerY = element.y;
+        const width = element.getWidth();
+        const height = element.getHeight();
+        const rotation = (element.rotation || 0) * Math.PI / 180;
 
-      // Четыре угла элемента
-      const corners = [
-        { x: -width / 2, y: -height / 2 },
-        { x: width / 2, y: -height / 2 },
-        { x: width / 2, y: height / 2 },
-        { x: -width / 2, y: height / 2 }
-      ];
+        const corners = [
+          { x: -width / 2, y: -height / 2 },
+          { x: width / 2, y: -height / 2 },
+          { x: width / 2, y: height / 2 },
+          { x: -width / 2, y: height / 2 }
+        ];
 
-      for (const corner of corners) {
-        const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
-        const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
-        const worldX = centerX + rotatedX;
-        const worldY = centerY + rotatedY;
+        for (const corner of corners) {
+          const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
+          const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
+          const worldX = centerX + rotatedX;
+          const worldY = centerY + rotatedY;
 
-        minX = Math.min(minX, worldX);
-        minY = Math.min(minY, worldY);
-        maxX = Math.max(maxX, worldX);
-        maxY = Math.max(maxY, worldY);
+          minX = Math.min(minX, worldX);
+          minY = Math.min(minY, worldY);
+          maxX = Math.max(maxX, worldX);
+          maxY = Math.max(maxY, worldY);
+        }
       }
     };
 
-    // Обрабатываем все элементы
-    this.elements.forEach(getElementBounds);
+    this.elements.forEach(processElement);
 
     if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
       this.x = (minX + maxX) / 2;
       this.y = (minY + maxY) / 2;
       this.width = maxX - minX;
       this.height = maxY - minY;
+
+      // Обновляем позицию выноски, но НЕ создаем новую
+      if (this.callouts && this.callouts.length > 0) {
+        // Просто обновляем текст, позицию не меняем автоматически
+        this.updateCalloutText();
+      }
     } else {
-      console.warn('Invalid bounds for group:', this.id);
       this.width = 0;
       this.height = 0;
     }
@@ -503,7 +527,26 @@ export class Group extends BaseElement {
   }
 
   getCalloutText() {
-    return `${this.name}\nКоличество элементов: ${this.elements ? this.elements.length : 0}`;
+    const elementsCount = this.getAllElementsCount();
+    return `${this.name}\nЭлементов: ${elementsCount}`;
+  }
+
+  getAllElementsCount() {
+    let count = 0;
+    const countElements = (element) => {
+      if (element.type === 'group') {
+        if (element.elements) {
+          element.elements.forEach(countElements);
+        }
+      } else {
+        count++;
+      }
+    };
+
+    if (this.elements) {
+      this.elements.forEach(countElements);
+    }
+    return count;
   }
 
   getParameters() {
@@ -538,15 +581,21 @@ export class Group extends BaseElement {
       return;
     }
 
+    // Перемещаем выноску группы
+    if (this.callouts && this.callouts.length > 0) {
+      this.callouts.forEach(callout => {
+        callout.x += deltaX;
+        callout.y += deltaY;
+      });
+    }
+
     // Рекурсивная функция для перемещения элемента и всех его вложенных групп
     const moveElementRecursive = (element) => {
       if (!element) return;
 
-      // Перемещаем текущий элемент
       element.x += deltaX;
       element.y += deltaY;
 
-      // Перемещаем выноски
       if (element.callouts && element.callouts.length > 0) {
         element.callouts.forEach(callout => {
           callout.x += deltaX;
@@ -554,36 +603,34 @@ export class Group extends BaseElement {
         });
       }
 
-      // Обновляем порты и текст
       if (element.updatePorts) element.updatePorts();
       if (element.updateCalloutText) element.updateCalloutText();
 
-      // Если элемент - группа, рекурсивно перемещаем все её элементы
       if (element.type === 'group' && element.elements && element.elements.length > 0) {
         element.elements.forEach(child => moveElementRecursive(child));
-        // Обновляем границы вложенной группы
         if (element.updateBounds) element.updateBounds();
       }
     };
 
-    // Перемещаем все элементы верхнего уровня и их содержимое
     this.elements.forEach(element => moveElementRecursive(element));
-
-    // Обновляем границы текущей группы
     this.updateBounds();
   }
 
   createPath(ctx) { }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
-    // Сначала рисуем все элементы группы и их выноски
+    // Рисуем все элементы группы
     if (this.elements) {
       this.elements.forEach(element => {
         if (element && element.draw) {
           element.draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors);
         }
+      });
+    }
 
-        // Рисуем выноски элемента
+    // Рисуем выноски всех элементов (включая выноску группы)
+    if (this.elements) {
+      this.elements.forEach(element => {
         if (element && element.callouts && element.callouts.length > 0) {
           for (const callout of element.callouts) {
             callout.draw(ctx, scale, isDarkTheme, element);
@@ -592,7 +639,14 @@ export class Group extends BaseElement {
       });
     }
 
-    // Потом рисуем рамку группы
+    // Рисуем выноску самой группы
+    if (this.callouts && this.callouts.length > 0) {
+      for (const callout of this.callouts) {
+        callout.draw(ctx, scale, isDarkTheme, this);
+      }
+    }
+
+    // Рисуем рамку группы
     if (this.width > 0 && this.height > 0) {
       ctx.save();
       ctx.lineWidth = Math.max(2, 3 / scale);
@@ -601,12 +655,6 @@ export class Group extends BaseElement {
       const topLeft = this.getTopLeft();
       ctx.strokeRect(topLeft.x, topLeft.y, this.width, this.height);
       ctx.setLineDash([]);
-
-      // Рисуем имя группы
-      ctx.fillStyle = isDarkTheme ? '#ffffff' : '#000000';
-      ctx.font = `${Math.max(12, 14 / scale)}px Arial`;
-      ctx.textBaseline = 'top';
-      ctx.fillText(this.name, topLeft.x + 5, topLeft.y + 5);
       ctx.restore();
     }
   }
