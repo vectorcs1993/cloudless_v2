@@ -141,7 +141,7 @@
                         </q-item>
                       </q-list>
                     </div>
-                    <div v-if="!isGroupSelected" class="rotation-controls q-mt-md">
+                    <div class="rotation-controls q-mt-md">
                       <div class="text-subtitle2 q-mb-sm">Поворот</div>
                       <q-btn-group spread>
                         <q-btn label="↺ 90°" @click="rotateLeft" color="primary" />
@@ -731,17 +731,45 @@ const rotateElement = (direction) => {
   if (!selectedElement.value) return;
 
   const delta = direction === 'left' ? -90 : 90;
-  selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
 
-  selectedElement.value.updatePorts?.();
-  selectedElement.value.updateCalloutText?.();
+  // Для группы - поворачиваем каждый элемент внутри
+  if (selectedElement.value instanceof Group) {
+    const group = selectedElement.value;
+    const centerX = group.x;
+    const centerY = group.y;
+    const angleRad = delta * Math.PI / 180;
 
-  // Вызываем обновление всех связей
+    // Поворачиваем каждый элемент вокруг центра группы
+    group.elements.forEach(element => {
+      // Вычисляем новую позицию
+      const dx = element.x - centerX;
+      const dy = element.y - centerY;
+      element.x = centerX + (dx * Math.cos(angleRad) - dy * Math.sin(angleRad));
+      element.y = centerY + (dx * Math.sin(angleRad) + dy * Math.cos(angleRad));
+
+      // Поворачиваем сам элемент
+      element.rotation = (element.rotation + delta) % 360;
+
+      // Обновляем
+      element.updatePorts?.();
+      element.updateCalloutText?.();
+    });
+
+    // Обновляем границы группы
+    group.updateBounds();
+  } else {
+    // Для обычного элемента
+    selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
+    selectedElement.value.updatePorts?.();
+    selectedElement.value.updateCalloutText?.();
+  }
+
+  // Обновляем связи
   if (connectionManager) {
     connectionManager.updateAllPortsAndConnections(40);
   }
 
-  // Принудительно обновляем UI
+  // Обновляем UI
   const currentElement = selectedElement.value;
   updateSelection([]);
   setTimeout(() => {

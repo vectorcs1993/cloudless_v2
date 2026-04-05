@@ -500,6 +500,7 @@ export class Group extends BaseElement {
 
   getPortsAfterMove(deltaX, deltaY) {
     const allPorts = [];
+
     const collect = (element) => {
       if (element.ports) {
         element.ports.forEach(port => {
@@ -514,6 +515,7 @@ export class Group extends BaseElement {
         element.elements.forEach(collect);
       }
     };
+
     collect(this);
     return allPorts;
   }
@@ -581,7 +583,7 @@ export class Group extends BaseElement {
       return;
     }
 
-    // Перемещаем выноску группы
+    // Перемещаем выноску группы (без трансформации)
     if (this.callouts && this.callouts.length > 0) {
       this.callouts.forEach(callout => {
         callout.x += deltaX;
@@ -589,7 +591,7 @@ export class Group extends BaseElement {
       });
     }
 
-    // Рекурсивная функция для перемещения элемента и всех его вложенных групп
+    // Рекурсивная функция для перемещения элемента
     const moveElementRecursive = (element) => {
       if (!element) return;
 
@@ -628,7 +630,7 @@ export class Group extends BaseElement {
       });
     }
 
-    // Рисуем выноски всех элементов (включая выноску группы)
+    // Рисуем выноски всех элементов
     if (this.elements) {
       this.elements.forEach(element => {
         if (element && element.callouts && element.callouts.length > 0) {
@@ -646,7 +648,7 @@ export class Group extends BaseElement {
       }
     }
 
-    // Рисуем рамку группы
+    // Рисуем рамку группы (без поворота)
     if (this.width > 0 && this.height > 0) {
       ctx.save();
       ctx.lineWidth = Math.max(2, 3 / scale);
@@ -661,6 +663,7 @@ export class Group extends BaseElement {
 
   hitTest(worldX, worldY, ctx) {
     if (!this.elements) return false;
+
     for (const element of this.elements) {
       if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
         return true;
@@ -668,6 +671,7 @@ export class Group extends BaseElement {
     }
     return false;
   }
+
 
   updatePorts() {
     if (this.elements) {
@@ -692,7 +696,6 @@ export class Group extends BaseElement {
     this.callouts.push(callout);
     return callout;
   }
-
   toJSON() {
     return {
       ...super.toJSON(),
