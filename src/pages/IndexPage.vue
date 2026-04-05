@@ -83,120 +83,117 @@
           </div>
         </div>
       </template>
-
       <template v-slot:after>
         <div class="canvas-container">
           <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
             @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
           </canvas>
-
           <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat bordered>
             <q-card-section class="row items-center justify-between">
               <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
               <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
             </q-card-section>
-
-            <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
-              <q-tab name="parameters" label="Параметры" />
-              <q-tab name="links" label="Связи" />
-            </q-tabs>
-            <q-card-section>
-
-              <div v-if="selectedElements.length === 1" class="single-element-info">
-                <q-list :dark="isDarkTheme" dense>
+            <div v-if="selectedElements.length === 1">
+              <q-card-section class="row items-center justify-between">
+                <q-list class="full-width" :dark="isDarkTheme" dense>
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>ID</q-item-label>
+                    </q-item-section>
+                    <q-item-section>
                       <q-item-label>{{ selectedElement?.id }}</q-item-label>
                     </q-item-section>
                   </q-item>
                   <q-item>
                     <q-item-section>
                       <q-item-label caption>Тип</q-item-label>
+                    </q-item-section>
+                    <q-item-section>
                       <q-item-label>{{ getElementTypeName(selectedElement) }}</q-item-label>
                     </q-item-section>
                   </q-item>
                 </q-list>
+              </q-card-section>
+              <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
+                <q-tab name="parameters" label="Параметры" />
+                <q-tab name="links" label="Связи" />
+              </q-tabs>
+              <q-tab-panels v-model="tabElement" :dark="isDarkTheme" animated>
+                <q-tab-panel name="parameters">
+                  <div class="single-element-info">
+                    <div class="element-params">
+                      <q-list dense>
+                        <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
+                          <q-item-section class="param-label-col">
+                            <q-item-label>{{ param.label }}:</q-item-label>
+                          </q-item-section>
+                          <q-item-section>
+                            <q-select :dark="isDarkTheme" v-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                              :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                              @update:model-value="(val) => onParameterChange(val, param.name)" />
+                            <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                              :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                          </q-item-section>
+                          <q-item-section side class="param-unit-col">
+                            <span v-if="param.unit">{{ param.unit }}</span>
+                            <span v-else>—</span>
+                          </q-item-section>
+                        </q-item>
+                      </q-list>
+                    </div>
+                    <div v-if="!isGroupSelected" class="rotation-controls q-mt-md">
+                      <div class="text-subtitle2 q-mb-sm">Поворот</div>
+                      <q-btn-group spread>
+                        <q-btn label="↺ 90°" @click="rotateLeft" color="primary" />
+                        <q-btn label="↻ 90°" @click="rotateRight" color="primary" />
+                      </q-btn-group>
+                    </div>
 
-                <div class="element-params">
-                  <div class="text-subtitle2 q-mt-md q-mb-sm">Параметры</div>
-                  <q-separator class="q-mb-sm" />
-
-                  <q-list dense>
-                    <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
-                      <q-item-section class="param-label-col">
-                        <q-item-label>{{ param.label }}:</q-item-label>
-                      </q-item-section>
-                      <q-item-section>
-                        <q-select :dark="isDarkTheme" v-if="param.type === 'select'" v-model="selectedElement[param.name]" :options="param.options"
-                          option-label="label" option-value="value" dense outlined emit-value map-options
-                          @update:model-value="(val) => onParameterChange(val, param.name)" />
-                        <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                          :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
-                      </q-item-section>
-                      <q-item-section side class="param-unit-col">
-                        <span v-if="param.unit">{{ param.unit }}</span>
-                        <span v-else>—</span>
-                      </q-item-section>
-                    </q-item>
-                  </q-list>
-                </div>
-
-                <div v-if="selectedElement?.ports && selectedElement.ports.length > 0" class="connections-info">
-                  <div class="text-subtitle2 q-mt-md q-mb-sm">Связи</div>
-                  <q-separator class="q-mb-sm" />
-
-                  <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                    <q-icon :name="port.isConnected && port.isConnected() ? 'link' : 'link_off'"
-                      :color="port.isConnected && port.isConnected() ? 'positive' : 'negative'" size="16px" />
-                    <span class="q-ml-sm">
-                      {{ port.side }} ({{ port.getDirectionName?.() || port.direction }})
-                    </span>
-                    <span v-if="port.isConnected && port.isConnected()" class="q-ml-auto">
-                      → ID {{ port.connectedElementId }}
-                    </span>
-                    <span v-else class="q-ml-auto text-negative">не подключен</span>
+                    <div class="layer-controls q-mt-md">
+                      <div class="text-subtitle2 q-mb-sm">Слои</div>
+                      <q-btn-group>
+                        <q-btn icon="vertical_align_top" @click="moveToTop" label="Вверх" />
+                        <q-btn icon="arrow_upward" @click="moveUp" label="Выше" />
+                        <q-btn icon="arrow_downward" @click="moveDown" label="Ниже" />
+                        <q-btn icon="vertical_align_bottom" @click="moveToBottom" label="Вниз" />
+                      </q-btn-group>
+                    </div>
                   </div>
-                </div>
+                </q-tab-panel>
+                <q-tab-panel name="links">
+                  <div v-if="selectedElement?.ports && selectedElement.ports.length > 0" class="connections-info">
+                    <div class="text-subtitle2 q-mt-md q-mb-sm">Связи</div>
+                    <q-separator class="q-mb-sm" />
 
-                <div v-if="!isGroupSelected" class="rotation-controls q-mt-md">
-                  <div class="text-subtitle2 q-mb-sm">Поворот</div>
-                  <q-btn-group spread>
-                    <q-btn label="↺ 90°" @click="rotateLeft" color="primary" />
-                    <q-btn label="↻ 90°" @click="rotateRight" color="primary" />
-                  </q-btn-group>
-                </div>
+                    <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
+                      <q-icon :name="port.isConnected && port.isConnected() ? 'link' : 'link_off'"
+                        :color="port.isConnected && port.isConnected() ? 'positive' : 'negative'" size="16px" />
+                      <span class="q-ml-sm">
+                        {{ port.side }} ({{ port.getDirectionName?.() || port.direction }})
+                      </span>
+                      <span v-if="port.isConnected && port.isConnected()" class="q-ml-auto">
+                        → ID {{ port.connectedElementId }}
+                      </span>
+                      <span v-else class="q-ml-auto text-negative">не подключен</span>
+                    </div>
+                  </div>
 
-                <div class="layer-controls q-mt-md">
-                  <div class="text-subtitle2 q-mb-sm">Слои</div>
-                  <q-btn-group>
-                    <q-btn icon="vertical_align_top" @click="moveToTop" label="Вверх" />
-                    <q-btn icon="arrow_upward" @click="moveUp" label="Выше" />
-                    <q-btn icon="arrow_downward" @click="moveDown" label="Ниже" />
-                    <q-btn icon="vertical_align_bottom" @click="moveToBottom" label="Вниз" />
-                  </q-btn-group>
-                </div>
-              </div>
-
-              <div v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
-                <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
-                <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
-                  class="full-width q-mb-sm" />
-                <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
-                  class="full-width" />
-              </div>
-
+                </q-tab-panel>
+              </q-tab-panels>
+            </div>
+            <q-card-section v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
+              <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
+              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
+                class="full-width q-mb-sm" />
+              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
+                class="full-width" />
+            </q-card-section>
+            <q-card-section>
               <div class="delete-controls q-mt-md">
                 <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
-                <span v-if="selectedElements.length > 1" class="q-ml-sm text-caption">
-                  ({{ selectedElements.length }} элементов)
-                </span>
               </div>
             </q-card-section>
           </q-card>
-
-
-
         </div>
       </template>
     </q-splitter>
@@ -323,7 +320,7 @@ let renderFrameRequest = null;
 
 // Refs
 const tabEditor = ref('library');
-const tabElement = ref('info');
+const tabElement = ref('parameters');
 const mainCanvas = ref(null);
 const elements = shallowRef([]);
 const selectedElements = shallowRef([]);

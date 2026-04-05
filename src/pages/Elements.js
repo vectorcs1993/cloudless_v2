@@ -43,6 +43,7 @@ export class BaseElement {
   static getAvailableTypes() {
     return {
       'duct': 'Прямой воздуховод',
+      'transition': 'Переход',
       'fan': 'Вентилятор',
       'tee': 'Тройник',
       'elbow': 'Отвод',
