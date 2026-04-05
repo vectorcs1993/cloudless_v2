@@ -43,6 +43,8 @@ export class Tee extends DuctBase {
 
   // ========== ГЕТТЕРЫ И СЕТТЕРЫ ==========
 
+  // В файле Tee.js, исправьте сеттер a:
+
   get a() { return this._a; }
 
   set a(value) {
@@ -51,18 +53,51 @@ export class Tee extends DuctBase {
     // Приводим значение к числу и ограничиваем глобальными пределами
     let newValue = Math.max(20, Math.min(1000, value));
 
+    // Временно сохраняем старые значения для проверки
+    const oldL1 = this._l1;
+    const oldL2 = this._l2;
+    const oldL3 = this._l3;
+
     // Проверка: A не может быть больше длины ответвления
-    if (newValue > this._l2) return;
+    if (newValue > this._l2) {
+      // Если не проходит, пробуем увеличить L2
+      const newL2 = Math.max(newValue, this._l2);
+      if (newL2 <= this.getMaxL2()) {
+        this._l2 = newL2;
+      } else {
+        return; // Не можем установить
+      }
+    }
 
     // Проверка: A не может быть больше половины длины магистрали (с учетом смещения)
     const maxAllowedA = (this._l1 / 2 - Math.abs(this._l3)) * 2;
-    if (newValue > maxAllowedA) return;
+    if (newValue > maxAllowedA && maxAllowedA >= 20) {
+      // Пробуем увеличить L1
+      const neededL1 = (newValue / 2 + Math.abs(this._l3)) * 2;
+      if (neededL1 <= this.getMaxL1()) {
+        this._l1 = neededL1;
+      } else {
+        // Возвращаем старые значения
+        this._l1 = oldL1;
+        this._l2 = oldL2;
+        this._l3 = oldL3;
+        return;
+      }
+    }
 
     // Проверка: A должен быть меньше половины длины магистрали
-    if (newValue > this._l1 / 2) return;
+    if (newValue > this._l1 / 2) {
+      const neededL1 = newValue * 2;
+      if (neededL1 <= this.getMaxL1()) {
+        this._l1 = neededL1;
+      } else {
+        return;
+      }
+    }
 
     this._a = newValue;
     this.updatePorts();
+    this.updateCalloutText();
   }
 
   get b() { return this._b; }

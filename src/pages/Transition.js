@@ -18,9 +18,26 @@ export class Transition extends DuctDirect {
     this.updateCalloutText();
   }
 
+  // ПЕРЕОПРЕДЕЛЯЕМ getWidth() - ширина перехода это его длина
+  getWidth() {
+    return this.mmToPx(this._b); // _b это длина перехода
+  }
+
+  // ПЕРЕОПРЕДЕЛЯЕМ getHeight() - высота перехода это максимальное сечение
   getHeight() {
-    const avgSize = (this._a + this._a2) / 2;
-    return this.mmToPx(avgSize);
+    const maxSize = Math.max(this._a, this._a2);
+    return this.mmToPx(maxSize);
+  }
+
+  // Получаем левый верхний угол с учетом максимальной высоты
+  getTopLeft() {
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+
+    return {
+      x: this.x - width_px / 2,
+      y: this.y - height_px / 2
+    };
   }
 
   getSizeAt(t) {
@@ -62,6 +79,7 @@ export class Transition extends DuctDirect {
 
     const ports = [];
 
+    // Левый порт (меньшее сечение)
     const inletPos = this.rotatePoint(
       topLeft.x,
       centerY,
@@ -72,6 +90,7 @@ export class Transition extends DuctDirect {
       this.id, 'inlet', 'left', 0, height1_px / 2, inletPos.x, inletPos.y
     ));
 
+    // Правый порт (большее сечение)
     const outletPos = this.rotatePoint(
       topLeft.x + width_px,
       centerY,
@@ -93,6 +112,8 @@ export class Transition extends DuctDirect {
     const height1_px = this.mmToPx(this._a);
     const height2_px = this.mmToPx(this._a2);
     const topLeft = this.getTopLeft();
+    const maxHeight = Math.max(height1_px, height2_px);
+    const offsetY = (maxHeight - height1_px) / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -101,7 +122,7 @@ export class Transition extends DuctDirect {
 
     ctx.beginPath();
 
-    // Унифицированная отрисовка - всегда используем centerY для оси
+    // Рисуем переход как трапецию
     ctx.moveTo(topLeft.x, centerY - height1_px / 2);
     ctx.lineTo(topLeft.x + width_px, centerY - height2_px / 2);
     ctx.lineTo(topLeft.x + width_px, centerY + height2_px / 2);
@@ -113,16 +134,6 @@ export class Transition extends DuctDirect {
     }
     this.setStrokeStyle(ctx, scale, isSelected, isDarkTheme);
 
-    // Рисуем осевую линию
-    ctx.beginPath();
-    ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + width_px, centerY);
-    ctx.strokeStyle = isDarkTheme ? '#888888' : '#aaaaaa';
-    ctx.lineWidth = Math.max(0.5, 1 / scale);
-    ctx.setLineDash([2 / scale, 4 / scale]);
-    ctx.stroke();
-
-    ctx.setLineDash([]);
     ctx.restore();
 
     if (showElementAxes) {

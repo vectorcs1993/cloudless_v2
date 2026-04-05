@@ -17,7 +17,6 @@ export class Cross extends DuctBase {
   }
 
   getMaxL1() {
-    // Максимальная горизонтальная длина - 5000 мм или 20 * A
     return Math.min(5000, this._a * 20);
   }
 
@@ -26,7 +25,6 @@ export class Cross extends DuctBase {
   }
 
   getMaxL2() {
-    // Максимальная вертикальная длина - 5000 мм или 20 * A
     return Math.min(5000, this._a * 20);
   }
 
@@ -37,17 +35,40 @@ export class Cross extends DuctBase {
   set a(value) {
     if (this._a === value) return;
 
-    // Приводим значение к числу и ограничиваем глобальными пределами
     let newValue = Math.max(20, Math.min(1000, value));
 
+    // Сохраняем старые значения
+    const oldL1 = this._l1;
+    const oldL2 = this._l2;
+
     // Проверка: A не может быть больше половины горизонтальной длины
-    if (newValue > this._l1 / 2) return;
+    if (newValue > this._l1 / 2) {
+      // Пробуем увеличить L1
+      const neededL1 = newValue * 2;
+      if (neededL1 <= this.getMaxL1()) {
+        this._l1 = neededL1;
+      } else {
+        return;
+      }
+    }
 
     // Проверка: A не может быть больше половины вертикальной длины
-    if (newValue > this._l2 / 2) return;
+    if (newValue > this._l2 / 2) {
+      // Пробуем увеличить L2
+      const neededL2 = newValue * 2;
+      if (neededL2 <= this.getMaxL2()) {
+        this._l2 = neededL2;
+      } else {
+        // Возвращаем старые значения
+        this._l1 = oldL1;
+        this._l2 = oldL2;
+        return;
+      }
+    }
 
     this._a = newValue;
     this.updatePorts();
+    this.updateCalloutText();
   }
 
   get b() { return this._b; }
@@ -58,7 +79,6 @@ export class Cross extends DuctBase {
     this.updateCalloutText();
   }
 
-  // Геттеры и сеттеры для горизонтальной длины (L1)
   get l1() { return this._l1; }
 
   set l1(newLength) {
@@ -75,9 +95,9 @@ export class Cross extends DuctBase {
 
     this._l1 = newValue;
     this.updatePorts();
+    this.updateCalloutText();
   }
 
-  // Геттеры и сеттеры для вертикальной длины (L2)
   get l2() { return this._l2; }
 
   set l2(newLength) {
@@ -94,9 +114,9 @@ export class Cross extends DuctBase {
 
     this._l2 = newValue;
     this.updatePorts();
+    this.updateCalloutText();
   }
 
-  // Получаем полные размеры элемента (bounding box)
   getWidth() {
     return this.mmToPx(this._l1);
   }
@@ -105,7 +125,6 @@ export class Cross extends DuctBase {
     return this.mmToPx(this._l2);
   }
 
-  // Получаем точку привязки (верхний левый угол bounding box)
   getTopLeft() {
     const width_px = this.getWidth();
     const height_px = this.getHeight();
@@ -121,7 +140,6 @@ export class Cross extends DuctBase {
     if (this._sectionType === 'round') {
       return `${baseText}\nL1: ${this._l1} мм\nL2: ${this._l2} мм`;
     } else {
-      // Для прямоугольного сечения показываем параметр B для информации
       return `${baseText}\nB: ${this._b} мм\nL1: ${this._l1} мм\nL2: ${this._l2} мм`;
     }
   }
@@ -198,7 +216,6 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const size_px = this.getSizePx(); // Ширина воздуховода (параметр A)
 
     // Левый порт
     const leftX = topLeft.x;
@@ -247,7 +264,6 @@ export class Cross extends DuctBase {
     }
   }
 
-  // Круглая крестовина
   _createRoundCross(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
@@ -255,7 +271,7 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const size_px = this.getSizePx();  // Диаметр круглого сечения (параметр A)
+    const size_px = this.getSizePx();
     const radius_px = size_px / 2;
 
     ctx.save();
@@ -265,11 +281,9 @@ export class Cross extends DuctBase {
 
     ctx.beginPath();
 
-    // Горизонтальная труба (круглое сечение)
     const horizontalY = centerY - radius_px;
     ctx.rect(topLeft.x, horizontalY, width_px, size_px);
 
-    // Вертикальная труба (круглое сечение)
     const verticalX = centerX - radius_px;
     ctx.rect(verticalX, topLeft.y, size_px, height_px);
 
@@ -279,7 +293,6 @@ export class Cross extends DuctBase {
     ctx.restore();
   }
 
-  // Прямоугольная крестовина
   _createRectangularCross(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
@@ -287,8 +300,7 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const a_px = this.getSizePx();  // Ширина прямоугольного сечения (параметр A)
-    // Параметр B НЕ используется для отрисовки ширины!
+    const a_px = this.getSizePx();
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -297,11 +309,9 @@ export class Cross extends DuctBase {
 
     ctx.beginPath();
 
-    // Горизонтальная труба (ширина = A, высота = A)
     const horizontalY = centerY - a_px / 2;
     ctx.rect(topLeft.x, horizontalY, width_px, a_px);
 
-    // Вертикальная труба (ширина = A, высота = A)
     const verticalX = centerX - a_px / 2;
     ctx.rect(verticalX, topLeft.y, a_px, height_px);
 
@@ -312,7 +322,6 @@ export class Cross extends DuctBase {
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    // Рисуем основной контур
     this.createPath(ctx);
     if (showColors) {
       this.setFillStyle(ctx, isSelected, false);
@@ -342,11 +351,9 @@ export class Cross extends DuctBase {
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
 
-    // Горизонтальная центральная линия
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width_px, centerY);
 
-    // Вертикальная центральная линия
     ctx.moveTo(centerX, topLeft.y);
     ctx.lineTo(centerX, topLeft.y + height_px);
 

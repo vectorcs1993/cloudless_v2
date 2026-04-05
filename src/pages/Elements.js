@@ -15,8 +15,24 @@ export class BaseElement {
     this.rotation = 0;
     this.ports = [];
     this.callouts = [];
+    this.showCallout = true; // показывать выноску, по умолчанию - да
+  }
+  get showCallout() {
+    return this._showCallout;
   }
 
+  set showCallout(value) {
+    if (this._showCallout === value) return;
+    this._showCallout = value;
+    if (!value) {
+      // Если выноску скрываем, очищаем её визуально, но не удаляем
+      this.updateCalloutText();
+    } else if (this.callouts.length === 0) {
+      // Если показываем и нет выноски, создаём её
+      this.addCallout(this.x, this.y - 150);
+    }
+    this.updateCalloutText();
+  }
   // Получение текущего масштаба мм/px
   getMmPerPx() {
     return globalScale.getMmPerPx();
@@ -108,9 +124,8 @@ export class BaseElement {
       { name: 'x', label: 'Позиция по X', type: 'number', step: 1, min: 20, value: this.x, unit: 'px' },
       { name: 'y', label: 'Позиция по Y', type: 'number', step: 1, min: 20, value: this.y, unit: 'px' },
       { name: 'rotation', label: 'Поворот', type: 'number', step: 1, min: 0, value: this.rotation, unit: '°' },
-      {
-        name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color
-      },
+      { name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color },
+      { name: 'showCallout', label: 'Показывать выноску', type: 'boolean', value: this.showCallout },
     ];
   }
 
@@ -229,7 +244,7 @@ export class BaseElement {
   }
 
   updateCalloutText() {
-    if (this.callouts.length > 0) {
+    if (this.showCallout && this.callouts.length > 0) {
       this.callouts[0].text = this.getCalloutText();
     }
   }
@@ -270,7 +285,8 @@ export class BaseElement {
       name: this.name,
       color: this.color, rotation: this.rotation,
       ports: this.ports.map(p => p.toJSON()),
-      callouts: this.callouts.map(c => c.toJSON())
+      callouts: this.callouts.map(c => c.toJSON()),
+      showCallout: this.showCallout,
     };
   }
 }
@@ -383,342 +399,8 @@ export class DuctBase extends BaseElement {
     return {
       ...super.toJSON(),
       a: this._a,
-      sectionType: this._sectionType
+      sectionType: this._sectionType,
     };
   }
 }
 
-// ========== КЛАСС ГРУППЫ ==========
-export class Group extends BaseElement {
-  constructor(id, elements, savedWidth = 0, savedHeight = 0) {
-    const groupId = (typeof id === 'number' && id !== undefined) ? id : Date.now() + Math.random();
-    super(groupId, 'group', 0, 0, `Группа ${groupId}`);
-    this.elements = elements || [];
-
-    // Если есть сохраненные размеры, используем их
-    if (savedWidth > 0 && savedHeight > 0) {
-      this.width = savedWidth;
-      this.height = savedHeight;
-    } else {
-      this.updateBounds();
-    }
-
-    // Добавляем выноску для группы, только если её нет
-    if ((!this.callouts || this.callouts.length === 0) && this.width > 0 && this.height > 0) {
-      const topLeft = this.getTopLeft();
-      this.addCallout(this.x, topLeft.y - 50);
-    }
-  }
-
-  updateBounds() {
-    if (!this.elements || this.elements.length === 0) {
-      this.x = 0;
-      this.y = 0;
-      this.width = 0;
-      this.height = 0;
-      return;
-    }
-
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-
-    const processElement = (element) => {
-      if (!element) return;
-
-      if (element.type === 'group') {
-        // Для группы используем её границы
-        if (element.width > 0 && element.height > 0) {
-          const halfW = element.width / 2;
-          const halfH = element.height / 2;
-          const corners = [
-            { x: element.x - halfW, y: element.y - halfH },
-            { x: element.x + halfW, y: element.y - halfH },
-            { x: element.x + halfW, y: element.y + halfH },
-            { x: element.x - halfW, y: element.y + halfH }
-          ];
-
-          for (const corner of corners) {
-            minX = Math.min(minX, corner.x);
-            minY = Math.min(minY, corner.y);
-            maxX = Math.max(maxX, corner.x);
-            maxY = Math.max(maxY, corner.y);
-          }
-        }
-
-        // Рекурсивно обрабатываем вложенные элементы группы
-        if (element.elements) {
-          element.elements.forEach(processElement);
-        }
-      } else {
-        const centerX = element.x;
-        const centerY = element.y;
-        const width = element.getWidth();
-        const height = element.getHeight();
-        const rotation = (element.rotation || 0) * Math.PI / 180;
-
-        const corners = [
-          { x: -width / 2, y: -height / 2 },
-          { x: width / 2, y: -height / 2 },
-          { x: width / 2, y: height / 2 },
-          { x: -width / 2, y: height / 2 }
-        ];
-
-        for (const corner of corners) {
-          const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
-          const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
-          const worldX = centerX + rotatedX;
-          const worldY = centerY + rotatedY;
-
-          minX = Math.min(minX, worldX);
-          minY = Math.min(minY, worldY);
-          maxX = Math.max(maxX, worldX);
-          maxY = Math.max(maxY, worldY);
-        }
-      }
-    };
-
-    this.elements.forEach(processElement);
-
-    if (isFinite(minX) && isFinite(maxX) && isFinite(minY) && isFinite(maxY)) {
-      this.x = (minX + maxX) / 2;
-      this.y = (minY + maxY) / 2;
-      this.width = maxX - minX;
-      this.height = maxY - minY;
-
-      if (this.callouts && this.callouts.length > 0) {
-        this.updateCalloutText();
-      }
-    } else {
-      this.width = 0;
-      this.height = 0;
-    }
-  }
-
-  getTopLeft() {
-    return {
-      x: this.x - this.width / 2,
-      y: this.y - this.height / 2
-    };
-  }
-
-  getElements() {
-    return [...(this.elements || [])];
-  }
-
-  getPortsAfterMove(deltaX, deltaY) {
-    const allPorts = [];
-
-    const collect = (element) => {
-      if (element.ports) {
-        element.ports.forEach(port => {
-          allPorts.push({
-            ...port,
-            worldX: port.worldX + deltaX,
-            worldY: port.worldY + deltaY,
-          });
-        });
-      }
-      if (element.type === 'group' && element.elements) {
-        element.elements.forEach(collect);
-      }
-    };
-
-    collect(this);
-    return allPorts;
-  }
-
-  getWidth() {
-    return this.width || 0;
-  }
-
-  getHeight() {
-    return this.height || 0;
-  }
-
-  getCalloutText() {
-    const elementsCount = this.getAllElementsCount();
-    return `${this.name}\nЭлементов: ${elementsCount}`;
-  }
-
-  getAllElementsCount() {
-    let count = 0;
-    const countElements = (element) => {
-      if (element.type === 'group') {
-        if (element.elements) {
-          element.elements.forEach(countElements);
-        }
-      } else {
-        count++;
-      }
-    };
-
-    if (this.elements) {
-      this.elements.forEach(countElements);
-    }
-    return count;
-  }
-
-  getParameters() {
-    return [{ name: 'name', label: 'Имя', type: 'text', value: this.name }];
-  }
-
-  getPorts() {
-    return [];
-  }
-
-  getAllPorts() {
-    const allPorts = [];
-
-    const collectPorts = (element) => {
-      if (element.ports && element.ports.length > 0) {
-        allPorts.push(...element.ports);
-      }
-      if (element.type === 'group' && element.elements) {
-        element.elements.forEach(collectPorts);
-      }
-    };
-
-    collectPorts(this);
-    return allPorts;
-  }
-
-  move(deltaX, deltaY) {
-    if (!this.elements || this.elements.length === 0) return;
-
-    if (isNaN(deltaX) || isNaN(deltaY) || !isFinite(deltaX) || !isFinite(deltaY)) {
-      console.warn('Invalid delta in group move:', deltaX, deltaY);
-      return;
-    }
-
-    // Перемещаем выноску группы
-    if (this.callouts && this.callouts.length > 0) {
-      this.callouts.forEach(callout => {
-        callout.x += deltaX;
-        callout.y += deltaY;
-      });
-    }
-
-    // Перемещаем все элементы и их выноски
-    const moveElementRecursive = (element) => {
-      if (!element) return;
-
-      element.x += deltaX;
-      element.y += deltaY;
-
-      // Перемещаем выноски элемента
-      if (element.callouts && element.callouts.length > 0) {
-        element.callouts.forEach(callout => {
-          callout.x += deltaX;
-          callout.y += deltaY;
-        });
-      }
-
-      if (element.updatePorts) element.updatePorts();
-      if (element.updateCalloutText) element.updateCalloutText();
-
-      if (element.type === 'group' && element.elements && element.elements.length > 0) {
-        element.elements.forEach(child => moveElementRecursive(child));
-        if (element.updateBounds) element.updateBounds();
-      }
-    };
-
-    this.elements.forEach(element => moveElementRecursive(element));
-    this.updateBounds();
-  }
-
-  createPath(ctx) { }
-
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
-    // Рисуем все элементы группы
-    if (this.elements) {
-      this.elements.forEach(element => {
-        if (element && element.draw) {
-          element.draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors);
-        }
-      });
-    }
-
-    // Рисуем выноски всех элементов
-    if (this.elements) {
-      this.elements.forEach(element => {
-        if (element && element.callouts && element.callouts.length > 0) {
-          for (const callout of element.callouts) {
-            callout.draw(ctx, scale, isDarkTheme, element);
-          }
-        }
-      });
-    }
-
-    // Рисуем выноску самой группы
-    if (this.callouts && this.callouts.length > 0) {
-      for (const callout of this.callouts) {
-        callout.draw(ctx, scale, isDarkTheme, this);
-      }
-    }
-
-    // Рисуем рамку группы (без поворота)
-    if (this.width > 0 && this.height > 0) {
-      ctx.save();
-      ctx.lineWidth = Math.max(2, 3 / scale);
-      ctx.strokeStyle = isSelected ? '#ff6600' : '#444444';
-      ctx.setLineDash([5 / scale, 5 / scale]);
-      const topLeft = this.getTopLeft();
-      ctx.strokeRect(topLeft.x, topLeft.y, this.width, this.height);
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-  }
-
-  hitTest(worldX, worldY, ctx) {
-    if (!this.elements) return false;
-
-    for (const element of this.elements) {
-      if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  updateAllPortsRecursive() {
-    const updateRecursive = (element) => {
-      if (element.updatePorts) element.updatePorts();
-      if (element.type === 'group' && element.elements) {
-        element.elements.forEach(updateRecursive);
-      }
-    };
-    this.elements.forEach(updateRecursive);
-  }
-
-  updatePorts() {
-    if (this.elements) {
-      this.elements.forEach(element => {
-        if (element && element.updatePorts) element.updatePorts();
-      });
-    }
-  }
-
-  updateCalloutText() {
-    if (this.elements) {
-      this.elements.forEach(element => {
-        if (element && element.updateCalloutText) element.updateCalloutText();
-      });
-    }
-  }
-
-  addCallout(x, y) {
-    const calloutId = Date.now() + Math.random();
-    const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
-    if (!this.callouts) this.callouts = [];
-    this.callouts.push(callout);
-    return callout;
-  }
-  toJSON() {
-    return {
-      ...super.toJSON(),
-      elements: this.elements ? this.elements.map(el => el.toJSON()) : [],
-      width: this.width,
-      height: this.height
-    };
-  }
-}

@@ -84,7 +84,6 @@ export class DuctDirect extends DuctBase {
   }
 
   getPorts() {
-    // Порты создаются на основе a (ширина трубы), а не c
     return this.createLinearPorts(this.getWidth(), this.getHeight());
   }
 

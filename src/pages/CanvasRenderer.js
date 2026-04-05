@@ -24,16 +24,23 @@ export class CanvasRenderer {
 
   // Метод для получения текущего радиуса порта с учетом масштаба и подсветки
   getPortRadius(port, isHighlighted = false) {
-    let radius = this.portSettings.baseRadius;
+    // Получаем текущий масштаб мм/px
+    const mmPerPx = this.options.mmPerPx?.value || 2;
 
-    // Масштабируем радиус относительно текущего масштаба
-    // Чем больше масштаб, тем больше радиус, но с ограничениями
-    const scaleFactor = Math.min(2, Math.max(0.5, this.scale.value));
-    radius = radius * scaleFactor;
+    // Базовый размер порта в миллиметрах (например 20 мм)
+    const portSizeMm = 15; // 15 мм - видимый размер порта
 
-    // Применяем ограничения
-    radius = Math.min(this.portSettings.maxRadius,
-      Math.max(this.portSettings.minRadius, radius));
+    // Переводим мм в пиксели с учетом текущего mmPerPx
+    let radiusPx = (portSizeMm / mmPerPx) / 2;
+
+    // Применяем масштаб камеры (zoom)
+    let radius = radiusPx / this.scale.value;
+
+    // Ограничиваем минимальный и максимальный размер на экране
+    const minScreenRadius = 3;  // минимум 3 пикселя на экране
+    const maxScreenRadius = 12; // максимум 12 пикселей на экране
+
+    radius = Math.min(maxScreenRadius, Math.max(minScreenRadius, radius));
 
     // Увеличиваем радиус для подсвеченного порта
     if (isHighlighted) {
@@ -381,7 +388,7 @@ export class CanvasRenderer {
     for (const element of this.elements.value) {
       if (element.callouts) {
         for (const callout of element.callouts) {
-          callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
+          if (element.showCallout) callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
         }
       }
     }

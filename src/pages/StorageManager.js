@@ -8,7 +8,7 @@ export class StorageManager {
     console.log(render);
 
     const data = {
-      elements: elements.map(el => el.toJSON()),
+      elements: elements.map((el) => el.toJSON()),
       nextElementId,
       nextPortId,
       nextGroupId,

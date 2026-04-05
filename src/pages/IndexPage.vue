@@ -128,7 +128,9 @@
                             <q-item-label>{{ param.label }}:</q-item-label>
                           </q-item-section>
                           <q-item-section>
-                            <q-select :dark="isDarkTheme" v-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                            <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                              @update:model-value="val => onParameterChange(val, param.name)" />
+                            <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
                               :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
                               @update:model-value="(val) => onParameterChange(val, param.name)" />
                             <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
@@ -208,7 +210,8 @@ import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
-import { Group, BaseElement } from './Elements.js';
+import { BaseElement } from './Elements.js';
+import { Group } from './Group.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Transition } from './Transition.js';
 import { Elbow } from './Elbow.js';
@@ -597,9 +600,11 @@ const loadFromLocalStorage = () => {
     gridStepM.value = data.gridStepM ?? 50;
     mmPerPx.value = data.mmPerPx ?? 2;
 
+    // ВАЖНО: Обновляем все группы рекурсивно
+    ElementFactory.updateAllGroupsBounds(loadedElements);
+
     loadedElements.forEach(el => {
       el.updatePorts?.();
-      if (el.type === 'group') el.updateBounds?.();
       el.updateCalloutText?.();
     });
 
@@ -713,7 +718,7 @@ const onDrop = (e) => {
     if (creator) {
       const newElement = creator();
       newElement.updatePorts?.();
-      newElement.addCallout?.(newElement.x, newElement.y - 150);
+      newElement.updateCalloutText?.();
       elements.value = [...elements.value, newElement];
       updateSelection([newElement]);
       scheduleRender();
@@ -966,10 +971,13 @@ watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAx
 
 watch(mmPerPx, (newVal) => {
   globalScale.setMmPerPx(newVal);
+
+  // Обновляем все группы рекурсивно
+  ElementFactory.updateAllGroupsBounds(elements.value);
+
   elements.value.forEach(el => {
     el.updatePorts?.();
     el.updateCalloutText?.();
-    if (el.type === 'group') el.updateBounds?.();
   });
   debouncedDraw();
 });
