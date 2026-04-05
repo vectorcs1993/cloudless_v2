@@ -333,7 +333,6 @@ let storageManager = null;
 // ID счетчики
 let nextElementId = 100;
 let nextPortId = 1000;
-let nextGroupId = 1000;
 
 // Drag and drop
 let dragType = null;
@@ -361,21 +360,16 @@ const projectTree = computed(() => {
       };
     }
 
-    const typeNames = { duct: 'Воздуховод', transition: 'Переход', elbow: 'Отвод', tee: 'Тройник', cross: 'Крестовина', fan: 'Вентилятор' };
-    const iconMap = { duct: 'timeline', transition: 'swap_horiz', elbow: 'trending_flat', tee: 'call_split', cross: 'call_merge', fan: 'toys' };
 
-    let info = `X:${Math.round(item.x)} Y:${Math.round(item.y)}`;
-    if (item.type === 'duct' || item.type === 'transition') info += ` | ${item.a}мм`;
-    if (item.type === 'elbow') info += ` | R:${item.r}мм`;
-    if (item.type === 'fan') info += ` | ${item.flow || 0} м³/ч`;
+
 
 
     return {
       id: item.id,
-      label: `${typeNames[item.type] || item.type}: ${item.name || item.id}`,
-      icon: iconMap[item.type] || 'circle',
+      label: `${BaseElement.getAvailableTypes()[item.type] || item.type}: ${item.name || item.id}`,
+      icon: 'rectangle',
       color: item.color || '#888',
-      info: info,
+      info: '',
       element: item
     };
   };
@@ -512,7 +506,7 @@ const handleKeyDown = (e) => {
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
 
 const saveToLocalStorage = () => {
-  storageManager?.save(elements.value, nextElementId, nextPortId, nextGroupId, renderOptions);
+  storageManager?.save(elements.value, nextElementId, nextPortId, renderOptions);
   showNotify({ type: 'positive', message: 'Сохранено!', position: 'top', timeout: 1000 });
 };
 
@@ -520,7 +514,8 @@ const loadFromLocalStorage = () => {
   const data = storageManager?.load();
   if (!data) {
     elements.value = [];
-    nextElementId = 100; nextPortId = 1000; nextGroupId = 1000;
+    nextElementId = 100;
+    nextPortId = 1000;
     updateSelection([]);
     scheduleRender();
     return;
@@ -546,7 +541,6 @@ const loadFromLocalStorage = () => {
     elements.value = loaded;
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
-    nextGroupId = data.nextGroupId || 1000;
     updateSelection([]);
     scheduleRender();
   } catch (error) {
@@ -560,7 +554,8 @@ const loadFromLocalStorage = () => {
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     elements.value = [];
-    nextElementId = 100; nextPortId = 1000; nextGroupId = 1000;
+    nextElementId = 100;
+    nextPortId = 1000;
     updateSelection([]);
     clipboardElements.value = [];
     scheduleRender();
@@ -592,6 +587,8 @@ const onDragStart = (e, item) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
+    // Устанавливаем призрак в рендерер
+    renderer?.setGhostElement(ghostElement);
     scheduleRender();
   }
   e.dataTransfer.setData('text/plain', item.type);
@@ -603,8 +600,29 @@ const onDragStart = (e, item) => {
   setTimeout(() => document.body.removeChild(dragIcon), 0);
 };
 
-const onDragEnd = () => { dragType = null; ghostElement = null; scheduleRender(); };
-const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+const onDragEnd = () => {
+  dragType = null;
+  ghostElement = null;
+  // Очищаем призрак в рендерере
+  renderer?.clearGhostElement();
+  scheduleRender();
+};
+
+// Измените onDragOver:
+const onDragOver = (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  if (ghostElement && renderer) {
+    const worldPos = renderer.screenToWorld(e.clientX, e.clientY);
+    if (worldPos) {
+      ghostElement.x = worldPos.x;
+      ghostElement.y = worldPos.y;
+      // Обновляем позицию призрака в рендерере
+      renderer.setGhostElement(ghostElement);
+      scheduleRender();
+    }
+  }
+};
 const onDrop = (e) => {
   e.preventDefault();
   if (!dragType) return;
@@ -627,6 +645,8 @@ const onDrop = (e) => {
   }
   ghostElement = null;
   dragType = null;
+  // Очищаем призрак в рендерере
+  renderer?.clearGhostElement();
   scheduleRender();
 };
 
@@ -705,7 +725,7 @@ const groupSelected = () => {
     showNotify({ type: 'warning', message: 'Нельзя группировать группы!', position: 'top', timeout: 3000 });
     return;
   }
-  const group = new Group(++nextGroupId, [...selectedElements.value]);
+  const group = new Group(++nextElementId, [...selectedElements.value]);
   group.updatePorts?.();
   const toRemove = new Set(selectedElements.value.map(el => el.id));
   elements.value = [...elements.value.filter(el => !toRemove.has(el.id)), group];
@@ -755,6 +775,7 @@ onMounted(() => {
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
+
   selectionManager = new SelectionManager(elements, renderer);
   interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, selectionManager, {
     snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale

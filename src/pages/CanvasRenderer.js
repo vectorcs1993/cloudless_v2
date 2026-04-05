@@ -12,14 +12,99 @@ export class CanvasRenderer {
     this.tooltipPort = null;
     this.tooltipPos = { x: 0, y: 0 };
 
+    // Добавляем свойство для призрака
+    this.ghostElement = null;
+
     // Настройки отображения портов
     this.portSettings = {
-      baseRadius: 3,        // Базовый радиус порта в пикселях (при масштабе 1)
-      minRadius: 1,         // Минимальный радиус порта
-      maxRadius: 5,        // Максимальный радиус порта
-      highlightScale: 1.5,  // Увеличение радиуса при подсветке
-      borderWidth: 0,       // Ширина обводки порта
+      baseRadius: 3,
+      minRadius: 1,
+      maxRadius: 5,
+      highlightScale: 1.5,
+      borderWidth: 0,
     };
+  }
+
+  // Добавляем метод установки призрака
+  setGhostElement(element) {
+    this.ghostElement = element;
+  }
+
+  // Добавляем метод очистки призрака
+  clearGhostElement() {
+    this.ghostElement = null;
+  }
+
+  draw() {
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    this.canvas.width = rect.width;
+    this.canvas.height = rect.height;
+
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.save();
+    ctx.translate(this.panX.value, this.panY.value);
+    ctx.scale(this.scale.value, this.scale.value);
+
+    if (this.options.showGrid.value) {
+      this.drawGrid(ctx);
+    }
+
+    // Рисуем основные элементы
+    this.elements.value.forEach(element => {
+      const isSelected = this.selectedElements.some(sel => sel.id === element.id);
+      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
+        this.options.showPorts.value, this.options.showColors.value,
+        this.options.showElementAxes.value);
+    });
+
+    this.drawAxes(ctx);
+
+    if (this.options.showPorts.value) {
+      this.drawPorts(ctx);
+    }
+
+    if (this.options.showCallouts.value) {
+      this.drawCallouts(ctx);
+    }
+
+    this.drawInfo(ctx);
+
+    // Рисуем призрак поверх всех элементов
+    if (this.ghostElement) {
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      this.ghostElement.draw(ctx, this.scale.value, false, this.options.isDarkTheme.value,
+        this.options.showPorts.value, this.options.showColors.value,
+        this.options.showElementAxes.value);
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    if (this.tooltipPort) {
+      this.drawTooltip(ctx);
+    }
+
+    if (this.selectionRect) {
+      ctx.save();
+      ctx.strokeStyle = '#00ff00';
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+
+      const x = Math.min(this.selectionRect.startX, this.selectionRect.endX);
+      const y = Math.min(this.selectionRect.startY, this.selectionRect.endY);
+      const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
+      const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
+
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeRect(x, y, width, height);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   }
 
   // Метод для получения текущего радиуса порта с учетом масштаба и подсветки
@@ -130,65 +215,6 @@ export class CanvasRenderer {
     };
   }
 
-  draw() {
-    const ctx = this.canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = this.canvas.getBoundingClientRect();
-    this.canvas.width = rect.width;
-    this.canvas.height = rect.height;
-
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.save();
-    ctx.translate(this.panX.value, this.panY.value);
-    ctx.scale(this.scale.value, this.scale.value);
-
-    if (this.options.showGrid.value) {
-      this.drawGrid(ctx);
-    }
-
-    this.elements.value.forEach(element => {
-      const isSelected = this.selectedElements.some(sel => sel.id === element.id);
-      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
-        this.options.showPorts.value, this.options.showColors.value,
-        this.options.showElementAxes.value);
-    });
-
-    this.drawAxes(ctx);
-
-    if (this.options.showPorts.value) {
-      this.drawPorts(ctx);
-    }
-
-    if (this.options.showCallouts.value) {
-      this.drawCallouts(ctx);
-    }
-
-    this.drawInfo(ctx);
-    ctx.restore();
-
-    if (this.tooltipPort) {
-      this.drawTooltip(ctx);
-    }
-
-    if (this.selectionRect) {
-      ctx.save();
-      ctx.strokeStyle = '#00ff00';
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-
-      const x = Math.min(this.selectionRect.startX, this.selectionRect.endX);
-      const y = Math.min(this.selectionRect.startY, this.selectionRect.endY);
-      const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
-      const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
-
-      ctx.fillRect(x, y, width, height);
-      ctx.strokeRect(x, y, width, height);
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-  }
 
   drawGrid(ctx) {
     const gridStepWorld = this.options.gridStepM?.value || 50;

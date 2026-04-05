@@ -4,12 +4,11 @@ export class StorageManager {
     this.key = key;
   }
 
-  save(elements, nextElementId, nextPortId, nextGroupId, render) {
+  save(elements, nextElementId, nextPortId, render) {
     const data = {
       elements: elements.map((el) => el.toJSON()),
       nextElementId,
       nextPortId,
-      nextGroupId,
       panX: render.panX.value,
       panY: render.panY.value,
       scale: render.scale.value,
