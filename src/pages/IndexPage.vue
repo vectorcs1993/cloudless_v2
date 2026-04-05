@@ -1,88 +1,113 @@
 <template>
   <div class="app" :class="{ 'dark-theme': isDarkTheme }">
-    <q-splitter :dark="isDarkTheme" v-model="splitterModel" class="full-height-splitter" :limits="[15, 85]">
+    <q-splitter :dark="isDarkTheme" v-model="splitterModel1" :limits="[20, 80]" class="full-height-splitter">
       <template v-slot:before>
-        <div class="toolbar">
-          <h3>HVAC Editor</h3>
-          <q-card :dark="isDarkTheme" square>
-            <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
-              <q-tab name="library" label="Библиотека" />
-              <q-tab name="settings" label="Настройки" />
-            </q-tabs>
-            <q-separator />
-            <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" animated>
-              <q-tab-panel name="library">
-                <div class="drag-items">
-                  <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
-                    @dragend="onDragEnd">
-                    <div class="drag-item-preview" v-html="item.svg"></div>
-                    <span class="drag-item-label">{{ item.label }}</span>
+        <q-splitter horizontal :dark="isDarkTheme" v-model="splitterModel2">
+          <template v-slot:before>
+            <q-card :dark="isDarkTheme" square class="fit" flat>
+              <q-card-section>
+                <h4>Расчёт воздуховодов онлайн</h4>
+              </q-card-section>
+              <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
+                <q-tab name="library" label="Библиотека" />
+                <q-tab name="settings" label="Настройки" />
+              </q-tabs>
+              <q-separator />
+              <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" animated>
+                <q-tab-panel name="library">
+                  <div class="drag-items">
+                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
+                      @dragend="onDragEnd">
+                      <div class="drag-item-preview" v-html="item.svg"></div>
+                      <span class="drag-item-label">{{ item.label }}</span>
+                    </div>
                   </div>
-                </div>
-              </q-tab-panel>
-              <q-tab-panel name="settings">
-                <div class="settings-grid">
-                  <label>Масштаб размеров (мм/px):</label>
-                  <div>
-                    <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
-                      class="inline-input" debounce="500" />
-                    <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+                </q-tab-panel>
+                <q-tab-panel name="settings">
+                  <div class="settings-grid">
+                    <label>Масштаб размеров (мм/px):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
+                        class="inline-input" debounce="500" />
+                      <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+                    </div>
+
+                    <label>Масштаб сетки:</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
+                        class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
+                      <span class="hint-text">px</span>
+                    </div>
+
+                    <label>Темная тема:</label>
+                    <div><q-toggle v-model="isDarkTheme" /></div>
+
+                    <label>Сетка:</label>
+                    <div><q-toggle v-model="showGrid" /></div>
+
+                    <label>Показать порты:</label>
+                    <div><q-toggle v-model="showPorts" /></div>
+
+                    <template v-if="showPorts">
+                      <label>Привязка к портам:</label>
+                      <div><q-toggle v-model="snapToPorts" /></div>
+                    </template>
+
+                    <template v-if="showPorts && snapToPorts">
+                      <label>Автообновление связей:</label>
+                      <div><q-toggle v-model="autoUpdateConnections" /></div>
+                    </template>
+
+                    <label>Показать выноски:</label>
+                    <div><q-toggle v-model="showCallouts" /></div>
+
+                    <label>Показывать цвета:</label>
+                    <div><q-toggle v-model="showColors" /></div>
+
+                    <label>Показывать оси элементов:</label>
+                    <div><q-toggle v-model="showElementAxes" /></div>
                   </div>
+                </q-tab-panel>
+              </q-tab-panels>
 
-                  <label>Масштаб сетки:</label>
-                  <div>
-                    <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
-                      class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
-                    <span class="hint-text">px</span>
-                  </div>
+              <q-card-section class="save-controls">
+                <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
+                <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
+                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" label="Обновить связи" dense />
+                <q-btn @click="copySelected" color="secondary" :disable="selectedElements.length === 0" dense>
+                  <q-icon name="content_copy" />
+                  <span class="q-ml-xs">Копировать ({{ selectedElements.length }})</span>
+                </q-btn>
+                <q-btn @click="pasteElements" color="secondary" :disable="!clipboardElements.length" dense>
+                  <q-icon name="content_paste" />
+                  <span class="q-ml-xs">Вставить</span>
+                </q-btn>
+              </q-card-section>
+            </q-card>
+          </template>
+          <template v-slot:after>
+            <q-card :dark="isDarkTheme" class="fit" flat>
+              <q-card-section>
+                Дерево проекта
+              </q-card-section>
+              <q-card-section>
+                <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes" @update:expanded="onExpandedChange" node-key="id"
+                  label-key="label" children-key="children" no-connectors @update:selected="onTreeSelect" default-expand-all
+                  :selected.sync="selectedTreeNode">
+                  <template v-slot:default-header="prop">
 
-                  <label>Темная тема:</label>
-                  <div><q-toggle v-model="isDarkTheme" /></div>
-
-                  <label>Сетка:</label>
-                  <div><q-toggle v-model="showGrid" /></div>
-
-                  <label>Показать порты:</label>
-                  <div><q-toggle v-model="showPorts" /></div>
-
-                  <template v-if="showPorts">
-                    <label>Привязка к портам:</label>
-                    <div><q-toggle v-model="snapToPorts" /></div>
+                    <div :class="['tree-node', { 'tree-node-selected': prop.node.id === selectedTreeNode }]">
+                      <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
+                      <span>{{ prop.node.label }}</span>
+                    </div>
                   </template>
-
-                  <template v-if="showPorts && snapToPorts">
-                    <label>Автообновление связей:</label>
-                    <div><q-toggle v-model="autoUpdateConnections" /></div>
-                  </template>
-
-                  <label>Показать выноски:</label>
-                  <div><q-toggle v-model="showCallouts" /></div>
-
-                  <label>Показывать цвета:</label>
-                  <div><q-toggle v-model="showColors" /></div>
-
-                  <label>Показывать оси элементов:</label>
-                  <div><q-toggle v-model="showElementAxes" /></div>
-                </div>
-              </q-tab-panel>
-            </q-tab-panels>
-          </q-card>
-
-          <div class="save-controls">
-            <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
-            <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
-            <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" label="Обновить связи" dense />
-            <q-btn @click="copySelected" color="secondary" :disable="selectedElements.length === 0" dense>
-              <q-icon name="content_copy" />
-              <span class="q-ml-xs">Копировать ({{ selectedElements.length }})</span>
-            </q-btn>
-            <q-btn @click="pasteElements" color="secondary" :disable="!clipboardElements.length" dense>
-              <q-icon name="content_paste" />
-              <span class="q-ml-xs">Вставить</span>
-            </q-btn>
-          </div>
-        </div>
+                </q-tree>
+              </q-card-section>
+            </q-card>
+          </template>
+        </q-splitter>
       </template>
+
       <template v-slot:after>
         <div class="canvas-container">
           <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
@@ -132,8 +157,8 @@
                           <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                             @update:model-value="val => onParameterChange(val, param.name)" />
                           <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
-                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                            :disable="isGroupSelected" :options="param.options" option-label="label" option-value="value" dense outlined emit-value
+                            map-options @update:model-value="(val) => onParameterChange(val, param.name)" />
                           <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
                             :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
                         </q-item-section>
@@ -148,22 +173,31 @@
                 <q-tab-panel name="positions">
                   <div class="single-element-info">
                     <q-list dense>
-                      <q-item v-for="param in getElementParametersPositions(selectedElement)" :key="param.name">
+                      <q-item>
                         <q-item-section class="param-label-col">
-                          <q-item-label>{{ param.label }}:</q-item-label>
+                          <q-item-label>X (px):</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
-                            @update:model-value="val => onParameterChange(val, param.name)" />
-                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
-                            @update:model-value="(val) => onParameterChange(val, param.name)" />
-                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'x')" />
                         </q-item-section>
-                        <q-item-section side class="param-unit-col">
-                          <span v-if="param.unit">{{ param.unit }}</span>
-                          <span v-else>—</span>
+                      </q-item>
+                      <q-item>
+                        <q-item-section class="param-label-col">
+                          <q-item-label>Y (px):</q-item-label>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'y')" />
+                        </q-item-section>
+                      </q-item>
+                      <q-item>
+                        <q-item-section class="param-label-col">
+                          <q-item-label>Поворот (°):</q-item-label>
+                        </q-item-section>
+                        <q-item-section>
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'rotation')" />
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -190,18 +224,13 @@
                 <q-tab-panel name="callout">
                   <div class="single-element-info">
                     <q-list dense>
-                      <q-item v-for="param in getElementParametersCallout(selectedElement)" :key="param.name">
+                      <q-item>
                         <q-item-section class="param-label-col">
-                          <q-item-label>{{ param.label }}:</q-item-label>
+                          <q-item-label>Показывать выноску:</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
-                            @update:model-value="val => onParameterChange(val, param.name)" />
-                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
-                            @update:model-value="(val) => onParameterChange(val, param.name)" />
-                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout"
+                            @update:model-value="val => onParameterChange(val, 'showCallout')" />
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -221,7 +250,6 @@
                       <span v-else class="q-ml-auto text-negative">не подключен</span>
                     </div>
                   </div>
-
                 </q-tab-panel>
               </q-tab-panels>
             </div>
@@ -245,7 +273,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, shallowRef, readonly } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, readonly } from 'vue';
 import { Notify } from 'quasar'
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { LayerManager } from './LayerManager.js';
@@ -253,7 +281,7 @@ import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
-import { BaseElement } from './Elements.js';
+import { BaseElement, dragItems } from './Elements.js';
 import { Group } from './Group.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Transition } from './Transition.js';
@@ -268,82 +296,10 @@ const showNotify = (options) => {
   Notify.create(options);
 };
 
-const dragItems = Object.freeze([
-  {
-    type: 'duct',
-    label: 'Воздуховод',
-    color: '#4a90e2',
-    width: 64,
-    height: 40,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="24" width="40" height="16" fill="#4a90e2" stroke="#2c3e50" stroke-width="2" rx="2"/>
-      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
-    </svg>`
-  },
-  {
-    type: 'fan',
-    label: 'Вентилятор',
-    color: '#f39c12',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="18" fill="#f39c12" stroke="#2c3e50" stroke-width="2"/>
-      <path d="M32 14 L32 8 M32 56 L32 50 M14 32 L8 32 M56 32 L50 32 M20 20 L16 16 M44 44 L48 48 M20 44 L16 48 M44 20 L48 16" stroke="#2c3e50" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="32" cy="32" r="6" fill="#e67e22"/>
-    </svg>`
-  },
-  {
-    type: 'tee',
-    label: 'Тройник',
-    color: '#27ae60',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="24" width="40" height="16" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
-      <rect x="28" y="12" width="8" height="40" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
-    </svg>`
-  },
-  {
-    type: 'elbow',
-    label: 'Отвод',
-    color: '#e74c3c',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <path d="M12 32 L32 32 L32 52" fill="none" stroke="#e74c3c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="12" cy="32" r="3" fill="#e74c3c"/>
-      <circle cx="32" cy="32" r="3" fill="#e74c3c"/>
-      <circle cx="32" cy="52" r="3" fill="#e74c3c"/>
-    </svg>`
-  },
-  {
-    type: 'cross',
-    label: 'Крестовина',
-    color: '#9b59b6',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="28" width="40" height="8" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
-      <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
-    </svg>`
-  },
-  {
-    type: 'transition',
-    label: 'Переход',
-    color: '#e67e22',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <polygon points="12,24 52,20 52,44 12,40" fill="#e67e22" stroke="#2c3e50" stroke-width="2"/>
-      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
-      <text x="32" y="54" font-size="8" text-anchor="middle" fill="#fff">${'⌀'}125→200</text>
-    </svg>`
-  }
-]);
-
 
 // Состояние
-const splitterModel = ref(15);
+const splitterModel1 = ref(20);
+const splitterModel2 = ref(60);
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
 const showPorts = ref(true);
@@ -355,19 +311,16 @@ const gridStepM = ref(50);
 const mmPerPx = ref(2);
 const autoUpdateConnections = ref(true);
 
-// Оптимизационные флаги
-let redrawTimeout = null;
-let isUpdatingSelection = false;
-let renderFrameRequest = null;
-
 // Refs
 const tabEditor = ref('library');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
-const elements = shallowRef([]);
-const selectedElements = shallowRef([]);
+const elements = ref([]);
+const selectedElements = ref([]);
 const mouseWorldPos = ref(null);
-const clipboardElements = shallowRef([]);
+const clipboardElements = ref([]);
+const selectedTreeNode = ref(null);
+const expandedTreeNodes = ref([]);
 
 // Менеджеры
 let renderer = null;
@@ -382,47 +335,106 @@ let nextElementId = 100;
 let nextPortId = 1000;
 let nextGroupId = 1000;
 
-// Drag and drop состояние
+// Drag and drop
 let dragType = null;
 let ghostElement = null;
+let redrawTimeout = null;
+let isUpdatingSelection = false;
+let renderFrameRequest = null;
 
-// Вычисляемые свойства
-const selectedElement = computed(() => {
-  const selected = selectedElements.value;
-  return selected.length === 1 ? selected[0] : null;
+// Вычисляемые
+const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
+const isGroupSelected = computed(() => selectedElement.value instanceof Group);
+
+// Простое построение дерева
+const projectTree = computed(() => {
+  const buildNode = (item) => {
+    if (item instanceof Group) {
+      return {
+        id: item.id,
+        label: item.name || `Группа ${item.id}`,
+        icon: 'folder',
+        color: 'orange',
+        info: `${item.elements?.length || 0} эл.`,
+        children: (item.elements || []).map(buildNode),
+        element: item
+      };
+    }
+
+    const typeNames = { duct: 'Воздуховод', transition: 'Переход', elbow: 'Отвод', tee: 'Тройник', cross: 'Крестовина', fan: 'Вентилятор' };
+    const iconMap = { duct: 'timeline', transition: 'swap_horiz', elbow: 'trending_flat', tee: 'call_split', cross: 'call_merge', fan: 'toys' };
+
+    let info = `X:${Math.round(item.x)} Y:${Math.round(item.y)}`;
+    if (item.type === 'duct' || item.type === 'transition') info += ` | ${item.a}мм`;
+    if (item.type === 'elbow') info += ` | R:${item.r}мм`;
+    if (item.type === 'fan') info += ` | ${item.flow || 0} м³/ч`;
+
+
+    return {
+      id: item.id,
+      label: `${typeNames[item.type] || item.type}: ${item.name || item.id}`,
+      icon: iconMap[item.type] || 'circle',
+      color: item.color || '#888',
+      info: info,
+      element: item
+    };
+  };
+
+  return elements.value.map(buildNode);
 });
 
-const isGroupSelected = computed(() => {
-  const el = selectedElement.value;
-  return el && el instanceof Group;
-});
+// Обновление дерева и выделения
+const updateTreeAndSelection = () => {
+  // Обновляем выделение в дереве
+  if (selectedElement.value) {
+    selectedTreeNode.value = selectedElement.value.id;
+  }
+};
+
+// Обработчики дерева
+const onTreeSelect = (nodeId) => {
+  if (!nodeId) return;
+
+  const findElement = (nodes) => {
+    for (const node of nodes) {
+      if (node.id === nodeId && node.element) return node.element;
+      if (node.children) {
+        const found = findElement(node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const found = findElement(projectTree.value);
+  if (found) {
+    updateSelection([found]);
+    if (renderer?.canvas) {
+      const cx = renderer.canvas.clientWidth / 2;
+      const cy = renderer.canvas.clientHeight / 2;
+      renderOptions.panX.value = cx - found.x * renderOptions.scale.value;
+      renderOptions.panY.value = cy - found.y * renderOptions.scale.value;
+      scheduleRender();
+    }
+  }
+};
+
+const onExpandedChange = (val) => { expandedTreeNodes.value = val; };
 
 // Параметры рендерера
 const renderOptions = {
-  scale: ref(1),
-  panX: ref(0),
-  panY: ref(0),
-  showGrid: readonly(showGrid),
-  showPorts: readonly(showPorts),
-  showColors: readonly(showColors),
-  showCallouts: readonly(showCallouts),
-  snapToPorts: readonly(snapToPorts),
-  autoUpdateConnections: readonly(autoUpdateConnections),
-  showElementAxes: readonly(showElementAxes),
-  isDarkTheme: readonly(isDarkTheme),
-  gridStepM: readonly(gridStepM),
-  mmPerPx: readonly(mmPerPx),
-  mouseWorldPos,
+  scale: ref(1), panX: ref(0), panY: ref(0),
+  showGrid: readonly(showGrid), showPorts: readonly(showPorts), showColors: readonly(showColors),
+  showCallouts: readonly(showCallouts), snapToPorts: readonly(snapToPorts),
+  autoUpdateConnections: readonly(autoUpdateConnections), showElementAxes: readonly(showElementAxes),
+  isDarkTheme: readonly(isDarkTheme), gridStepM: readonly(gridStepM), mmPerPx: readonly(mmPerPx), mouseWorldPos
 };
 
-// ========== ОПТИМИЗИРОВАННЫЕ ФУНКЦИИ ==========
+// ========== ОСНОВНЫЕ ФУНКЦИИ ==========
 
 const scheduleRender = () => {
   if (renderFrameRequest) return;
-  renderFrameRequest = requestAnimationFrame(() => {
-    renderer?.draw();
-    renderFrameRequest = null;
-  });
+  renderFrameRequest = requestAnimationFrame(() => { renderer?.draw(); renderFrameRequest = null; });
 };
 
 const debouncedDraw = () => {
@@ -435,119 +447,23 @@ const updateSelection = (newSelection, skipRender = false) => {
   isUpdatingSelection = true;
 
   try {
-    const currentIds = selectedElements.value.map(el => el?.id).join(',');
-    const newIds = newSelection.map(el => el?.id).join(',');
-
-    if (currentIds !== newIds) {
-      selectedElements.value = newSelection;
-      renderer?.setSelectedElements(newSelection);
-      if (!skipRender) scheduleRender();
-    }
+    selectedElements.value = newSelection;
+    renderer?.setSelectedElements(newSelection);
+    updateTreeAndSelection();
+    if (!skipRender) scheduleRender();
   } finally {
     isUpdatingSelection = false;
   }
 };
 
-const updateParameters = () => {
-  // Принудительно обновляем выбранные элементы
-  const currentSelected = selectedElements.value;
-  if (currentSelected.length > 0) {
-    // Создаем копии, чтобы Vue увидел изменения
-    selectedElements.value = [...currentSelected];
-
-    // Обновляем параметры каждого элемента
-    currentSelected.forEach((el) => {
-      if (el.x !== undefined) {
-        // Триггерим обновление
-        el.x = el.x;
-        el.y = el.y;
-        el.rotation = el.rotation;
-      }
-    });
-  }
-}
-
-// ========== РИСОВАНИЕ ПРИЗРАКА ==========
-const drawGhost = () => {
-  if (!ghostElement || !renderer) return;
-
-  const ctx = renderer.canvas.getContext('2d');
-  if (!ctx) return;
-
-  ctx.save();
-  ctx.translate(renderOptions.panX.value, renderOptions.panY.value);
-  ctx.scale(renderOptions.scale.value, renderOptions.scale.value);
-  ctx.globalAlpha = 0.6;
-  ghostElement.draw(ctx, renderOptions.scale.value, false, isDarkTheme.value, showPorts.value, showColors.value, showElementAxes.value);
-  ctx.globalAlpha = 1.0;
-  ctx.restore();
-};
-
-// Патчим метод draw рендерера для отрисовки призрака
-const patchRendererDraw = () => {
-  if (!renderer) return;
-
-  const originalDraw = renderer.draw.bind(renderer);
-  renderer.draw = () => {
-    originalDraw();
-    drawGhost();
-  };
-};
-
-// ========== ОБРАБОТЧИКИ ==========
-
-const onGridStepChange = (value) => {
-  let newValue = parseInt(value);
-  if (isNaN(newValue)) newValue = 50;
-  newValue = Math.min(500, Math.max(50, newValue));
-  if (gridStepM.value !== newValue) {
-    gridStepM.value = newValue;
-    debouncedDraw();
-  }
-};
-
-const getElementTypeName = (element) => {
-  if (!element) return 'Неизвестно';
-  return typeof element.getTypeName === 'function' ? element.getTypeName() :
-    (BaseElement.getAvailableTypes()[element.type] || element.type || 'Неизвестно');
-};
-
-const getElementParameters = (element) => {
-  return element && typeof element.getParameters === 'function' ? element.getParameters() : [];
-};
-
-const getElementParametersPositions = (element) => {
-  return element && typeof element.getParametersPosition === 'function' ? element.getParametersPosition() : [];
-};
-
-const getElementParametersCallout = (element) => {
-  return element && typeof element.getParametersCallout === 'function' ? element.getParametersCallout() : [];
-};
+const clearSelection = () => updateSelection([], true);
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
-
-  console.log(`Изменяем ${paramName} на ${value}`);
   selectedElement.value[paramName] = value;
-
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
-
-  if (connectionManager && autoUpdateConnections.value) {
-    connectionManager.updateAllPortsAndConnections(40);
-  }
-
-  // Принудительно обновляем UI панели без сброса выделения
-  if (selectedElement.value) {
-    // Создаем новый массив, чтобы Vue увидел изменения
-    selectedElements.value = [...selectedElements.value];
-  }
-
-  scheduleRender();
-};
-
-const clearSelection = () => {
-  updateSelection([], true);
+  if (connectionManager && autoUpdateConnections.value) connectionManager.updateAllPortsAndConnections(40);
   scheduleRender();
 };
 
@@ -555,95 +471,42 @@ const clearSelection = () => {
 
 const copySelected = () => {
   if (selectedElements.value.length === 0) return;
-
-  // Проверяем, есть ли среди выбранных элементов группы
-  const hasGroup = selectedElements.value.some(el => el instanceof Group);
-
-  if (hasGroup) {
-    showNotify({
-      type: 'warning',
-      message: 'Нельзя копировать группы! Сначала разгруппируйте их (кнопка "Разгруппировать")',
-      position: 'top',
-      timeout: 3000
-    });
+  if (selectedElements.value.some(el => el instanceof Group)) {
+    showNotify({ type: 'warning', message: 'Нельзя копировать группы! Сначала разгруппируйте их', position: 'top', timeout: 3000 });
     return;
   }
-
-  clipboardElements.value = selectedElements.value.map(element => {
-    const json = element.toJSON?.() || element;
-    return { ...json, callouts: [] };
-  });
-
-  showNotify({
-    type: 'positive',
-    message: `Скопировано ${clipboardElements.value.length} элементов`,
-    position: 'top',
-    timeout: 1000
-  });
+  clipboardElements.value = selectedElements.value.map(el => ({ ...el.toJSON(), callouts: [] }));
+  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, position: 'top', timeout: 1000 });
 };
 
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
-
   const newElements = [];
-  const offset = 50;
-
   clipboardElements.value.forEach(json => {
-    // Создаем новый JSON с новыми ID
     const newJson = {
-      ...json,
-      id: ++nextElementId,
-      x: json.x + offset,
-      y: json.y + offset,
-      ports: (json.ports || []).map(port => ({
-        ...port,
-        id: ++nextPortId,
-        connectedElementId: null,
-        connectedPortId: null
-      })),
+      ...json, id: ++nextElementId, x: json.x + 50, y: json.y + 50,
+      ports: (json.ports || []).map(p => ({ ...p, id: ++nextPortId, connectedElementId: null, connectedPortId: null })),
       callouts: []
     };
-
-    const newElement = ElementFactory.createFromJSON(newJson);
-
-    if (newElement.name) {
-      const baseName = newElement.name.replace(/\s*\(копия.*\)\s*$/, '');
-      newElement.name = `${baseName} (копия)`;
-    }
-
-    newElement.updatePorts?.();
-    newElement.addCallout?.(newElement.x, newElement.y - 150);
-    newElements.push(newElement);
+    const el = ElementFactory.createFromJSON(newJson);
+    el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
+    el.updatePorts?.();
+    el.addCallout?.(el.x, el.y - 150);
+    newElements.push(el);
   });
-
   elements.value = [...elements.value, ...newElements];
   updateSelection(newElements);
   scheduleRender();
-
-  showNotify({
-    type: 'positive',
-    message: `Вставлено ${newElements.length} элементов`,
-    position: 'top',
-    timeout: 1000
-  });
+  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов`, position: 'top', timeout: 1000 });
 };
 
 // ========== HOTKEYS ==========
 
 const handleKeyDown = (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') {
-    e.preventDefault();
-    copySelected();
-  } else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') {
-    e.preventDefault();
-    pasteElements();
-  } else if (e.key === 'Delete' || e.key === 'Del') {
-    e.preventDefault();
-    deleteSelected();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    clearSelection();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }
+  else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); pasteElements(); }
+  else if (e.key === 'Delete' || e.key === 'Del') { e.preventDefault(); deleteSelected(); }
+  else if (e.key === 'Escape') { e.preventDefault(); clearSelection(); }
 };
 
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
@@ -654,22 +517,16 @@ const saveToLocalStorage = () => {
 };
 
 const loadFromLocalStorage = () => {
-  if (!storageManager?.load) return;
-
-  const data = storageManager.load();
+  const data = storageManager?.load();
   if (!data) {
     elements.value = [];
-    nextElementId = 100;
-    nextPortId = 1000;
-    nextGroupId = 1000;
+    nextElementId = 100; nextPortId = 1000; nextGroupId = 1000;
     updateSelection([]);
     scheduleRender();
     return;
   }
-
   try {
-    const loadedElements = data.elements.map(json => ElementFactory.createFromJSON(json));
-
+    const loaded = data.elements.map(json => ElementFactory.createFromJSON(json));
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
@@ -684,23 +541,16 @@ const loadFromLocalStorage = () => {
     gridStepM.value = data.gridStepM ?? 50;
     mmPerPx.value = data.mmPerPx ?? 2;
 
-    // ВАЖНО: Обновляем все группы рекурсивно
-    ElementFactory.updateAllGroupsBounds(loadedElements);
-
-    loadedElements.forEach(el => {
-      el.updatePorts?.();
-      el.updateCalloutText?.();
-    });
-
-    elements.value = loadedElements;
+    ElementFactory.updateAllGroupsBounds(loaded);
+    loaded.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
+    elements.value = loaded;
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
     nextGroupId = data.nextGroupId || 1000;
-
     updateSelection([]);
     scheduleRender();
   } catch (error) {
-    console.error('Error loading data:', error);
+    console.error(error);
     elements.value = [];
     updateSelection([]);
     scheduleRender();
@@ -710,37 +560,29 @@ const loadFromLocalStorage = () => {
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     elements.value = [];
-    nextElementId = 100;
-    nextPortId = 1000;
-    nextGroupId = 1000;
+    nextElementId = 100; nextPortId = 1000; nextGroupId = 1000;
     updateSelection([]);
     clipboardElements.value = [];
     scheduleRender();
-    showNotify({ type: 'info', message: 'Сброс выполнен', position: 'bottom-right' });
   }
 };
 
 const updateAllPortsAndConnections = () => {
   const restored = connectionManager?.updateAllPortsAndConnections?.(5) || 0;
   scheduleRender();
-  showNotify({
-    type: 'positive',
-    message: `Восстановлено ${restored} связей!`,
-    position: 'top',
-    timeout: 2000
-  });
+  showNotify({ type: 'positive', message: `Восстановлено ${restored} связей!`, position: 'top', timeout: 2000 });
 };
 
 // ========== DRAG & DROP ==========
 
-const createGhostElement = (itemType, worldX, worldY) => {
-  switch (itemType) {
-    case 'duct': return new DuctDirect(-1, worldX, worldY);
-    case 'fan': return new Fan(-1, worldX, worldY);
-    case 'tee': return new Tee(-1, worldX, worldY);
-    case 'elbow': return new Elbow(-1, worldX, worldY);
-    case 'cross': return new Cross(-1, worldX, worldY);
-    case 'transition': return new Transition(-1, worldX, worldY);
+const createGhostElement = (type, x, y) => {
+  switch (type) {
+    case 'duct': return new DuctDirect(-1, x, y);
+    case 'fan': return new Fan(-1, x, y);
+    case 'tee': return new Tee(-1, x, y);
+    case 'elbow': return new Elbow(-1, x, y);
+    case 'cross': return new Cross(-1, x, y);
+    case 'transition': return new Transition(-1, x, y);
     default: return null;
   }
 };
@@ -750,10 +592,8 @@ const onDragStart = (e, item) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
-    patchRendererDraw(); // Обновляем патч после создания призрака
     scheduleRender();
   }
-
   e.dataTransfer.setData('text/plain', item.type);
   e.dataTransfer.effectAllowed = 'copy';
   const dragIcon = document.createElement('div');
@@ -763,33 +603,14 @@ const onDragStart = (e, item) => {
   setTimeout(() => document.body.removeChild(dragIcon), 0);
 };
 
-const onDragEnd = () => {
-  dragType = null;
-  ghostElement = null;
-  patchRendererDraw(); // Обновляем патч после удаления призрака
-  scheduleRender();
-};
-
-const onDragOver = (e) => {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'copy';
-  if (ghostElement && renderer) {
-    const worldPos = renderer.screenToWorld(e.clientX, e.clientY);
-    if (worldPos) {
-      ghostElement.x = worldPos.x;
-      ghostElement.y = worldPos.y;
-      scheduleRender();
-    }
-  }
-};
-
+const onDragEnd = () => { dragType = null; ghostElement = null; scheduleRender(); };
+const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
 const onDrop = (e) => {
   e.preventDefault();
   if (!dragType) return;
-
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
-    const elementCreators = {
+    const creators = {
       duct: () => new DuctDirect(++nextElementId, worldPos.x, worldPos.y),
       fan: () => new Fan(++nextElementId, worldPos.x, worldPos.y),
       tee: () => new Tee(++nextElementId, worldPos.x, worldPos.y),
@@ -797,201 +618,108 @@ const onDrop = (e) => {
       cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y),
       transition: () => new Transition(++nextElementId, worldPos.x, worldPos.y)
     };
-
-    const creator = elementCreators[dragType];
-    if (creator) {
-      const newElement = creator();
-      newElement.updatePorts?.();
-      newElement.updateCalloutText?.();
-      elements.value = [...elements.value, newElement];
-      updateSelection([newElement]);
-      scheduleRender();
-    }
+    const el = creators[dragType]();
+    el.updatePorts?.();
+    el.updateCalloutText?.();
+    elements.value = [...elements.value, el];
+    updateSelection([el]);
+    scheduleRender();
   }
   ghostElement = null;
   dragType = null;
-  patchRendererDraw();
   scheduleRender();
 };
 
 // ========== ОПЕРАЦИИ С ЭЛЕМЕНТАМИ ==========
 
-const rotateElement = (direction, angle) => {
+const rotateLeft90 = () => {
   if (!selectedElement.value) return;
-
-  const delta = direction === 'left' ? -angle : angle;
-
-  // Для группы - поворачиваем каждый элемент внутри
   if (selectedElement.value instanceof Group) {
     const group = selectedElement.value;
-    const centerX = group.x;
-    const centerY = group.y;
-    const angleRad = delta * Math.PI / 180;
-
-    // Сохраняем позиции всех выносок (рекурсивно)
-    const savedCallouts = [];
-
-    const saveCalloutsRecursive = (element) => {
-      if (element.callouts && element.callouts.length > 0) {
-        savedCallouts.push({
-          callout: element.callouts[0],
-          x: element.callouts[0].x,
-          y: element.callouts[0].y,
-          element: element
-        });
-      }
-      if (element.type === 'group' && element.elements) {
-        element.elements.forEach(saveCalloutsRecursive);
-      }
-    };
-
-    group.elements.forEach(saveCalloutsRecursive);
-
-    // Рекурсивная функция для поворота элементов
-    const rotateElementRecursive = (element) => {
-      if (!element) return;
-
-      // Вычисляем новую позицию элемента относительно центра группы
-      const dx = element.x - centerX;
-      const dy = element.y - centerY;
-      element.x = centerX + (dx * Math.cos(angleRad) - dy * Math.sin(angleRad));
-      element.y = centerY + (dx * Math.sin(angleRad) + dy * Math.cos(angleRad));
-
-      // Поворачиваем сам элемент
-      element.rotation = (element.rotation + delta) % 360;
-
-      // Обновляем порты элемента
-      if (element.updatePorts) element.updatePorts();
-
-      // Рекурсивно обрабатываем вложенные группы
-      if (element.type === 'group' && element.elements) {
-        element.elements.forEach(child => rotateElementRecursive(child));
-        if (element.updateBounds) element.updateBounds();
-      }
-    };
-
-    // Поворачиваем все элементы верхнего уровня
-    group.elements.forEach(rotateElementRecursive);
-
-    // Восстанавливаем позиции выносок (они не должны поворачиваться)
-    savedCallouts.forEach(saved => {
-      saved.callout.x = saved.x;
-      saved.callout.y = saved.y;
-      if (saved.element.updateCalloutText) {
-        saved.element.updateCalloutText();
-      }
+    const centerX = group.x, centerY = group.y;
+    const angle = -90 * Math.PI / 180;
+    group.elements.forEach(el => {
+      const dx = el.x - centerX, dy = el.y - centerY;
+      el.x = centerX + (dx * Math.cos(angle) - dy * Math.sin(angle));
+      el.y = centerY + (dx * Math.sin(angle) + dy * Math.cos(angle));
+      el.rotation = (el.rotation - 90) % 360;
+      el.updatePorts?.();
     });
-
-    // Обновляем границы и выноску группы
     group.updateBounds();
     group.updateCalloutText();
   } else {
-    // Для обычного элемента
-    selectedElement.value.rotation = ((selectedElement.value.rotation || 0) + delta + 360) % 360;
+    selectedElement.value.rotation = (selectedElement.value.rotation - 90 + 360) % 360;
     selectedElement.value.updatePorts?.();
     selectedElement.value.updateCalloutText?.();
   }
-
-  if (connectionManager) {
-    connectionManager.updateAllPortsAndConnections(40);
-  }
-
-  const currentElement = selectedElement.value;
-  // updateSelection([]);
-  // setTimeout(() => {
-  //   updateSelection([currentElement]);
-  // }, 10);
-  updateParameters();
-  updateSelection([currentElement]);
+  connectionManager?.updateAllPortsAndConnections(40);
+  updateTreeAndSelection();
   scheduleRender();
 };
-const rotateLeft90 = () => rotateElement('left', 90);
-const rotateRight90 = () => rotateElement('right', 90);
 
-const rotateLeft180 = () => rotateElement('left', 180);
-const rotateRight180 = () => rotateElement('right', 180);
-
-const moveToTop = () => {
-  if (selectedElement.value) {
-    layerManager?.moveToTop(selectedElement.value);
-    scheduleRender();
+const rotateRight90 = () => {
+  if (!selectedElement.value) return;
+  if (selectedElement.value instanceof Group) {
+    const group = selectedElement.value;
+    const centerX = group.x, centerY = group.y;
+    const angle = 90 * Math.PI / 180;
+    group.elements.forEach(el => {
+      const dx = el.x - centerX, dy = el.y - centerY;
+      el.x = centerX + (dx * Math.cos(angle) - dy * Math.sin(angle));
+      el.y = centerY + (dx * Math.sin(angle) + dy * Math.cos(angle));
+      el.rotation = (el.rotation + 90) % 360;
+      el.updatePorts?.();
+    });
+    group.updateBounds();
+    group.updateCalloutText();
+  } else {
+    selectedElement.value.rotation = (selectedElement.value.rotation + 90) % 360;
+    selectedElement.value.updatePorts?.();
+    selectedElement.value.updateCalloutText?.();
   }
+  connectionManager?.updateAllPortsAndConnections(40);
+  updateTreeAndSelection();
+  scheduleRender();
 };
 
-const moveToBottom = () => {
-  if (selectedElement.value) {
-    layerManager?.moveToBottom(selectedElement.value);
-    scheduleRender();
-  }
-};
+const rotateLeft180 = () => { rotateLeft90(); rotateLeft90(); };
+const rotateRight180 = () => { rotateRight90(); rotateRight90(); };
 
-const moveUp = () => {
-  if (selectedElement.value) {
-    layerManager?.moveUp(selectedElement.value);
-    scheduleRender();
-  }
-};
-
-const moveDown = () => {
-  if (selectedElement.value) {
-    layerManager?.moveDown(selectedElement.value);
-    scheduleRender();
-  }
-};
+const moveToTop = () => { if (selectedElement.value) { layerManager?.moveToTop(selectedElement.value); scheduleRender(); } };
+const moveToBottom = () => { if (selectedElement.value) { layerManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
+const moveUp = () => { if (selectedElement.value) { layerManager?.moveUp(selectedElement.value); scheduleRender(); } };
+const moveDown = () => { if (selectedElement.value) { layerManager?.moveDown(selectedElement.value); scheduleRender(); } };
 
 const deleteSelected = () => {
   if (selectedElements.value.length === 0) return;
-
-  const toDeleteIds = new Set(selectedElements.value.map(el => el.id));
-  selectedElements.value.forEach(element => connectionManager?.disconnectElement(element));
-  elements.value = elements.value.filter(el => !toDeleteIds.has(el.id));
+  const toDelete = new Set(selectedElements.value.map(el => el.id));
+  selectedElements.value.forEach(el => connectionManager?.disconnectElement(el));
+  elements.value = elements.value.filter(el => !toDelete.has(el.id));
   updateSelection([]);
   scheduleRender();
 };
 
 const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
-
-  // Проверяем, есть ли среди выбранных элементов группы
-  const hasGroup = selectedElements.value.some(el => el instanceof Group);
-
-  if (hasGroup) {
-    showNotify({
-      type: 'warning',
-      message: 'Нельзя создавать группы из групп! Выберите только обычные элементы.',
-      position: 'top',
-      timeout: 3000
-    });
+  if (selectedElements.value.some(el => el instanceof Group)) {
+    showNotify({ type: 'warning', message: 'Нельзя группировать группы!', position: 'top', timeout: 3000 });
     return;
   }
-
   const group = new Group(++nextGroupId, [...selectedElements.value]);
   group.updatePorts?.();
-
-  const toRemoveIds = new Set(selectedElements.value.map(el => el.id));
-  elements.value = [...elements.value.filter(el => !toRemoveIds.has(el.id)), group];
+  const toRemove = new Set(selectedElements.value.map(el => el.id));
+  elements.value = [...elements.value.filter(el => !toRemove.has(el.id)), group];
   updateSelection([group]);
   scheduleRender();
 };
 
 const ungroupSelected = () => {
   if (!isGroupSelected.value) return;
-
   const group = selectedElement.value;
-
-  // Проверяем, есть ли внутри группы другие группы
-  const hasNestedGroups = group.elements && group.elements.some(el => el instanceof Group);
-
-  if (hasNestedGroups) {
-    showNotify({
-      type: 'warning',
-      message: 'Нельзя разгруппировать группу, содержащую другие группы! Сначала разгруппируйте вложенные группы.',
-      position: 'top',
-      timeout: 3000
-    });
+  if (group.elements?.some(el => el instanceof Group)) {
+    showNotify({ type: 'warning', message: 'Нельзя разгруппировать группу с вложенными группами!', position: 'top', timeout: 3000 });
     return;
   }
-
   const groupElements = group.getElements();
   elements.value = [...elements.value.filter(el => el.id !== group.id), ...groupElements];
   updateSelection(groupElements);
@@ -1000,77 +728,50 @@ const ungroupSelected = () => {
 
 // ========== CANVAS СОБЫТИЯ ==========
 
-const onCanvasMouseDown = (e) => {
-  if (dragType) return;
-  interactionManager?.onMouseDown(e);
-  updateSelection([...renderer?.selectedElements || []]);
-};
-
+const onCanvasMouseDown = (e) => { if (dragType) return; interactionManager?.onMouseDown(e); updateSelection([...renderer?.selectedElements || []]); };
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
-
   if (dragType && ghostElement) {
-    ghostElement.x = worldPos.x;
-    ghostElement.y = worldPos.y;
+    ghostElement.x = worldPos.x; ghostElement.y = worldPos.y;
     scheduleRender();
   } else {
     interactionManager?.onMouseMove(e);
-    if (renderer?.selectedElements && !isUpdatingSelection) {
-      updateSelection([...renderer.selectedElements], true);
-    }
+    if (renderer?.selectedElements && !isUpdatingSelection) updateSelection([...renderer.selectedElements], true);
   }
 };
-
-const onCanvasMouseUp = (e) => {
-  if (dragType) return;
-  interactionManager?.onMouseUp(e);
-  updateParameters();
-  updateSelection([...renderer?.selectedElements || []]);
-  scheduleRender();
-};
-
-const onWheel = (e) => {
-  interactionManager?.onWheel(e);
-  scheduleRender();
-};
+const onCanvasMouseUp = (e) => { if (dragType) return; interactionManager?.onMouseUp(e); updateSelection([...renderer?.selectedElements || []]); scheduleRender(); };
+const onWheel = (e) => { interactionManager?.onWheel(e); scheduleRender(); };
+const onGridStepChange = (val) => { gridStepM.value = Math.min(500, Math.max(50, parseInt(val) || 50)); debouncedDraw(); };
+const getElementTypeName = (el) => el?.getTypeName?.() || BaseElement.getAvailableTypes()[el?.type] || el?.type || 'Неизвестно';
+const getElementParameters = (el) => el?.getParameters?.() || [];
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
 
 onMounted(() => {
   globalScale.setMmPerPx(mmPerPx.value);
-
   if (localStorage.getItem('theme') === 'dark') isDarkTheme.value = true;
 
   storageManager = new StorageManager('hvac_editor_data');
   connectionManager = new ConnectionManager(elements);
   renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
   selectionManager = new SelectionManager(elements, renderer);
-  interactionManager = new InteractionManager(
-    mainCanvas.value, elements, renderer, connectionManager, selectionManager,
-    { snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale }
-  );
+  interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, selectionManager, {
+    snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
+  });
   layerManager = new LayerManager(elements, renderer);
 
   interactionManager?.setAutoUpdateConnections(autoUpdateConnections.value);
-  interactionManager?.setOnElementMoveCallback?.((movingElements) => {
-    if (!isUpdatingSelection) updateSelection(movingElements, true);
-  });
-
-  watch(autoUpdateConnections, (newVal) => interactionManager?.setAutoUpdateConnections(newVal));
-
-  // Патчим рендерер для отрисовки призрака
-  patchRendererDraw();
+  interactionManager?.setOnElementMoveCallback?.((moving) => { if (!isUpdatingSelection) updateSelection(moving, true); });
+  watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
   loadFromLocalStorage();
 
   const resizeObserver = new ResizeObserver(() => scheduleRender());
   resizeObserver.observe(mainCanvas.value);
-
   window.addEventListener('keydown', handleKeyDown);
   mainCanvas.value.setAttribute('tabindex', '0');
   mainCanvas.value.focus();
-
   scheduleRender();
 
   onBeforeUnmount(() => {
@@ -1084,20 +785,14 @@ onMounted(() => {
 // ========== WATCHERS ==========
 
 watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
-
-watch(mmPerPx, (newVal) => {
-  globalScale.setMmPerPx(newVal);
-
-  // Обновляем все группы рекурсивно
+watch(mmPerPx, (val) => {
+  globalScale.setMmPerPx(val);
   ElementFactory.updateAllGroupsBounds(elements.value);
-
-  elements.value.forEach(el => {
-    el.updatePorts?.();
-    el.updateCalloutText?.();
-  });
+  elements.value.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
+  updateTreeAndSelection();
   debouncedDraw();
 });
-
-watch(elements, () => debouncedDraw(), { deep: false });
-
+watch(elements, () => {
+  debouncedDraw();
+}, { deep: true });
 </script>

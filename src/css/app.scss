@@ -168,6 +168,30 @@
   }
 }
 
-.full-width {
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
+  color: #666;
+}
+
+.dark-theme .tree-node {
+  color: #aaa;
+}
+
+.tree-node-selected {
+  color: #1976d2;
+  font-weight: bold;
+}
+
+.dark-theme .tree-node-selected {
+  color: #42a5f5;
+}
+
+.tree-node-info {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-right: 8px;
 }
