@@ -82,32 +82,57 @@
                 <div class="text-subtitle1">Диспетчер проекта</div>
                 <div>
                   <q-btn icon="add" label="Слой" flat dense size="sm" @click="addNewLayer" />
-                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected" :disable="selectedElements.length < 2" />
+                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected"
+                    :disable="selectedElements.length < 2" />
                 </div>
               </q-card-section>
               <q-separator />
               <q-card-actions class="q-pa-sm">
-                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" dense size="sm" />
-                <q-btn @click="copySelected" color="secondary" icon="content_copy" v-if="selectedElements.length > 0" dense size="sm"/>
-                <q-btn @click="pasteElements" color="secondary" icon="content_paste" v-if="clipboardElements.length > 0" dense size="sm"/>
-                <q-btn @click="expandAllTree" icon="unfold_more" dense size="sm" flat />
-                <q-btn @click="collapseAllTree" icon="unfold_less" dense size="sm" flat />
+                <q-btn @click="updateAllPortsAndConnections" icon="sync" dense flat size="sm" />
+                <q-btn @click="copySelected"  icon="content_copy" v-if="selectedElements.length > 0"
+                  dense flat size="sm"/>
+                <q-btn @click="pasteElements"  icon="content_paste" v-if="clipboardElements.length > 0"
+                 dense flat size="sm" />
+                <q-btn @click="expandAllTree" icon="unfold_more" dense flat size="sm" />
+                <q-btn @click="collapseAllTree" icon="unfold_less" dense flat size="sm" />
               </q-card-actions>
               <q-card-section class="q-pt-none">
                 <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes"
                   @update:expanded="onExpandedChange" node-key="id" label-key="label" children-key="children"
-                  no-connectors @update:selected="onTreeSelect" :selected.sync="selectedTreeNode"
-                  default-expand-all>
-                  <template v-slot:default-header="prop">
-                    <div :class="['tree-node', { 'tree-node-selected': prop.node.id === selectedTreeNode }]"
-                         @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
-                      <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
-                      <span class="tree-node-label">{{ prop.node.label }}</span>
-                      <q-icon v-if="prop.node.layerLocked" name="lock" size="14px" color="negative" class="q-ml-xs" />
-                      <q-icon v-if="!prop.node.layerVisible" name="visibility_off" size="14px" color="grey" class="q-ml-xs" />
-                      <span class="tree-node-info">{{ prop.node.info }}</span>
-                    </div>
-                  </template>
+                  no-connectors @update:selected="onTreeSelect" :selected.sync="selectedTreeNode" default-expand-all>
+<template v-slot:default-header="prop">
+  <div :class="['tree-node', {
+    'tree-node-selected': prop.node.id === selectedTreeNode,
+    'tree-node-layer': prop.node.isLayer,
+    'tree-node-layer-locked': prop.node.isLayer && prop.node.layerLocked,
+    'tree-node-layer-hidden': prop.node.isLayer && !prop.node.layerVisible
+  }]" @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
+
+    <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
+    <span class="tree-node-label">{{ prop.node.label }}</span>
+
+    <!-- Индикаторы для слоя -->
+    <template v-if="prop.node.isLayer">
+      <q-icon v-if="prop.node.layerLocked" name="lock" size="14px" color="negative" class="q-ml-xs" :title="'Слой заблокирован'" />
+      <q-icon v-if="!prop.node.layerVisible" name="visibility_off" size="14px" color="grey" class="q-ml-xs" :title="'Слой скрыт'" />
+      <q-icon v-if="activeLayerId === prop.node.layerId" name="check_circle" size="14px" color="positive" class="q-ml-xs" :title="'Активный слой'" />
+
+      <!-- КНОПКИ ДЕЙСТВИЙ ДЛЯ СЛОЯ -->
+      <q-icon name="edit" size="16px" color="info" class="q-ml-xs cursor-pointer"
+        @click.stop="renameLayer(prop.node.layerId)" :title="'Переименовать'" />
+      <q-icon name="delete" size="16px" color="negative" class="q-ml-xs cursor-pointer"
+        @click.stop="removeLayerWithConfirm(prop.node.layerId)" :title="'Удалить слой'" />
+    </template>
+
+    <!-- Индикаторы для элемента -->
+    <template v-else>
+      <q-icon v-if="prop.node.layerLocked" name="lock" size="12px" color="negative" class="q-ml-xs"
+        :title="`Слой ${prop.node.layerName} заблокирован`" />
+    </template>
+
+    <span class="tree-node-info">{{ prop.node.info }}</span>
+  </div>
+</template>
                 </q-tree>
               </q-card-section>
             </q-card>
@@ -131,92 +156,69 @@
               <q-card-section class="row items-center justify-between">
                 <q-list class="full-width" :dark="isDarkTheme" dense>
                   <q-item>
-                    <q-item-section>
-                      <q-item-label caption>ID</q-item-label>
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{ selectedElement?.id }}</q-item-label>
-                    </q-item-section>
+                    <q-item-section><q-item-label caption>ID</q-item-label></q-item-section>
+                    <q-item-section><q-item-label>{{ selectedElement?.id }}</q-item-label></q-item-section>
                   </q-item>
                   <q-item>
-                    <q-item-section>
-                      <q-item-label caption>Тип</q-item-label>
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{ getElementTypeName(selectedElement) }}</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                  <q-item>
-                    <q-item-section>
-                      <q-item-label caption>Слой</q-item-label>
-                    </q-item-section>
-                    <q-item-section>
-                      <q-select :dark="isDarkTheme" v-model="selectedElementLayer"
-                        :options="layerOptions" label="Слой" dense outlined
-                        @update:model-value="onElementLayerChange" />
-                    </q-item-section>
+                    <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
+                    <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
+                    }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
+
               <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
                 <q-tab name="parameters" label="Параметры" />
                 <q-tab name="positions" label="Позиция" />
                 <q-tab name="callout" label="Выноска" />
                 <q-tab name="links" label="Связи" />
               </q-tabs>
+
               <q-tab-panels v-model="tabElement" :dark="isDarkTheme" animated>
                 <q-tab-panel name="parameters">
                   <div class="single-element-info">
                     <q-list dense>
                       <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
-                        <q-item-section class="param-label-col">
-                          <q-item-label>{{ param.label }}:</q-item-label>
-                        </q-item-section>
+                        <q-item-section class="param-label-col"><q-item-label>{{ param.label
+                        }}:</q-item-label></q-item-section>
                         <q-item-section>
                           <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme"
-                            v-model="selectedElement[param.name]"
-                            @update:model-value="val => onParameterChange(val, param.name)" />
+                            v-model="selectedElement[param.name]" />
                           <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'"
                             v-model="selectedElement[param.name]" :disable="isGroupSelected" :options="param.options"
-                            option-label="label" option-value="value" dense outlined emit-value map-options
-                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                            option-label="label" option-value="value" dense outlined emit-value map-options />
                           <q-input :dark="isDarkTheme" v-else :type="param.type"
                             v-model.number="selectedElement[param.name]" :step="param.step" :min="param.min" dense
-                            outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                            outlined />
                         </q-item-section>
                         <q-item-section side class="param-unit-col">
-                          <span v-if="param.unit">{{ param.unit }}</span>
-                          <span v-else>—</span>
+                          <span v-if="param.unit">{{ param.unit }}</span><span v-else>—</span>
                         </q-item-section>
                       </q-item>
                     </q-list>
                   </div>
                 </q-tab-panel>
+
                 <q-tab-panel name="positions">
                   <div class="single-element-info">
                     <q-list dense>
                       <q-item>
-                        <q-item-section class="param-label-col">
-                          <q-item-label>X (px):</q-item-label>
-                        </q-item-section>
+                        <q-item-section class="param-label-col"><q-item-label>X (px):</q-item-label></q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense
-                            outlined @update:model-value="val => onParameterChange(val, 'x')" />
+                 <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense
+  outlined @update:model-value="val => onParameterChange(val, 'x')" />
                         </q-item-section>
                       </q-item>
                       <q-item>
-                        <q-item-section class="param-label-col">
-                          <q-item-label>Y (px):</q-item-label>
-                        </q-item-section>
+                        <q-item-section class="param-label-col"><q-item-label>Y (px):</q-item-label></q-item-section>
                         <q-item-section>
                           <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense
-                            outlined @update:model-value="val => onParameterChange(val, 'y')" />
+                            outlined @update:model-value="val => onParameterChange(val, 'y')"/>
                         </q-item-section>
                       </q-item>
                       <q-item>
-                        <q-item-section class="param-label-col">
-                          <q-item-label>Поворот (°):</q-item-label>
-                        </q-item-section>
+                        <q-item-section class="param-label-col"><q-item-label>Поворот
+                            (°):</q-item-label></q-item-section>
                         <q-item-section>
                           <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1"
                             dense outlined @update:model-value="val => onParameterChange(val, 'rotation')" />
@@ -243,32 +245,28 @@
                     </div>
                   </div>
                 </q-tab-panel>
+
                 <q-tab-panel name="callout">
                   <div class="single-element-info">
                     <q-list dense>
                       <q-item>
-                        <q-item-section class="param-label-col">
-                          <q-item-label>Показывать выноску:</q-item-label>
-                        </q-item-section>
+                        <q-item-section class="param-label-col"><q-item-label>Показывать
+                            выноску:</q-item-label></q-item-section>
                         <q-item-section>
-                          <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout"
-                            @update:model-value="val => onParameterChange(val, 'showCallout')" />
+                          <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout" />
                         </q-item-section>
                       </q-item>
                     </q-list>
                   </div>
                 </q-tab-panel>
+
                 <q-tab-panel name="links">
-                  <div v-if="selectedElement?.ports && selectedElement.ports.length > 0" class="connections-info">
+                  <div v-if="selectedElement?.ports?.length" class="connections-info">
                     <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                      <q-icon :name="port.isConnected && port.isConnected() ? 'link' : 'link_off'"
-                        :color="port.isConnected && port.isConnected() ? 'positive' : 'negative'" size="16px" />
-                      <span class="q-ml-sm">
-                        {{ port.side }} ({{ port.getDirectionName?.() || port.direction }})
-                      </span>
-                      <span v-if="port.isConnected && port.isConnected()" class="q-ml-auto">
-                        → ID {{ port.connectedElementId }}
-                      </span>
+                      <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'"
+                        :color="port.isConnected?.() ? 'positive' : 'negative'" size="16px" />
+                      <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
+                      <span v-if="port.isConnected?.()" class="q-ml-auto">→ ID {{ port.connectedElementId }}</span>
                       <span v-else class="q-ml-auto text-negative">не подключен</span>
                     </div>
                   </div>
@@ -283,9 +281,7 @@
                 @click="ungroupSelected" class="full-width" />
             </q-card-section>
             <q-card-section>
-              <div class="delete-controls q-mt-md">
-                <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
-              </div>
+              <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
             </q-card-section>
           </q-card>
         </div>
@@ -295,7 +291,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, readonly } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, readonly, shallowRef, triggerRef } from 'vue';
 import { Notify } from 'quasar'
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { ZIndexManager } from './ZIndexManager.js';
@@ -315,9 +311,7 @@ import { Fan } from './Fan.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
 
-const showNotify = (options) => {
-  Notify.create(options);
-};
+const showNotify = (options) => Notify.create(options);
 
 // Состояние
 const splitterModel1 = ref(20);
@@ -337,21 +331,15 @@ const autoUpdateConnections = ref(true);
 const tabEditor = ref('library');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
-const selectedElements = ref([]);
+const selectedElements = ref([]);  // Изменено: было shallowRef, стало ref
 const mouseWorldPos = ref(null);
-const clipboardElements = ref([]);
+const clipboardElements = ref([]);  // Изменено: было shallowRef, стало ref
 const selectedTreeNode = ref(null);
 const expandedTreeNodes = ref([]);
 
-// Новая структура данных - слои
-const layers = ref([
-  {
-    id: 'layer_default',
-    name: 'Слой 1',
-    visible: true,
-    locked: false,
-    elements: []
-  }
+// Структура данных - слои
+const layers = ref([  // Изменено: было shallowRef, стало ref
+  { id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }
 ]);
 const activeLayerId = ref('layer_default');
 
@@ -379,48 +367,42 @@ let renderFrameRequest = null;
 const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
 const isGroupSelected = computed(() => selectedElement.value instanceof Group);
 
-// Получение всех элементов из всех слоёв
 const allElements = computed(() => {
   if (!layers.value) return [];
-  return layers.value.flatMap(layer => layer.elements);
+  const result = [];
+  for (const layer of layers.value) {
+    result.push(...layer.elements);
+  }
+  return result;
 });
 
-// Получение видимых элементов для рендера
 const visibleElements = computed(() => {
   if (!layers.value) return [];
-  return layers.value.flatMap(layer =>
-    layer.visible ? layer.elements : []
-  );
+  const result = [];
+  for (const layer of layers.value) {
+    if (layer.visible) result.push(...layer.elements);
+  }
+  return result;
 });
 
-// Получение интерактивных элементов (не заблокированных)
 const interactiveElements = computed(() => {
   if (!layers.value) return [];
-  return layers.value.flatMap(layer =>
-    !layer.locked ? layer.elements : []
-  );
+  const result = [];
+  for (const layer of layers.value) {
+    if (!layer.locked) result.push(...layer.elements);
+  }
+  return result;
 });
 
-// Опции для выбора слоя в панели свойств
-const layerOptions = computed(() => {
-  return layers.value.map(layer => ({
-    label: `${layer.name} ${layer.locked ? '🔒' : ''} ${!layer.visible ? '👁️' : ''}`,
-    value: layer.id
-  }));
-});
+const layerOptions = computed(() => layers.value.map(layer => ({
+  label: `${layer.name} ${layer.locked ? '🔒' : ''} ${!layer.visible ? '👁️' : ''}`,
+  value: layer.id
+})));
 
-const selectedElementLayer = computed({
-  get: () => {
-    if (!selectedElement.value) return null;
-    const layer = layerManager?.getElementLayer(selectedElement.value);
-    return layer?.id || null;
-  },
-  set: (val) => {}
-});
 
-// Построение дерева проекта с иерархией слоёв
+// Построение дерева проекта
 const projectTree = computed(() => {
-  const buildElementNode = (item, layerInfo = null) => {
+  const buildElementNode = (item, layerInfo) => {
     if (item instanceof Group) {
       return {
         id: item.id,
@@ -428,15 +410,16 @@ const projectTree = computed(() => {
         icon: 'folder',
         color: 'orange',
         info: `${item.elements?.length || 0} эл.`,
-        children: (item.elements || []).map(el => buildElementNode(el, layerInfo)),
+        children: item.elements?.map(el => buildElementNode(el, layerInfo)) || [],
         element: item,
         layerId: layerInfo?.id,
         layerName: layerInfo?.name,
         layerLocked: layerInfo?.locked,
-        layerVisible: layerInfo?.visible
+        layerVisible: layerInfo?.visible,
+        isLayer: false,
+        isGroup: true
       };
     }
-
     return {
       id: item.id,
       label: `${BaseElement.getAvailableTypes()[item.type] || item.type}: ${item.name || item.id}`,
@@ -447,15 +430,15 @@ const projectTree = computed(() => {
       layerId: layerInfo?.id,
       layerName: layerInfo?.name,
       layerLocked: layerInfo?.locked,
-      layerVisible: layerInfo?.visible
+      layerVisible: layerInfo?.visible,
+      isLayer: false,
+      isGroup: false
     };
   };
 
-  // Строим дерево: сначала слои, внутри них элементы и группы
-  const treeNodes = layers.value.map(layer => {
-    // Фильтруем элементы верхнего уровня (не входящие в группы)
+  const result = [];
+  for (const layer of layers.value) {
     const topLevelElements = layer.elements.filter(el => {
-      // Проверяем, не входит ли элемент в какую-либо группу
       let isInGroup = false;
       for (const otherEl of layer.elements) {
         if (otherEl instanceof Group && otherEl.elements?.includes(el)) {
@@ -466,7 +449,7 @@ const projectTree = computed(() => {
       return !isInGroup;
     });
 
-    return {
+    result.push({
       id: `layer_${layer.id}`,
       label: layer.name,
       icon: layer.locked ? 'lock' : (layer.visible ? 'layers' : 'layers_clear'),
@@ -477,92 +460,13 @@ const projectTree = computed(() => {
       layerName: layer.name,
       layerLocked: layer.locked,
       layerVisible: layer.visible,
-      isLayer: true
-    };
-  });
-
-  return treeNodes;
+      isLayer: true,
+      isGroup: false,
+      element: null
+    });
+  }
+  return result;
 });
-
-// Обновление дерева и выделения
-const updateTreeAndSelection = () => {
-  if (selectedElement.value) {
-    selectedTreeNode.value = selectedElement.value.id;
-  }
-};
-
-// Обработчики дерева
-const onTreeSelect = (nodeId) => {
-  if (!nodeId) return;
-
-  const findElement = (nodes) => {
-    for (const node of nodes) {
-      if (node.id === nodeId && node.element) return node.element;
-      if (node.children) {
-        const found = findElement(node.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  const found = findElement(projectTree.value);
-  if (found) {
-    updateSelection([found]);
-    if (renderer?.canvas) {
-      const cx = renderer.canvas.clientWidth / 2;
-      const cy = renderer.canvas.clientHeight / 2;
-      renderOptions.panX.value = cx - found.x * renderOptions.scale.value;
-      renderOptions.panY.value = cy - found.y * renderOptions.scale.value;
-      scheduleRender();
-    }
-  }
-};
-
-const onExpandedChange = (val) => { expandedTreeNodes.value = val; };
-
-const expandAllTree = () => {
-  const getAllIds = (nodes) => {
-    let ids = [];
-    for (const node of nodes) {
-      ids.push(node.id);
-      if (node.children) {
-        ids.push(...getAllIds(node.children));
-      }
-    }
-    return ids;
-  };
-  expandedTreeNodes.value = getAllIds(projectTree.value);
-};
-
-const collapseAllTree = () => {
-  expandedTreeNodes.value = [];
-};
-
-// Контекстное меню для дерева
-const onTreeNodeContextMenu = (event, node) => {
-  event.preventDefault();
-  if (node.isLayer) {
-    // Меню для слоя
-    const actions = [
-      { label: node.layerVisible ? 'Скрыть слой' : 'Показать слой', action: () => toggleLayerVisibility(node.layerId) },
-      { label: node.layerLocked ? 'Разблокировать слой' : 'Заблокировать слой', action: () => toggleLayerLock(node.layerId) },
-      { label: 'Переименовать', action: () => renameLayer(node.layerId) },
-      { label: 'Удалить слой', action: () => removeLayerWithConfirm(node.layerId) }
-    ];
-    // Здесь можно показать кастомное меню
-    showNotify({ type: 'info', message: `Слой: ${node.label}`, timeout: 1000 });
-  } else if (node.element) {
-    // Меню для элемента
-    if (node.element instanceof Group) {
-      const actions = [
-        { label: 'Разгруппировать', action: () => { updateSelection([node.element]); ungroupSelected(); } },
-        { label: 'Выделить все элементы', action: () => updateSelection(node.element.elements) }
-      ];
-    }
-    updateSelection([node.element]);
-  }
-};
 
 // Параметры рендерера
 const renderOptions = {
@@ -577,7 +481,10 @@ const renderOptions = {
 
 const scheduleRender = () => {
   if (renderFrameRequest) return;
-  renderFrameRequest = requestAnimationFrame(() => { renderer?.draw(); renderFrameRequest = null; });
+  renderFrameRequest = requestAnimationFrame(() => {
+    renderer?.draw();
+    renderFrameRequest = null;
+  });
 };
 
 const debouncedDraw = () => {
@@ -588,28 +495,17 @@ const debouncedDraw = () => {
 const updateSelection = (newSelection, skipRender = false) => {
   if (isUpdatingSelection) return;
   isUpdatingSelection = true;
-
   try {
     selectedElements.value = newSelection;
     renderer?.setSelectedElements(newSelection);
-
-    // Обновляем выделение в дереве
-    if (newSelection.length === 1 && newSelection[0]) {
-      selectedTreeNode.value = newSelection[0].id;
-    } else {
-      selectedTreeNode.value = null;
-    }
-
+    selectedTreeNode.value = (newSelection.length === 1 && newSelection[0]) ? newSelection[0].id : null;
     if (!skipRender) scheduleRender();
   } finally {
     isUpdatingSelection = false;
   }
 };
 
-const clearSelection = () => {
-  updateSelection([], true);
-  selectedTreeNode.value = null;
-};
+const clearSelection = () => updateSelection([], true);
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
@@ -625,6 +521,7 @@ const onParameterChange = (value, paramName) => {
 const addNewLayer = () => {
   const newLayer = layerManager.addLayer();
   activeLayerId.value = newLayer.id;
+  layers.value = [...layers.value]; // Триггерим обновление
   showNotify({ type: 'positive', message: `Создан слой: ${newLayer.name}`, timeout: 2000 });
   scheduleRender();
 };
@@ -634,28 +531,26 @@ const removeLayerWithConfirm = (layerId) => {
     showNotify({ type: 'warning', message: 'Нельзя удалить последний слой!', timeout: 2000 });
     return;
   }
-
   const layer = layers.value.find(l => l.id === layerId);
   if (!layer) return;
 
   if (layer.elements.length > 0) {
     if (confirm(`Слой "${layer.name}" содержит ${layer.elements.length} элементов. Переместить их на первый слой?`)) {
-      const firstLayer = layers.value[0];
-      layerManager.removeLayer(layerId, firstLayer.id);
+      layerManager.removeLayer(layerId, layers.value[0].id);
+      layers.value = [...layers.value];
       showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён, элементы перемещены`, timeout: 2000 });
-    } else {
-      return;
-    }
+    } else return;
   } else {
     layerManager.removeLayer(layerId);
+    layers.value = [...layers.value];
     showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён`, timeout: 2000 });
   }
-
   scheduleRender();
 };
 
 const toggleLayerVisibility = (layerId) => {
   layerManager.toggleLayerVisibility(layerId);
+  layers.value = [...layers.value];
   const layer = layers.value.find(l => l.id === layerId);
   showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.visible ? 'показан' : 'скрыт'}`, timeout: 1000 });
   scheduleRender();
@@ -663,12 +558,14 @@ const toggleLayerVisibility = (layerId) => {
 
 const toggleLayerLock = (layerId) => {
   layerManager.toggleLayerLock(layerId);
+  layers.value = [...layers.value];
   const layer = layers.value.find(l => l.id === layerId);
   showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.locked ? 'заблокирован' : 'разблокирован'}`, timeout: 1000 });
   scheduleRender();
 };
 
 const setActiveLayer = (layerId) => {
+  clearSelection();
   activeLayerId.value = layerId;
   const layer = layers.value.find(l => l.id === layerId);
   showNotify({ type: 'info', message: `Активный слой: ${layer.name}`, timeout: 1000 });
@@ -677,51 +574,100 @@ const setActiveLayer = (layerId) => {
 const renameLayer = (layerId) => {
   const layer = layers.value.find(l => l.id === layerId);
   if (!layer) return;
-
   const newName = prompt('Введите новое имя слоя:', layer.name);
-  if (newName && newName.trim()) {
+  if (newName?.trim()) {
     layerManager.renameLayer(layerId, newName.trim());
+    layers.value = [...layers.value];
     scheduleRender();
   }
-};
-
-const clearAllLayers = () => {
-  if (confirm('Очистить все слои? Все элементы будут удалены!')) {
-    layerManager.clearAllLayers();
-    updateSelection([]);
-    scheduleRender();
-    showNotify({ type: 'positive', message: 'Все слои очищены', timeout: 2000 });
-  }
-};
-
-const getActiveLayerName = () => {
-  const layer = layers.value.find(l => l.id === activeLayerId.value);
-  return layer?.name || '—';
 };
 
 const onElementLayerChange = (newLayerId) => {
   if (!selectedElement.value) return;
   if (layerManager.moveElementToLayer(selectedElement.value.id, newLayerId)) {
+    layers.value = [...layers.value];
     showNotify({ type: 'positive', message: 'Элемент перемещён на другой слой', timeout: 1000 });
     scheduleRender();
-    updateTreeAndSelection();
+  }
+};
+
+// ========== ОБРАБОТЧИКИ ДЕРЕВА ==========
+
+const onTreeSelect = (nodeId) => {
+  if (!nodeId) return;
+
+  const findNode = (nodes) => {
+    for (const node of nodes) {
+      if (node.id === nodeId) return node;
+      if (node.children?.length) {
+        const found = findNode(node.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const foundNode = findNode(projectTree.value);
+  if (!foundNode) return;
+
+  if (foundNode.isLayer) {
+    selectedTreeNode.value = nodeId;
+     setActiveLayer(foundNode.layerId);
+    showNotify({ type: 'info', message: `Выбран слой: ${foundNode.label} (${foundNode.info})`, timeout: 1500 });
+    return;
+  }
+
+  if (foundNode.element) {
+    updateSelection([foundNode.element]);
+    if (renderer?.canvas) {
+      const cx = renderer.canvas.clientWidth / 2;
+      const cy = renderer.canvas.clientHeight / 2;
+      renderOptions.panX.value = cx - foundNode.element.x * renderOptions.scale.value;
+      renderOptions.panY.value = cy - foundNode.element.y * renderOptions.scale.value;
+      scheduleRender();
+    }
+  }
+};
+
+const onExpandedChange = (val) => { expandedTreeNodes.value = val; };
+
+const expandAllTree = () => {
+  const getAllIds = (nodes) => {
+    let ids = [];
+    for (const node of nodes) {
+      ids.push(node.id);
+      if (node.children?.length) ids.push(...getAllIds(node.children));
+    }
+    return ids;
+  };
+  expandedTreeNodes.value = getAllIds(projectTree.value);
+};
+
+const collapseAllTree = () => { expandedTreeNodes.value = []; };
+
+const onTreeNodeContextMenu = (event, node) => {
+  event.preventDefault();
+  if (node.isLayer) {
+    showNotify({ type: 'info', message: `Слой: ${node.label}`, timeout: 1000 });
+  } else if (node.element) {
+    updateSelection([node.element]);
   }
 };
 
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
 
 const copySelected = () => {
-  if (selectedElements.value.length === 0) return;
+  if (!selectedElements.value.length) return;
   if (selectedElements.value.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя копировать группы! Сначала разгруппируйте их', position: 'top', timeout: 3000 });
+    showNotify({ type: 'warning', message: 'Нельзя копировать группы! Сначала разгруппируйте их', timeout: 3000 });
     return;
   }
   clipboardElements.value = selectedElements.value.map(el => ({ ...el.toJSON(), callouts: [] }));
-  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, position: 'top', timeout: 1000 });
+  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, timeout: 1000 });
 };
 
 const pasteElements = () => {
-  if (clipboardElements.value.length === 0) return;
+  if (!clipboardElements.value.length) return;
   const activeLayer = layerManager.getActiveLayer();
   if (!activeLayer) {
     showNotify({ type: 'warning', message: 'Нет активного слоя для вставки', timeout: 2000 });
@@ -733,7 +679,7 @@ const pasteElements = () => {
   }
 
   const newElements = [];
-  clipboardElements.value.forEach(json => {
+  for (const json of clipboardElements.value) {
     const newJson = {
       ...json, id: ++nextElementId, x: json.x + 50, y: json.y + 50,
       ports: (json.ports || []).map(p => ({ ...p, id: ++nextPortId, connectedElementId: null, connectedPortId: null })),
@@ -744,10 +690,9 @@ const pasteElements = () => {
     el.updatePorts?.();
     el.addCallout?.(el.x, el.y - 150);
     newElements.push(el);
-  });
-
-  layerManager.addElementToActiveLayer(newElements);
-  // Альтернативно: newElements.forEach(el => activeLayer.elements.push(el));
+  }
+  activeLayer.elements.push(...newElements);
+  layers.value = [...layers.value];
   updateSelection(newElements);
   scheduleRender();
   showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`, timeout: 2000 });
@@ -767,63 +712,41 @@ const handleKeyDown = (e) => {
 const saveToLocalStorage = () => {
   const data = {
     layers: layers.value.map(layer => ({
-      id: layer.id,
-      name: layer.name,
-      visible: layer.visible,
-      locked: layer.locked,
+      id: layer.id, name: layer.name, visible: layer.visible, locked: layer.locked,
       elements: layer.elements.map(el => el.toJSON())
     })),
-    activeLayerId: activeLayerId.value,
-    nextElementId,
-    nextPortId,
-    panX: renderOptions.panX.value,
-    panY: renderOptions.panY.value,
-    scale: renderOptions.scale.value,
-    showColors: showColors.value,
-    showElementAxes: showElementAxes.value,
-    isDarkTheme: isDarkTheme.value,
-    showGrid: showGrid.value,
-    showPorts: showPorts.value,
-    snapToPorts: snapToPorts.value,
-    autoUpdateConnections: autoUpdateConnections.value,
-    showCallouts: showCallouts.value,
-    gridStepM: gridStepM.value,
-    mmPerPx: mmPerPx.value,
-    version: '2.0',
-    savedAt: new Date().toISOString()
+    activeLayerId: activeLayerId.value, nextElementId, nextPortId,
+    panX: renderOptions.panX.value, panY: renderOptions.panY.value, scale: renderOptions.scale.value,
+    showColors: showColors.value, showElementAxes: showElementAxes.value, isDarkTheme: isDarkTheme.value,
+    showGrid: showGrid.value, showPorts: showPorts.value, snapToPorts: snapToPorts.value,
+    autoUpdateConnections: autoUpdateConnections.value, showCallouts: showCallouts.value,
+    gridStepM: gridStepM.value, mmPerPx: mmPerPx.value, version: '2.0'
   };
   localStorage.setItem('hvac_editor_data', JSON.stringify(data));
-  showNotify({ type: 'positive', message: 'Сохранено!', position: 'top', timeout: 1000 });
+  showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
 
 const loadFromLocalStorage = () => {
   const savedData = localStorage.getItem('hvac_editor_data');
   if (!savedData) {
-    // Инициализация по умолчанию
     layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     activeLayerId.value = 'layer_default';
-    nextElementId = 100;
-    nextPortId = 1000;
+    nextElementId = 100; nextPortId = 1000;
     updateSelection([]);
     scheduleRender();
     return;
   }
-
   try {
     const data = JSON.parse(savedData);
-
-    // Загружаем слои
-    if (data.layers && Array.isArray(data.layers)) {
+    if (data.layers?.length) {
       layers.value = data.layers.map(layer => ({
         ...layer,
         elements: (layer.elements || []).map(elJson => ElementFactory.createFromJSON(elJson))
       }));
     } else {
-      // Совместимость со старой версией
       const oldElements = data.elements?.map(elJson => ElementFactory.createFromJSON(elJson)) || [];
       layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: oldElements }];
     }
-
     activeLayerId.value = data.activeLayerId || layers.value[0]?.id || 'layer_default';
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
@@ -841,12 +764,10 @@ const loadFromLocalStorage = () => {
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
 
-    // Обновляем все порты и выноски
-    allElements.value.forEach(el => {
+    for (const el of allElements.value) {
       el.updatePorts?.();
       el.updateCalloutText?.();
-    });
-
+    }
     updateSelection([]);
     scheduleRender();
   } catch (error) {
@@ -861,10 +782,9 @@ const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     activeLayerId.value = 'layer_default';
-    nextElementId = 100;
-    nextPortId = 1000;
-    updateSelection([]);
+    nextElementId = 100; nextPortId = 1000;
     clipboardElements.value = [];
+    updateSelection([]);
     scheduleRender();
   }
 };
@@ -872,21 +792,18 @@ const resetToDefault = () => {
 const updateAllPortsAndConnections = () => {
   const restored = connectionManager?.updateAllPortsAndConnections?.(5, layerManager) || 0;
   scheduleRender();
-  showNotify({ type: 'positive', message: `Восстановлено ${restored} связей!`, position: 'top', timeout: 2000 });
+  showNotify({ type: 'positive', message: `Восстановлено ${restored} связей!`, timeout: 2000 });
 };
 
 // ========== DRAG & DROP ==========
 
 const createGhostElement = (type, x, y) => {
-  switch (type) {
-    case 'duct': return new DuctDirect(-1, x, y);
-    case 'fan': return new Fan(-1, x, y);
-    case 'tee': return new Tee(-1, x, y);
-    case 'elbow': return new Elbow(-1, x, y);
-    case 'cross': return new Cross(-1, x, y);
-    case 'transition': return new Transition(-1, x, y);
-    default: return null;
-  }
+  const creators = {
+    duct: () => new DuctDirect(-1, x, y), fan: () => new Fan(-1, x, y),
+    tee: () => new Tee(-1, x, y), elbow: () => new Elbow(-1, x, y),
+    cross: () => new Cross(-1, x, y), transition: () => new Transition(-1, x, y)
+  };
+  return creators[type]?.() || null;
 };
 
 const onDragStart = (e, item) => {
@@ -954,8 +871,8 @@ const onDrop = (e) => {
     const el = creators[dragType]();
     el.updatePorts?.();
     el.updateCalloutText?.();
-
     activeLayer.elements.push(el);
+    layers.value = [...layers.value];
     updateSelection([el]);
     scheduleRender();
   }
@@ -967,58 +884,34 @@ const onDrop = (e) => {
 
 // ========== ОПЕРАЦИИ С ЭЛЕМЕНТАМИ ==========
 
-const rotateLeft90 = () => {
+const rotateElement = (angleDeg) => {
   if (!selectedElement.value) return;
-  if (selectedElement.value instanceof Group) {
-    const group = selectedElement.value;
-    const centerX = group.x, centerY = group.y;
-    const angle = -90 * Math.PI / 180;
-    group.elements.forEach(el => {
-      const dx = el.x - centerX, dy = el.y - centerY;
-      el.x = centerX + (dx * Math.cos(angle) - dy * Math.sin(angle));
-      el.y = centerY + (dx * Math.sin(angle) + dy * Math.cos(angle));
-      el.rotation = (el.rotation - 90) % 360;
-      el.updatePorts?.();
-    });
-    group.updateBounds();
-    group.updateCalloutText();
+  const el = selectedElement.value;
+  if (el instanceof Group) {
+    const centerX = el.x, centerY = el.y;
+    const angleRad = angleDeg * Math.PI / 180;
+    for (const child of el.elements) {
+      const dx = child.x - centerX, dy = child.y - centerY;
+      child.x = centerX + dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+      child.y = centerY + dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+      child.rotation = (child.rotation + angleDeg) % 360;
+      child.updatePorts?.();
+    }
+    el.updateBounds();
+    el.updateCalloutText();
   } else {
-    selectedElement.value.rotation = (selectedElement.value.rotation - 90 + 360) % 360;
-    selectedElement.value.updatePorts?.();
-    selectedElement.value.updateCalloutText?.();
+    el.rotation = (el.rotation + angleDeg + 360) % 360;
+    el.updatePorts?.();
+    el.updateCalloutText?.();
   }
   connectionManager?.updateAllPortsAndConnections(40);
-  updateTreeAndSelection();
   scheduleRender();
 };
 
-const rotateRight90 = () => {
-  if (!selectedElement.value) return;
-  if (selectedElement.value instanceof Group) {
-    const group = selectedElement.value;
-    const centerX = group.x, centerY = group.y;
-    const angle = 90 * Math.PI / 180;
-    group.elements.forEach(el => {
-      const dx = el.x - centerX, dy = el.y - centerY;
-      el.x = centerX + (dx * Math.cos(angle) - dy * Math.sin(angle));
-      el.y = centerY + (dx * Math.sin(angle) + dy * Math.cos(angle));
-      el.rotation = (el.rotation + 90) % 360;
-      el.updatePorts?.();
-    });
-    group.updateBounds();
-    group.updateCalloutText();
-  } else {
-    selectedElement.value.rotation = (selectedElement.value.rotation + 90) % 360;
-    selectedElement.value.updatePorts?.();
-    selectedElement.value.updateCalloutText?.();
-  }
-  connectionManager?.updateAllPortsAndConnections(40);
-  updateTreeAndSelection();
-  scheduleRender();
-};
-
-const rotateLeft180 = () => { rotateLeft90(); rotateLeft90(); };
-const rotateRight180 = () => { rotateRight90(); rotateRight90(); };
+const rotateLeft90 = () => rotateElement(-90);
+const rotateRight90 = () => rotateElement(90);
+const rotateLeft180 = () => rotateElement(-180);
+const rotateRight180 = () => rotateElement(180);
 
 const moveToTop = () => { if (selectedElement.value) { zIndexManager?.moveToTop(selectedElement.value); scheduleRender(); } };
 const moveToBottom = () => { if (selectedElement.value) { zIndexManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
@@ -1026,16 +919,13 @@ const moveUp = () => { if (selectedElement.value) { zIndexManager?.moveUp(select
 const moveDown = () => { if (selectedElement.value) { zIndexManager?.moveDown(selectedElement.value); scheduleRender(); } };
 
 const deleteSelected = () => {
-  if (selectedElements.value.length === 0) return;
+  if (!selectedElements.value.length) return;
   const toDelete = new Set(selectedElements.value.map(el => el.id));
-
-  selectedElements.value.forEach(el => connectionManager?.disconnectElement(el));
-
-  // Удаляем из слоёв
+  for (const el of selectedElements.value) connectionManager?.disconnectElement(el);
   for (const layer of layers.value) {
     layer.elements = layer.elements.filter(el => !toDelete.has(el.id));
   }
-
+  layers.value = [...layers.value];
   updateSelection([]);
   scheduleRender();
 };
@@ -1043,31 +933,26 @@ const deleteSelected = () => {
 const groupSelected = () => {
   if (selectedElements.value.length < 2) return;
   if (selectedElements.value.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя группировать группы!', position: 'top', timeout: 3000 });
+    showNotify({ type: 'warning', message: 'Нельзя группировать группы!', timeout: 3000 });
     return;
   }
-
-  // Проверяем, что все элементы из одного слоя
   const layersSet = new Set();
   for (const el of selectedElements.value) {
     const layer = layerManager.getElementLayer(el);
     if (layer) layersSet.add(layer.id);
   }
-
   if (layersSet.size > 1) {
-    showNotify({ type: 'warning', message: 'Нельзя группировать элементы из разных слоёв!', position: 'top', timeout: 3000 });
+    showNotify({ type: 'warning', message: 'Нельзя группировать элементы из разных слоёв!', timeout: 3000 });
     return;
   }
-
   const targetLayer = layerManager.getElementLayer(selectedElements.value[0]);
   if (!targetLayer) return;
 
   const group = new Group(++nextElementId, [...selectedElements.value]);
   group.updatePorts?.();
-
   const toRemove = new Set(selectedElements.value.map(el => el.id));
   targetLayer.elements = [...targetLayer.elements.filter(el => !toRemove.has(el.id)), group];
-
+  layers.value = [...layers.value];
   updateSelection([group]);
   scheduleRender();
 };
@@ -1076,40 +961,64 @@ const ungroupSelected = () => {
   if (!isGroupSelected.value) return;
   const group = selectedElement.value;
   if (group.elements?.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя разгруппировать группу с вложенными группами!', position: 'top', timeout: 3000 });
+    showNotify({ type: 'warning', message: 'Нельзя разгруппировать группу с вложенными группами!', timeout: 3000 });
     return;
   }
-
   const layer = layerManager.getElementLayer(group);
   if (!layer) return;
-
   const groupElements = group.getElements();
   const index = layer.elements.findIndex(el => el.id === group.id);
-  if (index !== -1) {
-    layer.elements.splice(index, 1, ...groupElements);
-  }
-
+  if (index !== -1) layer.elements.splice(index, 1, ...groupElements);
+  layers.value = [...layers.value];
   updateSelection(groupElements);
   scheduleRender();
 };
 
 // ========== CANVAS СОБЫТИЯ ==========
 
-const onCanvasMouseDown = (e) => { if (dragType) return; interactionManager?.onMouseDown(e); updateSelection([...renderer?.selectedElements || []]); };
+const onCanvasMouseDown = (e) => {
+  if (dragType) return;
+  interactionManager?.onMouseDown(e);
+  updateSelection([...renderer?.selectedElements || []]);
+};
+
 const onCanvasMouseMove = (e) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) mouseWorldPos.value = worldPos;
+
   if (dragType && ghostElement) {
-    ghostElement.x = worldPos.x; ghostElement.y = worldPos.y;
+    ghostElement.x = worldPos.x;
+    ghostElement.y = worldPos.y;
     scheduleRender();
   } else {
     interactionManager?.onMouseMove(e);
-    if (renderer?.selectedElements && !isUpdatingSelection) updateSelection([...renderer.selectedElements], true);
+    if (renderer?.selectedElements && !isUpdatingSelection) {
+      const currentIds = selectedElements.value.map(el => el.id).sort();
+      const newIds = renderer.selectedElements.map(el => el.id).sort();
+      if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
+        updateSelection([...renderer.selectedElements], true);
+      }
+    }
   }
 };
-const onCanvasMouseUp = (e) => { if (dragType) return; interactionManager?.onMouseUp(e); updateSelection([...renderer?.selectedElements || []]); scheduleRender(); };
-const onWheel = (e) => { interactionManager?.onWheel(e); scheduleRender(); };
-const onGridStepChange = (val) => { gridStepM.value = Math.min(500, Math.max(50, parseInt(val) || 50)); debouncedDraw(); };
+
+const onCanvasMouseUp = (e) => {
+  if (dragType) return;
+  interactionManager?.onMouseUp(e);
+  updateSelection([...renderer?.selectedElements || []]);
+  scheduleRender();
+};
+
+const onWheel = (e) => {
+  interactionManager?.onWheel(e);
+  scheduleRender();
+};
+
+const onGridStepChange = (val) => {
+  gridStepM.value = Math.min(500, Math.max(50, parseInt(val) || 50));
+  debouncedDraw();
+};
+
 const getElementTypeName = (el) => el?.getTypeName?.() || BaseElement.getAvailableTypes()[el?.type] || el?.type || 'Неизвестно';
 const getElementParameters = (el) => el?.getParameters?.() || [];
 
@@ -1119,9 +1028,12 @@ onMounted(() => {
   globalScale.setMmPerPx(mmPerPx.value);
   if (localStorage.getItem('theme') === 'dark') isDarkTheme.value = true;
 
-  storageManager = new StorageManager('hvac_editor_data');
+  if (!mainCanvas.value) {
+    console.error('Canvas element not found');
+    return;
+  }
 
-  // Инициализация менеджеров в правильном порядке
+  storageManager = new StorageManager('hvac_editor_data');
   layerManager = new LayerManager(layers, activeLayerId);
   zIndexManager = new ZIndexManager(layers);
   connectionManager = new ConnectionManager(allElements, layerManager);
@@ -1131,13 +1043,11 @@ onMounted(() => {
     mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager
   );
 
-  // Устанавливаем связи между менеджерами
   zIndexManager.setRenderer(renderer);
   interactionManager.setOnElementMoveCallback?.((moving) => {
     if (!isUpdatingSelection) updateSelection(moving, true);
   });
   interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
-
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
   loadFromLocalStorage();
@@ -1157,22 +1067,22 @@ onMounted(() => {
   });
 });
 
-// ========== WATCHERS ==========
+// ========== WATCHERS (как в старой версии) ==========
 
 watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
+
 watch(mmPerPx, (val) => {
   globalScale.setMmPerPx(val);
   ElementFactory.updateAllGroupsBounds(allElements.value);
-  allElements.value.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
-  updateTreeAndSelection();
+  for (const el of allElements.value) {
+    el.updatePorts?.();
+    el.updateCalloutText?.();
+  }
   debouncedDraw();
 });
+
+// Главный watcher на allElements (как в старой версии elements)
 watch(allElements, () => {
   debouncedDraw();
-  updateTreeAndSelection();
-}, { deep: true });
-watch(layers, () => {
-  debouncedDraw();
-  updateTreeAndSelection();
 }, { deep: true });
 </script>

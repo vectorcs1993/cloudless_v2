@@ -1,7 +1,7 @@
 export class CanvasRenderer {
   constructor(canvas, layers, options) {
     this.canvas = canvas;
-    this.layers = layers; // теперь это reactive layers
+    this.layers = layers;
     this.options = options;
     this.scale = options.scale;
     this.panX = options.panX;
@@ -11,11 +11,11 @@ export class CanvasRenderer {
     this.selectionRect = null;
     this.tooltipPort = null;
     this.tooltipPos = { x: 0, y: 0 };
-
-    // Добавляем свойство для призрака
     this.ghostElement = null;
 
-    // Настройки отображения портов
+    // Кэш видимой области
+    this.visibleBounds = { minX: -Infinity, minY: -Infinity, maxX: Infinity, maxY: Infinity };
+
     this.portSettings = {
       baseRadius: 3,
       minRadius: 1,
@@ -25,29 +25,80 @@ export class CanvasRenderer {
     };
   }
 
-  // Добавляем метод установки призрака
   setGhostElement(element) {
     this.ghostElement = element;
   }
 
-  // Добавляем метод очистки призрака
   clearGhostElement() {
     this.ghostElement = null;
   }
 
-  // Получение видимых элементов (учитывая видимость слоёв)
   getVisibleElements() {
-    if (!this.layers.value) return [];
-    return this.layers.value.flatMap(layer =>
-      layer.visible ? layer.elements : []
-    );
+    if (!this.layers?.value) return [];
+    const result = [];
+    for (const layer of this.layers.value) {
+      if (layer.visible) {
+        result.push(...layer.elements);
+      }
+    }
+    return result;
+  }
+
+  // Обновление видимой области камеры
+  updateVisibleBounds() {
+    if (!this.canvas) return;
+
+    const width = this.canvas.width / this.scale.value;
+    const height = this.canvas.height / this.scale.value;
+    const startX = -this.panX.value / this.scale.value;
+    const startY = -this.panY.value / this.scale.value;
+
+    // Добавляем запас в 20% для плавного появления элементов у краёв
+    const padding = Math.max(width, height) * 0.2;
+
+    this.visibleBounds = {
+      minX: startX - padding,
+      minY: startY - padding,
+      maxX: startX + width + padding,
+      maxY: startY + height + padding
+    };
+  }
+
+  // Проверка, видим ли элемент (с учётом его размера)
+  isElementVisible(element) {
+    const width = element.getWidth();
+    const height = element.getHeight();
+    const centerX = element.x;
+    const centerY = element.y;
+
+    // Половина размера элемента
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    // Проверка пересечения bounding box элемента с видимой областью
+    return !(centerX + halfW < this.visibleBounds.minX ||
+      centerX - halfW > this.visibleBounds.maxX ||
+      centerY + halfH < this.visibleBounds.minY ||
+      centerY - halfH > this.visibleBounds.maxY);
+  }
+
+  // Проверка, видна ли выноска
+  isCalloutVisible(callout, element) {
+    return !(callout.x < this.visibleBounds.minX - 100 ||
+      callout.x > this.visibleBounds.maxX + 100 ||
+      callout.y < this.visibleBounds.minY - 50 ||
+      callout.y > this.visibleBounds.maxY + 50);
   }
 
   draw() {
+    if (!this.canvas || !this.canvas.getContext) return;
+
     const ctx = this.canvas.getContext('2d');
     if (!ctx) return;
 
     const rect = this.canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
     this.canvas.width = rect.width;
     this.canvas.height = rect.height;
 
@@ -56,38 +107,56 @@ export class CanvasRenderer {
     ctx.translate(this.panX.value, this.panY.value);
     ctx.scale(this.scale.value, this.scale.value);
 
+    // Обновляем видимую область перед отрисовкой
+    this.updateVisibleBounds();
+
     if (this.options.showGrid.value) {
       this.drawGrid(ctx);
     }
 
-    // Рисуем основные элементы из видимых слоёв
-    const visibleElements = this.getVisibleElements();
-    visibleElements.forEach(element => {
-      const isSelected = this.selectedElements.some(sel => sel && sel.id === element.id);
-      element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
-        this.options.showPorts.value, this.options.showColors.value,
-        this.options.showElementAxes.value);
-    });
-
     this.drawAxes(ctx);
 
+    // Рисуем только видимые элементы
+    const visibleElements = this.getVisibleElements();
+    let drawnCount = 0;
+
+    for (const element of visibleElements) {
+      if (this.isElementVisible(element)) {
+        const isSelected = this.selectedElements.some(sel => sel && sel.id === element.id);
+        try {
+          element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
+            this.options.showPorts.value, this.options.showColors.value,
+            this.options.showElementAxes.value);
+          drawnCount++;
+        } catch (err) {
+          console.warn('Error drawing element:', element.id, err);
+        }
+      }
+    }
+
+    // Рисуем порты только для видимых элементов
     if (this.options.showPorts.value) {
       this.drawPorts(ctx);
     }
 
+    // Рисуем выноски только для видимых элементов
     if (this.options.showCallouts.value) {
       this.drawCallouts(ctx);
     }
 
-    this.drawInfo(ctx);
+    this.drawInfo(ctx, drawnCount, visibleElements.length);
 
-    // Рисуем призрак поверх всех элементов
+    // Рисуем призрак
     if (this.ghostElement) {
       ctx.save();
       ctx.globalAlpha = 0.6;
-      this.ghostElement.draw(ctx, this.scale.value, false, this.options.isDarkTheme.value,
-        this.options.showPorts.value, this.options.showColors.value,
-        this.options.showElementAxes.value);
+      try {
+        this.ghostElement.draw(ctx, this.scale.value, false, this.options.isDarkTheme.value,
+          this.options.showPorts.value, this.options.showColors.value,
+          this.options.showElementAxes.value);
+      } catch (err) {
+        console.warn('Error drawing ghost element:', err);
+      }
       ctx.restore();
     }
 
@@ -98,72 +167,52 @@ export class CanvasRenderer {
     }
 
     if (this.selectionRect) {
-      ctx.save();
-      ctx.strokeStyle = '#00ff00';
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-
-      const x = Math.min(this.selectionRect.startX, this.selectionRect.endX);
-      const y = Math.min(this.selectionRect.startY, this.selectionRect.endY);
-      const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
-      const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
-
-      ctx.fillRect(x, y, width, height);
-      ctx.strokeRect(x, y, width, height);
-      ctx.setLineDash([]);
-      ctx.restore();
+      this.drawSelectionRect(ctx);
     }
   }
 
-  // Метод для получения текущего радиуса порта с учетом масштаба и подсветки
+  drawSelectionRect(ctx) {
+    if (!this.selectionRect) return;
+
+    ctx.save();
+    ctx.strokeStyle = '#00ff00';
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+
+    const x = Math.min(this.selectionRect.startX, this.selectionRect.endX);
+    const y = Math.min(this.selectionRect.startY, this.selectionRect.endY);
+    const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
+    const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
+
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeRect(x, y, width, height);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   getPortRadius(port, isHighlighted = false) {
-    // Получаем текущий масштаб мм/px
     const mmPerPx = this.options.mmPerPx?.value || 2;
-
-    // Базовый размер порта в миллиметрах (например 20 мм)
-    const portSizeMm = 15; // 15 мм - видимый размер порта
-
-    // Переводим мм в пиксели с учетом текущего mmPerPx
+    const portSizeMm = 15;
     let radiusPx = (portSizeMm / mmPerPx) / 2;
-
-    // Применяем масштаб камеры (zoom)
     let radius = radiusPx / this.scale.value;
-
-    // Ограничиваем минимальный и максимальный размер на экране
-    const minScreenRadius = 3;  // минимум 3 пикселя на экране
-    const maxScreenRadius = 12; // максимум 12 пикселей на экране
-
+    const minScreenRadius = 3;
+    const maxScreenRadius = 12;
     radius = Math.min(maxScreenRadius, Math.max(minScreenRadius, radius));
-
-    // Увеличиваем радиус для подсвеченного порта
     if (isHighlighted) {
       radius *= this.portSettings.highlightScale;
     }
-
     return radius;
   }
 
-  // Метод для получения цвета порта
   getPortColor(port, isHighlighted = false) {
-    if (isHighlighted) {
-      return '#ff00ff'; // Ярко-розовый для подсветки
-    }
-
-    if (port.isConnected()) {
-      return '#00ff00'; // Зеленый для подключенных портов
-    }
-
-    // Цвета в зависимости от направления
+    if (isHighlighted) return '#ff00ff';
+    if (port.isConnected?.()) return '#00ff00';
     switch (port.direction) {
-      case 'inlet':
-        return '#00aaff';
-      case 'outlet':
-        return '#ffaa00';
-      case 'branch':
-        return '#aa00ff';
-      default:
-        return '#888888';
+      case 'inlet': return '#00aaff';
+      case 'outlet': return '#ffaa00';
+      case 'branch': return '#aa00ff';
+      default: return '#888888';
     }
   }
 
@@ -176,12 +225,6 @@ export class CanvasRenderer {
 
   clearTooltip() {
     this.tooltipPort = null;
-  }
-
-  updateTooltipPosition(screenX, screenY) {
-    if (this.tooltipPort) {
-      this.tooltipPos = { x: screenX, y: screenY };
-    }
   }
 
   setSelectedElements(elements) {
@@ -208,6 +251,7 @@ export class CanvasRenderer {
   }
 
   screenToWorld(screenX, screenY) {
+    if (!this.canvas) return { x: 0, y: 0 };
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = screenX - rect.left;
     const canvasY = screenY - rect.top;
@@ -295,7 +339,8 @@ export class CanvasRenderer {
 
     const collectPorts = (elements) => {
       for (const element of elements) {
-        if (element.ports && element.ports.length > 0) {
+        // Собираем порты только для видимых элементов
+        if (this.isElementVisible(element) && element.ports?.length) {
           allPorts.push(...element.ports);
         }
         if (element.type === 'group' && element.elements) {
@@ -310,37 +355,36 @@ export class CanvasRenderer {
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
 
+      // Проверяем, виден ли порт на экране
+      if (port.worldX < this.visibleBounds.minX - 50 ||
+        port.worldX > this.visibleBounds.maxX + 50 ||
+        port.worldY < this.visibleBounds.minY - 50 ||
+        port.worldY > this.visibleBounds.maxY + 50) {
+        continue;
+      }
+
       const isHighlighted = this.highlightedPort && this.highlightedPort.id === port.id;
       const radius = this.getPortRadius(port, isHighlighted);
       const color = this.getPortColor(port, isHighlighted);
 
       ctx.save();
-
-      // Добавляем свечение для подсвеченного порта
       if (isHighlighted) {
         ctx.shadowBlur = 8;
         ctx.shadowColor = '#ff00ff';
       }
-
       ctx.beginPath();
       ctx.arc(port.worldX, port.worldY, radius, 0, 2 * Math.PI);
-
       ctx.fillStyle = color;
       ctx.fill();
-
-      // Обводка порта
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = this.portSettings.borderWidth / this.scale.value;
       ctx.stroke();
-
-      // Если порт подключен, добавляем внутреннюю точку
-      if (port.isConnected()) {
+      if (port.isConnected?.()) {
         ctx.beginPath();
         ctx.arc(port.worldX, port.worldY, radius * 0.4, 0, 2 * Math.PI);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
       }
-
       ctx.restore();
     }
   }
@@ -354,19 +398,18 @@ export class CanvasRenderer {
     if (!element) return;
 
     const lines = [
-      `Порт: ${port.getDirectionName()} (${port.side})`,
-      `Статус: ${port.isConnected() ? '✓ Подключен' : '○ Не подключен'}`,
+      `Порт: ${port.getDirectionName?.() || port.direction} (${port.side})`,
+      `Статус: ${port.isConnected?.() ? '✓ Подключен' : '○ Не подключен'}`,
     ];
 
-    if (port.isConnected()) {
+    if (port.isConnected?.()) {
       const connectedElement = visibleElements.find(el => el.id === port.connectedElementId);
       if (connectedElement) {
         lines.push(`Связан с: ${connectedElement.name}`);
-        lines.push(`Тип: ${connectedElement.getTypeName()}`);
+        lines.push(`Тип: ${connectedElement.getTypeName?.() || '?'}`);
       }
     }
 
-    // Добавляем информацию о координатах порта
     lines.push(`Координаты: (${Math.round(port.worldX)}, ${Math.round(port.worldY)})`);
 
     const padding = 8;
@@ -423,15 +466,28 @@ export class CanvasRenderer {
   drawCallouts(ctx) {
     const visibleElements = this.getVisibleElements();
     for (const element of visibleElements) {
-      if (element.callouts) {
+      if (!this.isElementVisible(element)) continue;
+
+      if (element.callouts?.length && element.showCallout) {
+
+        if (element.updateCalloutText) {
+          element.updateCalloutText();
+        }
+
         for (const callout of element.callouts) {
-          if (element.showCallout) callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
+          if (this.isCalloutVisible(callout, element)) {
+            try {
+              callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
+            } catch (err) {
+              console.warn('Error drawing callout:', err);
+            }
+          }
         }
       }
     }
   }
 
-  drawInfo(ctx) {
+  drawInfo(ctx, drawnCount, totalCount) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -440,20 +496,17 @@ export class CanvasRenderer {
     ctx.font = '14px Arial';
     ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
     ctx.fillText('Панорама: x: ' + this.panX.value.toFixed(2) + ' y: ' + this.panY.value.toFixed(2), 10, 50);
+    ctx.fillText(`Элементов: ${drawnCount} / ${totalCount} (видимых)`, 10, 70);
 
-    const visibleElements = this.getVisibleElements();
-    ctx.fillText('Элементов: ' + visibleElements.length, 10, 70);
-
-    // Добавляем информацию о портах
     if (this.options.showPorts.value) {
       let connectedCount = 0;
-      let totalCount = 0;
+      let totalPorts = 0;
 
       const countPorts = (elements) => {
         for (const element of elements) {
-          if (element.ports && element.ports.length > 0) {
-            totalCount += element.ports.length;
-            connectedCount += element.ports.filter(p => p.isConnected()).length;
+          if (this.isElementVisible(element) && element.ports?.length) {
+            totalPorts += element.ports.length;
+            connectedCount += element.ports.filter(p => p.isConnected?.()).length;
           }
           if (element.type === 'group' && element.elements) {
             countPorts(element.elements);
@@ -461,19 +514,18 @@ export class CanvasRenderer {
         }
       };
 
+      const visibleElements = this.getVisibleElements();
       countPorts(visibleElements);
-      ctx.fillText(`Портов: ${connectedCount}/${totalCount} подключено`, 10, 90);
+      ctx.fillText(`Портов: ${connectedCount}/${totalPorts} подключено`, 10, 90);
     }
 
-    // Добавляем информацию о слоях
-    if (this.layers.value) {
+    if (this.layers?.value) {
       ctx.fillText(`Слоёв: ${this.layers.value.length}`, 10, 110);
     }
 
     ctx.restore();
   }
 
-  // Метод для обновления настроек отображения портов
   updatePortSettings(settings) {
     this.portSettings = { ...this.portSettings, ...settings };
   }
