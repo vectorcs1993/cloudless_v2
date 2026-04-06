@@ -48,34 +48,26 @@ export class ConnectionManager {
   }
 
   // Проверка, можно ли соединять порты (учитывая блокировку слоёв)
-  canConnectPorts(port1, port2) {
-    if (!port1 || !port2) return false;
+canConnectPorts(port1, port2) {
+  if (!port1 || !port2) return false;
 
-    // Нельзя соединять порт с самим собой
-    if (port1.id === port2.id) return false;
+  // Нельзя соединять порт с самим собой
+  if (port1.id === port2.id) return false;
 
-    // Нельзя соединять порты одного элемента
-    if (port1.elementId === port2.elementId) return false;
+  // Нельзя соединять порты одного элемента
+  if (port1.elementId === port2.elementId) return false;
 
-    // Проверяем блокировку слоёв
-    if (this.layerManager) {
-      const element1 = this.getElementById(port1.elementId);
-      const element2 = this.getElementById(port2.elementId);
-
-      if (element1 && this.layerManager.isLayerLocked(element1)) return false;
-      if (element2 && this.layerManager.isLayerLocked(element2)) return false;
-    }
-
-    // Правила соединения: inlet с outlet, или outlet с inlet
-    const isValidPair = (port1.direction === 'inlet' && port2.direction === 'outlet') ||
-                       (port1.direction === 'outlet' && port2.direction === 'inlet');
-
-    // Также можно соединять branch с любым (кроме branch+branch)
-    const isValidBranch = (port1.direction === 'branch' && port2.direction !== 'branch') ||
-                          (port2.direction === 'branch' && port1.direction !== 'branch');
-
-    return isValidPair || isValidBranch;
+  // Проверяем блокировку слоёв
+  if (this.layerManager) {
+    const element1 = this.getElementById(port1.elementId);
+    const element2 = this.getElementById(port2.elementId);
+    if (element1 && this.layerManager.isLayerLocked(element1)) return false;
+    if (element2 && this.layerManager.isLayerLocked(element2)) return false;
   }
+
+  // РАЗРЕШАЕМ ЛЮБЫЕ СОЕДИНЕНИЯ
+  return true;
+}
 
   // Соединение двух портов
   connectPorts(port1, port2) {
