@@ -1,7 +1,7 @@
 export class CanvasRenderer {
-  constructor(canvas, elements, options) {
+  constructor(canvas, layers, options) {
     this.canvas = canvas;
-    this.elements = elements;
+    this.layers = layers; // теперь это reactive layers
     this.options = options;
     this.scale = options.scale;
     this.panX = options.panX;
@@ -35,6 +35,14 @@ export class CanvasRenderer {
     this.ghostElement = null;
   }
 
+  // Получение видимых элементов (учитывая видимость слоёв)
+  getVisibleElements() {
+    if (!this.layers.value) return [];
+    return this.layers.value.flatMap(layer =>
+      layer.visible ? layer.elements : []
+    );
+  }
+
   draw() {
     const ctx = this.canvas.getContext('2d');
     if (!ctx) return;
@@ -52,9 +60,10 @@ export class CanvasRenderer {
       this.drawGrid(ctx);
     }
 
-    // Рисуем основные элементы
-    this.elements.value.forEach(element => {
-      const isSelected = this.selectedElements.some(sel => sel.id === element.id);
+    // Рисуем основные элементы из видимых слоёв
+    const visibleElements = this.getVisibleElements();
+    visibleElements.forEach(element => {
+      const isSelected = this.selectedElements.some(sel => sel && sel.id === element.id);
       element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
         this.options.showPorts.value, this.options.showColors.value,
         this.options.showElementAxes.value);
@@ -215,7 +224,6 @@ export class CanvasRenderer {
     };
   }
 
-
   drawGrid(ctx) {
     const gridStepWorld = this.options.gridStepM?.value || 50;
     const width = this.canvas.width / this.scale.value;
@@ -296,7 +304,8 @@ export class CanvasRenderer {
       }
     };
 
-    collectPorts(this.elements.value);
+    const visibleElements = this.getVisibleElements();
+    collectPorts(visibleElements);
 
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
@@ -340,7 +349,8 @@ export class CanvasRenderer {
     if (!this.tooltipPort) return;
 
     const port = this.tooltipPort;
-    const element = this.elements.value.find(el => el.id === port.elementId);
+    const visibleElements = this.getVisibleElements();
+    const element = visibleElements.find(el => el.id === port.elementId);
     if (!element) return;
 
     const lines = [
@@ -349,7 +359,7 @@ export class CanvasRenderer {
     ];
 
     if (port.isConnected()) {
-      const connectedElement = this.elements.value.find(el => el.id === port.connectedElementId);
+      const connectedElement = visibleElements.find(el => el.id === port.connectedElementId);
       if (connectedElement) {
         lines.push(`Связан с: ${connectedElement.name}`);
         lines.push(`Тип: ${connectedElement.getTypeName()}`);
@@ -411,7 +421,8 @@ export class CanvasRenderer {
   }
 
   drawCallouts(ctx) {
-    for (const element of this.elements.value) {
+    const visibleElements = this.getVisibleElements();
+    for (const element of visibleElements) {
       if (element.callouts) {
         for (const callout of element.callouts) {
           if (element.showCallout) callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
@@ -429,7 +440,9 @@ export class CanvasRenderer {
     ctx.font = '14px Arial';
     ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
     ctx.fillText('Панорама: x: ' + this.panX.value.toFixed(2) + ' y: ' + this.panY.value.toFixed(2), 10, 50);
-    ctx.fillText('Элементов: ' + this.elements.value.length, 10, 70);
+
+    const visibleElements = this.getVisibleElements();
+    ctx.fillText('Элементов: ' + visibleElements.length, 10, 70);
 
     // Добавляем информацию о портах
     if (this.options.showPorts.value) {
@@ -448,8 +461,13 @@ export class CanvasRenderer {
         }
       };
 
-      countPorts(this.elements.value);
+      countPorts(visibleElements);
       ctx.fillText(`Портов: ${connectedCount}/${totalCount} подключено`, 10, 90);
+    }
+
+    // Добавляем информацию о слоях
+    if (this.layers.value) {
+      ctx.fillText(`Слоёв: ${this.layers.value.length}`, 10, 110);
     }
 
     ctx.restore();

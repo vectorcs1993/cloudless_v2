@@ -78,23 +78,34 @@
           </template>
           <template v-slot:after>
             <q-card :dark="isDarkTheme" class="fit" flat>
-              <q-card-section>
-                Диспетчер проекта
+              <q-card-section class="row items-center justify-between">
+                <div class="text-subtitle1">Диспетчер проекта</div>
+                <div>
+                  <q-btn icon="add" label="Слой" flat dense size="sm" @click="addNewLayer" />
+                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected" :disable="selectedElements.length < 2" />
+                </div>
               </q-card-section>
-              <q-card-actions>
-                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" dense />
-                <q-btn @click="copySelected" color="secondary" icon="content_copy" v-if="selectedElements.length > 0" dense/>
-                <q-btn @click="pasteElements" color="secondary" icon="content_paste" v-if="clipboardElements.length > 0" dense/>
+              <q-separator />
+              <q-card-actions class="q-pa-sm">
+                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" dense size="sm" />
+                <q-btn @click="copySelected" color="secondary" icon="content_copy" v-if="selectedElements.length > 0" dense size="sm"/>
+                <q-btn @click="pasteElements" color="secondary" icon="content_paste" v-if="clipboardElements.length > 0" dense size="sm"/>
+                <q-btn @click="expandAllTree" icon="unfold_more" dense size="sm" flat />
+                <q-btn @click="collapseAllTree" icon="unfold_less" dense size="sm" flat />
               </q-card-actions>
-              <q-card-section>
+              <q-card-section class="q-pt-none">
                 <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes"
                   @update:expanded="onExpandedChange" node-key="id" label-key="label" children-key="children"
-                  no-connectors @update:selected="onTreeSelect" default-expand-all :selected.sync="selectedTreeNode">
+                  no-connectors @update:selected="onTreeSelect" :selected.sync="selectedTreeNode"
+                  default-expand-all>
                   <template v-slot:default-header="prop">
-
-                    <div :class="['tree-node', { 'tree-node-selected': prop.node.id === selectedTreeNode }]">
+                    <div :class="['tree-node', { 'tree-node-selected': prop.node.id === selectedTreeNode }]"
+                         @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
                       <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
-                      <span>{{ prop.node.label }}</span>
+                      <span class="tree-node-label">{{ prop.node.label }}</span>
+                      <q-icon v-if="prop.node.layerLocked" name="lock" size="14px" color="negative" class="q-ml-xs" />
+                      <q-icon v-if="!prop.node.layerVisible" name="visibility_off" size="14px" color="grey" class="q-ml-xs" />
+                      <span class="tree-node-info">{{ prop.node.info }}</span>
                     </div>
                   </template>
                 </q-tree>
@@ -133,6 +144,16 @@
                     </q-item-section>
                     <q-item-section>
                       <q-item-label>{{ getElementTypeName(selectedElement) }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label caption>Слой</q-item-label>
+                    </q-item-section>
+                    <q-item-section>
+                      <q-select :dark="isDarkTheme" v-model="selectedElementLayer"
+                        :options="layerOptions" label="Слой" dense outlined
+                        @update:model-value="onElementLayerChange" />
                     </q-item-section>
                   </q-item>
                 </q-list>
@@ -282,6 +303,7 @@ import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
+import { LayerManager } from './LayerManager.js';
 import { BaseElement, dragItems } from './Elements.js';
 import { Group } from './Group.js';
 import { DuctDirect } from './DuctDirect.js';
@@ -296,7 +318,6 @@ import { globalScale } from './GlobalScale.js';
 const showNotify = (options) => {
   Notify.create(options);
 };
-
 
 // Состояние
 const splitterModel1 = ref(20);
@@ -316,24 +337,36 @@ const autoUpdateConnections = ref(true);
 const tabEditor = ref('library');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
-const elements = ref([]);
 const selectedElements = ref([]);
 const mouseWorldPos = ref(null);
 const clipboardElements = ref([]);
 const selectedTreeNode = ref(null);
 const expandedTreeNodes = ref([]);
 
+// Новая структура данных - слои
+const layers = ref([
+  {
+    id: 'layer_default',
+    name: 'Слой 1',
+    visible: true,
+    locked: false,
+    elements: []
+  }
+]);
+const activeLayerId = ref('layer_default');
+
+// ID счетчики
+let nextElementId = 100;
+let nextPortId = 1000;
+
 // Менеджеры
 let renderer = null;
 let connectionManager = null;
 let interactionManager = null;
 let selectionManager = null;
-let zindexManager = null;
+let layerManager = null;
+let zIndexManager = null;
 let storageManager = null;
-
-// ID счетчики
-let nextElementId = 100;
-let nextPortId = 1000;
 
 // Drag and drop
 let dragType = null;
@@ -346,9 +379,48 @@ let renderFrameRequest = null;
 const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
 const isGroupSelected = computed(() => selectedElement.value instanceof Group);
 
-// Простое построение дерева
+// Получение всех элементов из всех слоёв
+const allElements = computed(() => {
+  if (!layers.value) return [];
+  return layers.value.flatMap(layer => layer.elements);
+});
+
+// Получение видимых элементов для рендера
+const visibleElements = computed(() => {
+  if (!layers.value) return [];
+  return layers.value.flatMap(layer =>
+    layer.visible ? layer.elements : []
+  );
+});
+
+// Получение интерактивных элементов (не заблокированных)
+const interactiveElements = computed(() => {
+  if (!layers.value) return [];
+  return layers.value.flatMap(layer =>
+    !layer.locked ? layer.elements : []
+  );
+});
+
+// Опции для выбора слоя в панели свойств
+const layerOptions = computed(() => {
+  return layers.value.map(layer => ({
+    label: `${layer.name} ${layer.locked ? '🔒' : ''} ${!layer.visible ? '👁️' : ''}`,
+    value: layer.id
+  }));
+});
+
+const selectedElementLayer = computed({
+  get: () => {
+    if (!selectedElement.value) return null;
+    const layer = layerManager?.getElementLayer(selectedElement.value);
+    return layer?.id || null;
+  },
+  set: (val) => {}
+});
+
+// Построение дерева проекта с иерархией слоёв
 const projectTree = computed(() => {
-  const buildNode = (item) => {
+  const buildElementNode = (item, layerInfo = null) => {
     if (item instanceof Group) {
       return {
         id: item.id,
@@ -356,14 +428,14 @@ const projectTree = computed(() => {
         icon: 'folder',
         color: 'orange',
         info: `${item.elements?.length || 0} эл.`,
-        children: (item.elements || []).map(buildNode),
-        element: item
+        children: (item.elements || []).map(el => buildElementNode(el, layerInfo)),
+        element: item,
+        layerId: layerInfo?.id,
+        layerName: layerInfo?.name,
+        layerLocked: layerInfo?.locked,
+        layerVisible: layerInfo?.visible
       };
     }
-
-
-
-
 
     return {
       id: item.id,
@@ -371,16 +443,49 @@ const projectTree = computed(() => {
       icon: 'rectangle',
       color: item.color || '#888',
       info: '',
-      element: item
+      element: item,
+      layerId: layerInfo?.id,
+      layerName: layerInfo?.name,
+      layerLocked: layerInfo?.locked,
+      layerVisible: layerInfo?.visible
     };
   };
 
-  return elements.value.map(buildNode);
+  // Строим дерево: сначала слои, внутри них элементы и группы
+  const treeNodes = layers.value.map(layer => {
+    // Фильтруем элементы верхнего уровня (не входящие в группы)
+    const topLevelElements = layer.elements.filter(el => {
+      // Проверяем, не входит ли элемент в какую-либо группу
+      let isInGroup = false;
+      for (const otherEl of layer.elements) {
+        if (otherEl instanceof Group && otherEl.elements?.includes(el)) {
+          isInGroup = true;
+          break;
+        }
+      }
+      return !isInGroup;
+    });
+
+    return {
+      id: `layer_${layer.id}`,
+      label: layer.name,
+      icon: layer.locked ? 'lock' : (layer.visible ? 'layers' : 'layers_clear'),
+      color: layer.locked ? 'negative' : (layer.visible ? 'primary' : 'grey'),
+      info: `${layer.elements.length} эл.`,
+      children: topLevelElements.map(el => buildElementNode(el, layer)),
+      layerId: layer.id,
+      layerName: layer.name,
+      layerLocked: layer.locked,
+      layerVisible: layer.visible,
+      isLayer: true
+    };
+  });
+
+  return treeNodes;
 });
 
 // Обновление дерева и выделения
 const updateTreeAndSelection = () => {
-  // Обновляем выделение в дереве
   if (selectedElement.value) {
     selectedTreeNode.value = selectedElement.value.id;
   }
@@ -416,6 +521,49 @@ const onTreeSelect = (nodeId) => {
 
 const onExpandedChange = (val) => { expandedTreeNodes.value = val; };
 
+const expandAllTree = () => {
+  const getAllIds = (nodes) => {
+    let ids = [];
+    for (const node of nodes) {
+      ids.push(node.id);
+      if (node.children) {
+        ids.push(...getAllIds(node.children));
+      }
+    }
+    return ids;
+  };
+  expandedTreeNodes.value = getAllIds(projectTree.value);
+};
+
+const collapseAllTree = () => {
+  expandedTreeNodes.value = [];
+};
+
+// Контекстное меню для дерева
+const onTreeNodeContextMenu = (event, node) => {
+  event.preventDefault();
+  if (node.isLayer) {
+    // Меню для слоя
+    const actions = [
+      { label: node.layerVisible ? 'Скрыть слой' : 'Показать слой', action: () => toggleLayerVisibility(node.layerId) },
+      { label: node.layerLocked ? 'Разблокировать слой' : 'Заблокировать слой', action: () => toggleLayerLock(node.layerId) },
+      { label: 'Переименовать', action: () => renameLayer(node.layerId) },
+      { label: 'Удалить слой', action: () => removeLayerWithConfirm(node.layerId) }
+    ];
+    // Здесь можно показать кастомное меню
+    showNotify({ type: 'info', message: `Слой: ${node.label}`, timeout: 1000 });
+  } else if (node.element) {
+    // Меню для элемента
+    if (node.element instanceof Group) {
+      const actions = [
+        { label: 'Разгруппировать', action: () => { updateSelection([node.element]); ungroupSelected(); } },
+        { label: 'Выделить все элементы', action: () => updateSelection(node.element.elements) }
+      ];
+    }
+    updateSelection([node.element]);
+  }
+};
+
 // Параметры рендерера
 const renderOptions = {
   scale: ref(1), panX: ref(0), panY: ref(0),
@@ -449,7 +597,7 @@ const updateSelection = (newSelection, skipRender = false) => {
     if (newSelection.length === 1 && newSelection[0]) {
       selectedTreeNode.value = newSelection[0].id;
     } else {
-      selectedTreeNode.value = null; // Очищаем выделение в дереве
+      selectedTreeNode.value = null;
     }
 
     if (!skipRender) scheduleRender();
@@ -460,7 +608,7 @@ const updateSelection = (newSelection, skipRender = false) => {
 
 const clearSelection = () => {
   updateSelection([], true);
-  selectedTreeNode.value = null; // Дополнительная очистка для надежности
+  selectedTreeNode.value = null;
 };
 
 const onParameterChange = (value, paramName) => {
@@ -470,6 +618,94 @@ const onParameterChange = (value, paramName) => {
   selectedElement.value.updateCalloutText?.();
   if (connectionManager && autoUpdateConnections.value) connectionManager.updateAllPortsAndConnections(40);
   scheduleRender();
+};
+
+// ========== УПРАВЛЕНИЕ СЛОЯМИ ==========
+
+const addNewLayer = () => {
+  const newLayer = layerManager.addLayer();
+  activeLayerId.value = newLayer.id;
+  showNotify({ type: 'positive', message: `Создан слой: ${newLayer.name}`, timeout: 2000 });
+  scheduleRender();
+};
+
+const removeLayerWithConfirm = (layerId) => {
+  if (layers.value.length === 1) {
+    showNotify({ type: 'warning', message: 'Нельзя удалить последний слой!', timeout: 2000 });
+    return;
+  }
+
+  const layer = layers.value.find(l => l.id === layerId);
+  if (!layer) return;
+
+  if (layer.elements.length > 0) {
+    if (confirm(`Слой "${layer.name}" содержит ${layer.elements.length} элементов. Переместить их на первый слой?`)) {
+      const firstLayer = layers.value[0];
+      layerManager.removeLayer(layerId, firstLayer.id);
+      showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён, элементы перемещены`, timeout: 2000 });
+    } else {
+      return;
+    }
+  } else {
+    layerManager.removeLayer(layerId);
+    showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён`, timeout: 2000 });
+  }
+
+  scheduleRender();
+};
+
+const toggleLayerVisibility = (layerId) => {
+  layerManager.toggleLayerVisibility(layerId);
+  const layer = layers.value.find(l => l.id === layerId);
+  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.visible ? 'показан' : 'скрыт'}`, timeout: 1000 });
+  scheduleRender();
+};
+
+const toggleLayerLock = (layerId) => {
+  layerManager.toggleLayerLock(layerId);
+  const layer = layers.value.find(l => l.id === layerId);
+  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.locked ? 'заблокирован' : 'разблокирован'}`, timeout: 1000 });
+  scheduleRender();
+};
+
+const setActiveLayer = (layerId) => {
+  activeLayerId.value = layerId;
+  const layer = layers.value.find(l => l.id === layerId);
+  showNotify({ type: 'info', message: `Активный слой: ${layer.name}`, timeout: 1000 });
+};
+
+const renameLayer = (layerId) => {
+  const layer = layers.value.find(l => l.id === layerId);
+  if (!layer) return;
+
+  const newName = prompt('Введите новое имя слоя:', layer.name);
+  if (newName && newName.trim()) {
+    layerManager.renameLayer(layerId, newName.trim());
+    scheduleRender();
+  }
+};
+
+const clearAllLayers = () => {
+  if (confirm('Очистить все слои? Все элементы будут удалены!')) {
+    layerManager.clearAllLayers();
+    updateSelection([]);
+    scheduleRender();
+    showNotify({ type: 'positive', message: 'Все слои очищены', timeout: 2000 });
+  }
+};
+
+const getActiveLayerName = () => {
+  const layer = layers.value.find(l => l.id === activeLayerId.value);
+  return layer?.name || '—';
+};
+
+const onElementLayerChange = (newLayerId) => {
+  if (!selectedElement.value) return;
+  if (layerManager.moveElementToLayer(selectedElement.value.id, newLayerId)) {
+    showNotify({ type: 'positive', message: 'Элемент перемещён на другой слой', timeout: 1000 });
+    scheduleRender();
+    updateTreeAndSelection();
+  }
 };
 
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
@@ -486,6 +722,16 @@ const copySelected = () => {
 
 const pasteElements = () => {
   if (clipboardElements.value.length === 0) return;
+  const activeLayer = layerManager.getActiveLayer();
+  if (!activeLayer) {
+    showNotify({ type: 'warning', message: 'Нет активного слоя для вставки', timeout: 2000 });
+    return;
+  }
+  if (activeLayer.locked) {
+    showNotify({ type: 'warning', message: 'Активный слой заблокирован!', timeout: 2000 });
+    return;
+  }
+
   const newElements = [];
   clipboardElements.value.forEach(json => {
     const newJson = {
@@ -499,10 +745,12 @@ const pasteElements = () => {
     el.addCallout?.(el.x, el.y - 150);
     newElements.push(el);
   });
-  elements.value = [...elements.value, ...newElements];
+
+  layerManager.addElementToActiveLayer(newElements);
+  // Альтернативно: newElements.forEach(el => activeLayer.elements.push(el));
   updateSelection(newElements);
   scheduleRender();
-  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов`, position: 'top', timeout: 1000 });
+  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`, timeout: 2000 });
 };
 
 // ========== HOTKEYS ==========
@@ -517,22 +765,66 @@ const handleKeyDown = (e) => {
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
 
 const saveToLocalStorage = () => {
-  storageManager?.save(elements.value, nextElementId, nextPortId, renderOptions);
+  const data = {
+    layers: layers.value.map(layer => ({
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      locked: layer.locked,
+      elements: layer.elements.map(el => el.toJSON())
+    })),
+    activeLayerId: activeLayerId.value,
+    nextElementId,
+    nextPortId,
+    panX: renderOptions.panX.value,
+    panY: renderOptions.panY.value,
+    scale: renderOptions.scale.value,
+    showColors: showColors.value,
+    showElementAxes: showElementAxes.value,
+    isDarkTheme: isDarkTheme.value,
+    showGrid: showGrid.value,
+    showPorts: showPorts.value,
+    snapToPorts: snapToPorts.value,
+    autoUpdateConnections: autoUpdateConnections.value,
+    showCallouts: showCallouts.value,
+    gridStepM: gridStepM.value,
+    mmPerPx: mmPerPx.value,
+    version: '2.0',
+    savedAt: new Date().toISOString()
+  };
+  localStorage.setItem('hvac_editor_data', JSON.stringify(data));
   showNotify({ type: 'positive', message: 'Сохранено!', position: 'top', timeout: 1000 });
 };
 
 const loadFromLocalStorage = () => {
-  const data = storageManager?.load();
-  if (!data) {
-    elements.value = [];
+  const savedData = localStorage.getItem('hvac_editor_data');
+  if (!savedData) {
+    // Инициализация по умолчанию
+    layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
+    activeLayerId.value = 'layer_default';
     nextElementId = 100;
     nextPortId = 1000;
     updateSelection([]);
     scheduleRender();
     return;
   }
+
   try {
-    const loaded = data.elements.map(json => ElementFactory.createFromJSON(json));
+    const data = JSON.parse(savedData);
+
+    // Загружаем слои
+    if (data.layers && Array.isArray(data.layers)) {
+      layers.value = data.layers.map(layer => ({
+        ...layer,
+        elements: (layer.elements || []).map(elJson => ElementFactory.createFromJSON(elJson))
+      }));
+    } else {
+      // Совместимость со старой версией
+      const oldElements = data.elements?.map(elJson => ElementFactory.createFromJSON(elJson)) || [];
+      layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: oldElements }];
+    }
+
+    activeLayerId.value = data.activeLayerId || layers.value[0]?.id || 'layer_default';
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
@@ -546,17 +838,20 @@ const loadFromLocalStorage = () => {
     showCallouts.value = data.showCallouts ?? false;
     gridStepM.value = data.gridStepM ?? 50;
     mmPerPx.value = data.mmPerPx ?? 2;
-
-    ElementFactory.updateAllGroupsBounds(loaded);
-    loaded.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
-    elements.value = loaded;
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
+
+    // Обновляем все порты и выноски
+    allElements.value.forEach(el => {
+      el.updatePorts?.();
+      el.updateCalloutText?.();
+    });
+
     updateSelection([]);
     scheduleRender();
   } catch (error) {
     console.error(error);
-    elements.value = [];
+    layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     updateSelection([]);
     scheduleRender();
   }
@@ -564,7 +859,8 @@ const loadFromLocalStorage = () => {
 
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
-    elements.value = [];
+    layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
+    activeLayerId.value = 'layer_default';
     nextElementId = 100;
     nextPortId = 1000;
     updateSelection([]);
@@ -574,7 +870,7 @@ const resetToDefault = () => {
 };
 
 const updateAllPortsAndConnections = () => {
-  const restored = connectionManager?.updateAllPortsAndConnections?.(5) || 0;
+  const restored = connectionManager?.updateAllPortsAndConnections?.(5, layerManager) || 0;
   scheduleRender();
   showNotify({ type: 'positive', message: `Восстановлено ${restored} связей!`, position: 'top', timeout: 2000 });
 };
@@ -598,7 +894,6 @@ const onDragStart = (e, item) => {
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
-    // Устанавливаем призрак в рендерер
     renderer?.setGhostElement(ghostElement);
     scheduleRender();
   }
@@ -614,12 +909,10 @@ const onDragStart = (e, item) => {
 const onDragEnd = () => {
   dragType = null;
   ghostElement = null;
-  // Очищаем призрак в рендерере
   renderer?.clearGhostElement();
   scheduleRender();
 };
 
-// Измените onDragOver:
 const onDragOver = (e) => {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
@@ -628,15 +921,26 @@ const onDragOver = (e) => {
     if (worldPos) {
       ghostElement.x = worldPos.x;
       ghostElement.y = worldPos.y;
-      // Обновляем позицию призрака в рендерере
       renderer.setGhostElement(ghostElement);
       scheduleRender();
     }
   }
 };
+
 const onDrop = (e) => {
   e.preventDefault();
   if (!dragType) return;
+
+  const activeLayer = layerManager.getActiveLayer();
+  if (!activeLayer) {
+    showNotify({ type: 'warning', message: 'Нет активного слоя для добавления элементов', timeout: 2000 });
+    return;
+  }
+  if (activeLayer.locked) {
+    showNotify({ type: 'warning', message: 'Активный слой заблокирован!', timeout: 2000 });
+    return;
+  }
+
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
     const creators = {
@@ -650,13 +954,13 @@ const onDrop = (e) => {
     const el = creators[dragType]();
     el.updatePorts?.();
     el.updateCalloutText?.();
-    elements.value = [...elements.value, el];
+
+    activeLayer.elements.push(el);
     updateSelection([el]);
     scheduleRender();
   }
   ghostElement = null;
   dragType = null;
-  // Очищаем призрак в рендерере
   renderer?.clearGhostElement();
   scheduleRender();
 };
@@ -716,16 +1020,22 @@ const rotateRight90 = () => {
 const rotateLeft180 = () => { rotateLeft90(); rotateLeft90(); };
 const rotateRight180 = () => { rotateRight90(); rotateRight90(); };
 
-const moveToTop = () => { if (selectedElement.value) { zindexManager?.moveToTop(selectedElement.value); scheduleRender(); } };
-const moveToBottom = () => { if (selectedElement.value) { zindexManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
-const moveUp = () => { if (selectedElement.value) { zindexManager?.moveUp(selectedElement.value); scheduleRender(); } };
-const moveDown = () => { if (selectedElement.value) { zindexManager?.moveDown(selectedElement.value); scheduleRender(); } };
+const moveToTop = () => { if (selectedElement.value) { zIndexManager?.moveToTop(selectedElement.value); scheduleRender(); } };
+const moveToBottom = () => { if (selectedElement.value) { zIndexManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
+const moveUp = () => { if (selectedElement.value) { zIndexManager?.moveUp(selectedElement.value); scheduleRender(); } };
+const moveDown = () => { if (selectedElement.value) { zIndexManager?.moveDown(selectedElement.value); scheduleRender(); } };
 
 const deleteSelected = () => {
   if (selectedElements.value.length === 0) return;
   const toDelete = new Set(selectedElements.value.map(el => el.id));
+
   selectedElements.value.forEach(el => connectionManager?.disconnectElement(el));
-  elements.value = elements.value.filter(el => !toDelete.has(el.id));
+
+  // Удаляем из слоёв
+  for (const layer of layers.value) {
+    layer.elements = layer.elements.filter(el => !toDelete.has(el.id));
+  }
+
   updateSelection([]);
   scheduleRender();
 };
@@ -736,10 +1046,28 @@ const groupSelected = () => {
     showNotify({ type: 'warning', message: 'Нельзя группировать группы!', position: 'top', timeout: 3000 });
     return;
   }
+
+  // Проверяем, что все элементы из одного слоя
+  const layersSet = new Set();
+  for (const el of selectedElements.value) {
+    const layer = layerManager.getElementLayer(el);
+    if (layer) layersSet.add(layer.id);
+  }
+
+  if (layersSet.size > 1) {
+    showNotify({ type: 'warning', message: 'Нельзя группировать элементы из разных слоёв!', position: 'top', timeout: 3000 });
+    return;
+  }
+
+  const targetLayer = layerManager.getElementLayer(selectedElements.value[0]);
+  if (!targetLayer) return;
+
   const group = new Group(++nextElementId, [...selectedElements.value]);
   group.updatePorts?.();
+
   const toRemove = new Set(selectedElements.value.map(el => el.id));
-  elements.value = [...elements.value.filter(el => !toRemove.has(el.id)), group];
+  targetLayer.elements = [...targetLayer.elements.filter(el => !toRemove.has(el.id)), group];
+
   updateSelection([group]);
   scheduleRender();
 };
@@ -751,8 +1079,16 @@ const ungroupSelected = () => {
     showNotify({ type: 'warning', message: 'Нельзя разгруппировать группу с вложенными группами!', position: 'top', timeout: 3000 });
     return;
   }
+
+  const layer = layerManager.getElementLayer(group);
+  if (!layer) return;
+
   const groupElements = group.getElements();
-  elements.value = [...elements.value.filter(el => el.id !== group.id), ...groupElements];
+  const index = layer.elements.findIndex(el => el.id === group.id);
+  if (index !== -1) {
+    layer.elements.splice(index, 1, ...groupElements);
+  }
+
   updateSelection(groupElements);
   scheduleRender();
 };
@@ -784,17 +1120,24 @@ onMounted(() => {
   if (localStorage.getItem('theme') === 'dark') isDarkTheme.value = true;
 
   storageManager = new StorageManager('hvac_editor_data');
-  connectionManager = new ConnectionManager(elements);
-  renderer = new CanvasRenderer(mainCanvas.value, elements, renderOptions);
 
-  selectionManager = new SelectionManager(elements, renderer);
-  interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, selectionManager, {
-    snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
+  // Инициализация менеджеров в правильном порядке
+  layerManager = new LayerManager(layers, activeLayerId);
+  zIndexManager = new ZIndexManager(layers);
+  connectionManager = new ConnectionManager(allElements, layerManager);
+  renderer = new CanvasRenderer(mainCanvas.value, layers, renderOptions);
+  selectionManager = new SelectionManager(allElements, renderer);
+  interactionManager = new InteractionManager(
+    mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager
+  );
+
+  // Устанавливаем связи между менеджерами
+  zIndexManager.setRenderer(renderer);
+  interactionManager.setOnElementMoveCallback?.((moving) => {
+    if (!isUpdatingSelection) updateSelection(moving, true);
   });
-  zindexManager = new ZIndexManager(elements, renderer);
+  interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
 
-  interactionManager?.setAutoUpdateConnections(autoUpdateConnections.value);
-  interactionManager?.setOnElementMoveCallback?.((moving) => { if (!isUpdatingSelection) updateSelection(moving, true); });
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
   loadFromLocalStorage();
@@ -819,12 +1162,17 @@ onMounted(() => {
 watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
 watch(mmPerPx, (val) => {
   globalScale.setMmPerPx(val);
-  ElementFactory.updateAllGroupsBounds(elements.value);
-  elements.value.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
+  ElementFactory.updateAllGroupsBounds(allElements.value);
+  allElements.value.forEach(el => { el.updatePorts?.(); el.updateCalloutText?.(); });
   updateTreeAndSelection();
   debouncedDraw();
 });
-watch(elements, () => {
+watch(allElements, () => {
   debouncedDraw();
+  updateTreeAndSelection();
+}, { deep: true });
+watch(layers, () => {
+  debouncedDraw();
+  updateTreeAndSelection();
 }, { deep: true });
 </script>
