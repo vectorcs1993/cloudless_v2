@@ -277,7 +277,7 @@
 import { ref, onMounted, computed, watch, onBeforeUnmount, readonly } from 'vue';
 import { Notify } from 'quasar'
 import { CanvasRenderer } from './CanvasRenderer.js';
-import { LayerManager } from './LayerManager.js';
+import { ZIndexManager } from './ZIndexManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
@@ -328,7 +328,7 @@ let renderer = null;
 let connectionManager = null;
 let interactionManager = null;
 let selectionManager = null;
-let layerManager = null;
+let zindexManager = null;
 let storageManager = null;
 
 // ID счетчики
@@ -716,10 +716,10 @@ const rotateRight90 = () => {
 const rotateLeft180 = () => { rotateLeft90(); rotateLeft90(); };
 const rotateRight180 = () => { rotateRight90(); rotateRight90(); };
 
-const moveToTop = () => { if (selectedElement.value) { layerManager?.moveToTop(selectedElement.value); scheduleRender(); } };
-const moveToBottom = () => { if (selectedElement.value) { layerManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
-const moveUp = () => { if (selectedElement.value) { layerManager?.moveUp(selectedElement.value); scheduleRender(); } };
-const moveDown = () => { if (selectedElement.value) { layerManager?.moveDown(selectedElement.value); scheduleRender(); } };
+const moveToTop = () => { if (selectedElement.value) { zindexManager?.moveToTop(selectedElement.value); scheduleRender(); } };
+const moveToBottom = () => { if (selectedElement.value) { zindexManager?.moveToBottom(selectedElement.value); scheduleRender(); } };
+const moveUp = () => { if (selectedElement.value) { zindexManager?.moveUp(selectedElement.value); scheduleRender(); } };
+const moveDown = () => { if (selectedElement.value) { zindexManager?.moveDown(selectedElement.value); scheduleRender(); } };
 
 const deleteSelected = () => {
   if (selectedElements.value.length === 0) return;
@@ -791,7 +791,7 @@ onMounted(() => {
   interactionManager = new InteractionManager(mainCanvas.value, elements, renderer, connectionManager, selectionManager, {
     snapToPorts, showPorts, showCallouts, panX: renderOptions.panX, panY: renderOptions.panY, scale: renderOptions.scale
   });
-  layerManager = new LayerManager(elements, renderer);
+  zindexManager = new ZIndexManager(elements, renderer);
 
   interactionManager?.setAutoUpdateConnections(autoUpdateConnections.value);
   interactionManager?.setOnElementMoveCallback?.((moving) => { if (!isUpdatingSelection) updateSelection(moving, true); });

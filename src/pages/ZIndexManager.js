@@ -1,5 +1,5 @@
 // ========== КЛАСС УПРАВЛЕНИЯ СЛОЯМИ ==========
-export class LayerManager {
+export class ZIndexManager {
   constructor(elements, renderer) {
     this.elements = elements;
     this.renderer = renderer;
