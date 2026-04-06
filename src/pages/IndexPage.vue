@@ -6,7 +6,7 @@
           <template v-slot:before>
             <q-card :dark="isDarkTheme" square class="fit" flat>
               <q-card-section>
-                <h4>Расчёт воздуховодов онлайн</h4>
+                <div class="text-h6">Расчёт воздуховодов онлайн</div>
               </q-card-section>
               <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
                 <q-tab name="library" label="Библиотека" />
@@ -16,8 +16,8 @@
               <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" animated>
                 <q-tab-panel name="library">
                   <div class="drag-items">
-                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
-                      @dragend="onDragEnd">
+                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true"
+                      @dragstart="onDragStart($event, item)" @dragend="onDragEnd">
                       <div class="drag-item-preview" v-html="item.svg"></div>
                       <span class="drag-item-label">{{ item.label }}</span>
                     </div>
@@ -27,15 +27,15 @@
                   <div class="settings-grid">
                     <label>Масштаб размеров (мм/px):</label>
                     <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
-                        class="inline-input" debounce="500" />
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10"
+                        dense outlined class="inline-input" debounce="500" />
                       <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
                     </div>
 
                     <label>Масштаб сетки:</label>
                     <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
-                        class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500"
+                        dense outlined class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
                       <span class="hint-text">px</span>
                     </div>
 
@@ -73,27 +73,23 @@
               <q-card-section class="save-controls">
                 <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
                 <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
-                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" label="Обновить связи" dense />
-                <q-btn @click="copySelected" color="secondary" :disable="selectedElements.length === 0" dense>
-                  <q-icon name="content_copy" />
-                  <span class="q-ml-xs">Копировать ({{ selectedElements.length }})</span>
-                </q-btn>
-                <q-btn @click="pasteElements" color="secondary" :disable="!clipboardElements.length" dense>
-                  <q-icon name="content_paste" />
-                  <span class="q-ml-xs">Вставить</span>
-                </q-btn>
               </q-card-section>
             </q-card>
           </template>
           <template v-slot:after>
             <q-card :dark="isDarkTheme" class="fit" flat>
               <q-card-section>
-                Дерево проекта
+                Диспетчер проекта
               </q-card-section>
+              <q-card-actions>
+                <q-btn @click="updateAllPortsAndConnections" color="info" icon="sync" dense />
+                <q-btn @click="copySelected" color="secondary" icon="content_copy" v-if="selectedElements.length > 0" dense/>
+                <q-btn @click="pasteElements" color="secondary" icon="content_paste" v-if="clipboardElements.length > 0" dense/>
+              </q-card-actions>
               <q-card-section>
-                <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes" @update:expanded="onExpandedChange" node-key="id"
-                  label-key="label" children-key="children" no-connectors @update:selected="onTreeSelect" default-expand-all
-                  :selected.sync="selectedTreeNode">
+                <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes"
+                  @update:expanded="onExpandedChange" node-key="id" label-key="label" children-key="children"
+                  no-connectors @update:selected="onTreeSelect" default-expand-all :selected.sync="selectedTreeNode">
                   <template v-slot:default-header="prop">
 
                     <div :class="['tree-node', { 'tree-node-selected': prop.node.id === selectedTreeNode }]">
@@ -110,10 +106,12 @@
 
       <template v-slot:after>
         <div class="canvas-container">
-          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-            @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
+          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
+            @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver"
+            @drop="onDrop" tabindex="0">
           </canvas>
-          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat bordered>
+          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat
+            bordered>
             <q-card-section class="row items-center justify-between">
               <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
               <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
@@ -154,13 +152,16 @@
                           <q-item-label>{{ param.label }}:</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme"
+                            v-model="selectedElement[param.name]"
                             @update:model-value="val => onParameterChange(val, param.name)" />
-                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :disable="isGroupSelected" :options="param.options" option-label="label" option-value="value" dense outlined emit-value
-                            map-options @update:model-value="(val) => onParameterChange(val, param.name)" />
-                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                            :min="param.min" dense outlined @update:model-value="val => onParameterChange(val, param.name)" />
+                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'"
+                            v-model="selectedElement[param.name]" :disable="isGroupSelected" :options="param.options"
+                            option-label="label" option-value="value" dense outlined emit-value map-options
+                            @update:model-value="(val) => onParameterChange(val, param.name)" />
+                          <q-input :dark="isDarkTheme" v-else :type="param.type"
+                            v-model.number="selectedElement[param.name]" :step="param.step" :min="param.min" dense
+                            outlined @update:model-value="val => onParameterChange(val, param.name)" />
                         </q-item-section>
                         <q-item-section side class="param-unit-col">
                           <span v-if="param.unit">{{ param.unit }}</span>
@@ -178,8 +179,8 @@
                           <q-item-label>X (px):</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense outlined
-                            @update:model-value="val => onParameterChange(val, 'x')" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense
+                            outlined @update:model-value="val => onParameterChange(val, 'x')" />
                         </q-item-section>
                       </q-item>
                       <q-item>
@@ -187,8 +188,8 @@
                           <q-item-label>Y (px):</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense outlined
-                            @update:model-value="val => onParameterChange(val, 'y')" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense
+                            outlined @update:model-value="val => onParameterChange(val, 'y')" />
                         </q-item-section>
                       </q-item>
                       <q-item>
@@ -196,8 +197,8 @@
                           <q-item-label>Поворот (°):</q-item-label>
                         </q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1" dense outlined
-                            @update:model-value="val => onParameterChange(val, 'rotation')" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1"
+                            dense outlined @update:model-value="val => onParameterChange(val, 'rotation')" />
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -255,10 +256,10 @@
             </div>
             <q-card-section v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
               <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
-              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
-                class="full-width q-mb-sm" />
-              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
-                class="full-width" />
+              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2"
+                @click="groupSelected" class="full-width q-mb-sm" />
+              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected"
+                @click="ungroupSelected" class="full-width" />
             </q-card-section>
             <q-card-section>
               <div class="delete-controls q-mt-md">
@@ -443,14 +444,24 @@ const updateSelection = (newSelection, skipRender = false) => {
   try {
     selectedElements.value = newSelection;
     renderer?.setSelectedElements(newSelection);
-    updateTreeAndSelection();
+
+    // Обновляем выделение в дереве
+    if (newSelection.length === 1 && newSelection[0]) {
+      selectedTreeNode.value = newSelection[0].id;
+    } else {
+      selectedTreeNode.value = null; // Очищаем выделение в дереве
+    }
+
     if (!skipRender) scheduleRender();
   } finally {
     isUpdatingSelection = false;
   }
 };
 
-const clearSelection = () => updateSelection([], true);
+const clearSelection = () => {
+  updateSelection([], true);
+  selectedTreeNode.value = null; // Дополнительная очистка для надежности
+};
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;

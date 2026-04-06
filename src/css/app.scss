@@ -181,12 +181,11 @@
 }
 
 .tree-node-selected {
-  color: #1976d2;
-  font-weight: bold;
+  color: $primary;
 }
 
 .dark-theme .tree-node-selected {
-  color: #42a5f5;
+    color: $primary;
 }
 
 .tree-node-info {
