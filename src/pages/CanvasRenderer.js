@@ -44,26 +44,6 @@ export class CanvasRenderer {
     return result;
   }
 
-  // Обновление видимой области камеры
-  updateVisibleBounds() {
-    if (!this.canvas) return;
-
-    const width = this.canvas.width / this.scale.value;
-    const height = this.canvas.height / this.scale.value;
-    const startX = -this.panX.value / this.scale.value;
-    const startY = -this.panY.value / this.scale.value;
-
-    // Добавляем запас в 20% для плавного появления элементов у краёв
-    const padding = Math.max(width, height) * 0.2;
-
-    this.visibleBounds = {
-      minX: startX - padding,
-      minY: startY - padding,
-      maxX: startX + width + padding,
-      maxY: startY + height + padding
-    };
-  }
-
   // Проверка, видим ли элемент (с учётом его размера)
   isElementVisible(element) {
     const width = element.getWidth();
@@ -106,9 +86,6 @@ export class CanvasRenderer {
     ctx.save();
     ctx.translate(this.panX.value, this.panY.value);
     ctx.scale(this.scale.value, this.scale.value);
-
-    // Обновляем видимую область перед отрисовкой
-    this.updateVisibleBounds();
 
     if (this.options.showGrid.value) {
       this.drawGrid(ctx);
