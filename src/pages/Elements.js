@@ -89,6 +89,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
+    this._hitTolerance = 1; // Допуск для обнаружения элемента при клике
   }
   get showCallout() {
     return this._showCallout;

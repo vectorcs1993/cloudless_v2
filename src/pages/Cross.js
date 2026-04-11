@@ -408,8 +408,7 @@ export class Cross extends DuctBase {
       return true;
     }
 
-    // Добавляем допуск 5px вокруг элемента для удобства выделения
-    const hitTolerance = 5;
+    // Используем protected hitTolerance из BaseElement
     const topLeft = this.getTopLeft();
     const local = this.transformToLocalCoords(worldX, worldY);
     const width_px = this.getWidth();
@@ -419,15 +418,15 @@ export class Cross extends DuctBase {
 
     // Проверяем расстояние до горизонтальной линии
     const isNearHorizontal =
-      local.x >= topLeft.x - hitTolerance &&
-      local.x <= topLeft.x + width_px + hitTolerance &&
-      Math.abs(local.y - centerY) <= hitTolerance;
+      local.x >= topLeft.x - this._hitTolerance &&
+      local.x <= topLeft.x + width_px + this._hitTolerance &&
+      Math.abs(local.y - centerY) <= this._hitTolerance;
 
     // Проверяем расстояние до вертикальной линии
     const isNearVertical =
-      Math.abs(local.x - centerX) <= hitTolerance &&
-      local.y >= topLeft.y - hitTolerance &&
-      local.y <= topLeft.y + height_px + hitTolerance;
+      Math.abs(local.x - centerX) <= this._hitTolerance &&
+      local.y >= topLeft.y - this._hitTolerance &&
+      local.y <= topLeft.y + height_px + this._hitTolerance;
 
     return isNearHorizontal || isNearVertical;
   }

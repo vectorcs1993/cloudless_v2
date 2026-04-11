@@ -470,8 +470,7 @@ export class Tee extends DuctBase {
       return true;
     }
 
-    // Добавляем допуск 5px вокруг элемента для удобства выделения
-    const hitTolerance = 5;
+    // Используем protected hitTolerance из BaseElement
     const topLeft = this.getTopLeft();
     const local = this.transformToLocalCoords(worldX, worldY);
     const width_px = this.getWidth();
@@ -482,16 +481,16 @@ export class Tee extends DuctBase {
 
     // Проверяем расстояние до горизонтальной линии
     const isNearHorizontal =
-      local.x >= topLeft.x - hitTolerance &&
-      local.x <= topLeft.x + width_px + hitTolerance &&
-      Math.abs(local.y - centerY) <= hitTolerance;
+      local.x >= topLeft.x - this._hitTolerance &&
+      local.x <= topLeft.x + width_px + this._hitTolerance &&
+      Math.abs(local.y - centerY) <= this._hitTolerance;
 
     // Проверяем расстояние до вертикальной линии (ответвления)
     const branchCenterX = centerX + offset_px;
     const isNearVertical =
-      Math.abs(local.x - branchCenterX) <= hitTolerance &&
-      local.y >= topLeft.y - hitTolerance &&
-      local.y <= centerY + hitTolerance;
+      Math.abs(local.x - branchCenterX) <= this._hitTolerance &&
+      local.y >= topLeft.y - this._hitTolerance &&
+      local.y <= centerY + this._hitTolerance;
 
     return isNearHorizontal || isNearVertical;
   }

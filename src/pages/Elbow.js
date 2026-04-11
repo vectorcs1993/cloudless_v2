@@ -207,8 +207,7 @@ export class Elbow extends DuctBase {
       return true;
     }
 
-    // Добавляем допуск 5px вокруг линий элемента для удобства выделения
-    const hitTolerance = 5;
+    // Используем protected hitTolerance из BaseElement
     const local = this.transformToLocalCoords(worldX, worldY);
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
@@ -219,15 +218,15 @@ export class Elbow extends DuctBase {
 
     // Проверяем расстояние до подводящей горизонтальной линии
     const isNearHorizontalLine =
-      local.x >= bendCenterX - hitTolerance &&
-      local.x <= bendCenterX + centerRadius_px + hitTolerance &&
-      Math.abs(local.y - (bendCenterY - centerRadius_px)) <= hitTolerance;
+      local.x >= bendCenterX - this._hitTolerance &&
+      local.x <= bendCenterX + centerRadius_px + this._hitTolerance &&
+      Math.abs(local.y - (bendCenterY - centerRadius_px)) <= this._hitTolerance;
 
     // Проверяем расстояние до отводящей вертикальной линии
     const isNearVerticalLine =
-      Math.abs(local.x - (bendCenterX + centerRadius_px)) <= hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px - hitTolerance &&
-      local.y <= bendCenterY + hitTolerance;
+      Math.abs(local.x - (bendCenterX + centerRadius_px)) <= this._hitTolerance &&
+      local.y >= bendCenterY - centerRadius_px - this._hitTolerance &&
+      local.y <= bendCenterY + this._hitTolerance;
 
     // Проверяем расстояние до дуги (приближенно)
     const distFromBendCenter = Math.sqrt(
@@ -235,9 +234,9 @@ export class Elbow extends DuctBase {
       Math.pow(local.y - bendCenterY, 2)
     );
     const isNearArc =
-      Math.abs(distFromBendCenter - centerRadius_px) <= hitTolerance &&
-      local.x >= bendCenterX - hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px - hitTolerance;
+      Math.abs(distFromBendCenter - centerRadius_px) <= this._hitTolerance &&
+      local.x >= bendCenterX - this._hitTolerance &&
+      local.y >= bendCenterY - centerRadius_px - this._hitTolerance;
 
     return isNearHorizontalLine || isNearVerticalLine || isNearArc;
   }
