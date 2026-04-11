@@ -162,21 +162,6 @@ export class Transition extends DuctDirect {
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 
-    // Штриховые линии границ (конический вид)
-    const height1_px = this.mmToPx(this._a);
-    const height2_px = this.mmToPx(this._a2);
-
-    ctx.beginPath();
-    ctx.moveTo(topLeft.x, centerY - height1_px / 2);
-    ctx.lineTo(topLeft.x + width_px, centerY - height2_px / 2);
-    ctx.moveTo(topLeft.x, centerY + height1_px / 2);
-    ctx.lineTo(topLeft.x + width_px, centerY + height2_px / 2);
-    ctx.strokeStyle = isDarkTheme ? '#555' : '#aaa';
-    ctx.lineWidth = Math.max(0.5, 1 / scale);
-    ctx.setLineDash([4 / scale, 4 / scale]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
     ctx.restore();
 
     if (showElementAxes) {
@@ -210,16 +195,19 @@ export class Transition extends DuctDirect {
   }
 
   hitTest(worldX, worldY, ctx) {
-    const width_px = this.getWidth();
-    const height1_px = this.mmToPx(this._a);
-    const height2_px = this.mmToPx(this._a2);
-    const maxHeight = Math.max(height1_px, height2_px);
-
     const local = this.transformToLocalCoords(worldX, worldY);
     const topLeft = this.getTopLeft();
-
-    return local.x >= topLeft.x && local.x <= topLeft.x + width_px &&
-      local.y >= topLeft.y && local.y <= topLeft.y + maxHeight;
+    const centerY = this.y;
+    const width_px = this.getWidth();
+    const hitTolerance = 5; // Допуск 5px для удобства выделения
+    
+    // Проверяем, находится ли точка на расстояние ~5px от центральной линии перехода
+    const isNearLine = 
+      local.x >= topLeft.x - hitTolerance && 
+      local.x <= topLeft.x + width_px + hitTolerance &&
+      Math.abs(local.y - centerY) <= hitTolerance;
+    
+    return isNearLine;
   }
 
   toJSON() {

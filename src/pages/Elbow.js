@@ -304,15 +304,57 @@ export class Elbow extends DuctBase {
       return false;
     }
 
+    // Сначала проверяем основной путь
     if (ctx) {
       this.createPath(ctx);
-      return ctx.isPointInPath(worldX, worldY);
+      if (ctx.isPointInPath(worldX, worldY)) {
+        return true;
+      }
     }
 
+    // Используем временный canvas для проверки пути элемента
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
+    
+    // Проверяем точку в основном пути
     this.createPath(tempCtx);
-    return tempCtx.isPointInPath(worldX, worldY);
+    if (tempCtx.isPointInPath(worldX, worldY)) {
+      return true;
+    }
+
+    // Добавляем допуск 5px вокруг линий элемента для удобства выделения
+    const hitTolerance = 5;
+    const local = this.transformToLocalCoords(worldX, worldY);
+    const topLeft = this.getTopLeft();
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._r);
+    const centerRadius_px = radius_px + size_px / 2;
+    const bendCenterX = topLeft.x;
+    const bendCenterY = topLeft.y + this.getHeight();
+
+    // Проверяем расстояние до подводящей горизонтальной линии
+    const isNearHorizontalLine = 
+      local.x >= bendCenterX - hitTolerance && 
+      local.x <= bendCenterX + centerRadius_px + hitTolerance &&
+      Math.abs(local.y - (bendCenterY - centerRadius_px)) <= hitTolerance;
+
+    // Проверяем расстояние до отводящей вертикальной линии
+    const isNearVerticalLine = 
+      Math.abs(local.x - (bendCenterX + centerRadius_px)) <= hitTolerance &&
+      local.y >= bendCenterY - centerRadius_px - hitTolerance && 
+      local.y <= bendCenterY + hitTolerance;
+
+    // Проверяем расстояние до дуги (приближенно)
+    const distFromBendCenter = Math.sqrt(
+      Math.pow(local.x - bendCenterX, 2) + 
+      Math.pow(local.y - bendCenterY, 2)
+    );
+    const isNearArc = 
+      Math.abs(distFromBendCenter - centerRadius_px) <= hitTolerance &&
+      local.x >= bendCenterX - hitTolerance &&
+      local.y >= bendCenterY - centerRadius_px - hitTolerance;
+
+    return isNearHorizontalLine || isNearVerticalLine || isNearArc;
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {

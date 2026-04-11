@@ -390,15 +390,46 @@ export class Cross extends DuctBase {
       return false;
     }
 
+    // Сначала проверяем основной путь
     if (ctx) {
       this.createPath(ctx);
-      return ctx.isPointInPath(worldX, worldY);
+      if (ctx.isPointInPath(worldX, worldY)) {
+        return true;
+      }
     }
 
+    // Используем временный canvas для проверки пути элемента
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
+    
+    // Проверяем точку в основном пути
     this.createPath(tempCtx);
-    return tempCtx.isPointInPath(worldX, worldY);
+    if (tempCtx.isPointInPath(worldX, worldY)) {
+      return true;
+    }
+
+    // Добавляем допуск 5px вокруг элемента для удобства выделения
+    const hitTolerance = 5;
+    const topLeft = this.getTopLeft();
+    const local = this.transformToLocalCoords(worldX, worldY);
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const centerX = this.x;
+    const centerY = this.y;
+
+    // Проверяем расстояние до горизонтальной линии
+    const isNearHorizontal = 
+      local.x >= topLeft.x - hitTolerance && 
+      local.x <= topLeft.x + width_px + hitTolerance &&
+      Math.abs(local.y - centerY) <= hitTolerance;
+
+    // Проверяем расстояние до вертикальной линии
+    const isNearVertical = 
+      Math.abs(local.x - centerX) <= hitTolerance &&
+      local.y >= topLeft.y - hitTolerance && 
+      local.y <= topLeft.y + height_px + hitTolerance;
+
+    return isNearHorizontal || isNearVertical;
   }
 
   toJSON() {
