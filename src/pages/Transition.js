@@ -29,7 +29,7 @@ export class Transition extends DuctDirect {
 
 
   get c2() { return this._c2; }
-  set a2(value) {
+  set c2(value) {
     if (this._c2 === value) return;
     this._c2 = value;
     this.updatePorts();
