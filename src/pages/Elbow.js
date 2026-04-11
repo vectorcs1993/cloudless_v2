@@ -315,62 +315,49 @@ export class Elbow extends DuctBase {
     return tempCtx.isPointInPath(worldX, worldY);
   }
 
-  // Переопределяем метод отрисовки для дополнительных линий сегментов
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    // Сначала рисуем основной контур
-    this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._r);
+    const bendCenterX = topLeft.x;
+    const bendCenterY = topLeft.y + this.getHeight();
+    const centerRadius_px = radius_px + size_px / 2;
 
-    // Для круглого типа рисуем линии сегментов
-    if (this._sectionType === 'round' && this._segments > 0) {
-      const rotation = this.rotation || 0;
-      const centerX = this.x;
-      const centerY = this.y;
-      const topLeft = this.getTopLeft();
-      const size_px = this.getSizePx();
-      const radius_px = this.mmToPx(this._r);
-      const bendCenterX = topLeft.x;
-      const bendCenterY = topLeft.y + this.getHeight();
-      const outerRadius_px = radius_px + size_px;
-      const innerRadius_px = radius_px;
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
 
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(rotation * Math.PI / 180);
-      ctx.translate(-centerX, -centerY);
+    ctx.beginPath();
 
-      ctx.beginPath();
-      ctx.strokeStyle = isDarkTheme ? '#888888' : '#aaaaaa';
-      ctx.lineWidth = Math.max(0.5, 0.8 / scale);
+    // Рисуем дугу (центральная линия)
+    ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
 
-      const startAngle = Math.PI * 1.5;
-      const endAngle = Math.PI * 2;
-      const angleStep = (endAngle - startAngle) / this._segments;
+    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    ctx.stroke();
 
-      for (let i = 0; i <= this._segments; i++) {
-        const angle = startAngle + angleStep * i;
-        const outerX = bendCenterX + outerRadius_px * Math.cos(angle);
-        const outerY = bendCenterY + outerRadius_px * Math.sin(angle);
-        const innerX = bendCenterX + innerRadius_px * Math.cos(angle);
-        const innerY = bendCenterY + innerRadius_px * Math.sin(angle);
+    // Рисуем прямую подводящую линию
+    ctx.beginPath();
+    ctx.moveTo(bendCenterX, bendCenterY - centerRadius_px);
+    ctx.lineTo(topLeft.x, bendCenterY - centerRadius_px);
+    ctx.stroke();
 
-        ctx.beginPath();
-        ctx.moveTo(outerX, outerY);
-        ctx.lineTo(innerX, innerY);
-        ctx.stroke();
-      }
+    // Рисуем прямую отводящую линию
+    ctx.beginPath();
+    ctx.moveTo(bendCenterX + centerRadius_px, bendCenterY);
+    ctx.lineTo(bendCenterX + centerRadius_px, topLeft.y + this.getHeight());
+    ctx.stroke();
 
-      ctx.restore();
-    }
+    ctx.restore();
 
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
   }
-
   toJSON() {
     const base = super.toJSON();
     return {

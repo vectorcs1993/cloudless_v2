@@ -182,15 +182,10 @@ export class CanvasRenderer {
     return radius;
   }
 
-  getPortColor(port, isHighlighted = false) {
+
+  getPortColor(isHighlighted = false) {
     if (isHighlighted) return '#ff00ff';
-    if (port.isConnected?.()) return '#00ff00';
-    switch (port.direction) {
-      case 'inlet': return '#00aaff';
-      case 'outlet': return '#ffaa00';
-      case 'branch': return '#aa00ff';
-      default: return '#888888';
-    }
+    return '#888888'; // Все порты серые, без дифференциации
   }
 
   setTooltipPort(port, screenX, screenY) {

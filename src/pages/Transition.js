@@ -139,16 +139,13 @@ export class Transition extends DuctDirect {
     return ports;
   }
 
+  // Замените метод draw
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
     const width_px = this.getWidth();
-    const height1_px = this.mmToPx(this._a);
-    const height2_px = this.mmToPx(this._a2);
     const topLeft = this.getTopLeft();
-    const maxHeight = Math.max(height1_px, height2_px);
-    const offsetY = (maxHeight - height1_px) / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -157,17 +154,28 @@ export class Transition extends DuctDirect {
 
     ctx.beginPath();
 
-    // Рисуем переход как трапецию
+    // Центральная линия перехода
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+
+    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    ctx.stroke();
+
+    // Штриховые линии границ (конический вид)
+    const height1_px = this.mmToPx(this._a);
+    const height2_px = this.mmToPx(this._a2);
+
+    ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY - height1_px / 2);
     ctx.lineTo(topLeft.x + width_px, centerY - height2_px / 2);
+    ctx.moveTo(topLeft.x, centerY + height1_px / 2);
     ctx.lineTo(topLeft.x + width_px, centerY + height2_px / 2);
-    ctx.lineTo(topLeft.x, centerY + height1_px / 2);
-    ctx.closePath();
-
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, isDarkTheme);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, isDarkTheme);
+    ctx.strokeStyle = isDarkTheme ? '#555' : '#aaa';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     ctx.restore();
 

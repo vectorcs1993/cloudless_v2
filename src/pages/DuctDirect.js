@@ -88,8 +88,42 @@ export class DuctDirect extends DuctBase {
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    // Отрисовка использует a (ширина трубы), c игнорируется
-    this.drawRectangular(ctx, this.getWidth(), this.getHeight(), isSelected, scale, showColors);
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const width_px = this.getWidth();
+    const height_px = this.getHeight();
+    const topLeft = this.getTopLeft();
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+
+    // Рисуем линию (ось воздуховода)
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+
+    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    ctx.stroke();
+
+    // Рисуем штриховые линии границ (опционально, для обозначения габаритов)
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, centerY - height_px / 2);
+    ctx.lineTo(topLeft.x + width_px, centerY - height_px / 2);
+    ctx.moveTo(topLeft.x, centerY + height_px / 2);
+    ctx.lineTo(topLeft.x + width_px, centerY + height_px / 2);
+    ctx.strokeStyle = isDarkTheme ? '#555' : '#aaa';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }

@@ -30,8 +30,8 @@ export class Port {
   }
 
   getDirectionName() {
-    const directions = { 'inlet': 'Вход', 'outlet': 'Выход', 'branch': 'Ответвление' };
-    return directions[this.direction] || this.direction;
+    // Возвращаем просто "Порт" для всех, без различий
+    return 'Порт';
   }
 
   updateWorldPosition(centerX, centerY, rotation, pointX, pointY) {

@@ -379,11 +379,34 @@ export class Tee extends DuctBase {
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+    const width_px = this.getWidth();
+    const offset_px = this.mmToPx(this._l3);
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+
+    // Горизонтальная линия (магистраль)
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+
+    // Вертикальная линия (ответвление)
+    const branchX = centerX + offset_px;
+    ctx.moveTo(branchX, centerY);
+    ctx.lineTo(branchX, topLeft.y);
+
+    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    ctx.stroke();
+
+    ctx.restore();
 
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);

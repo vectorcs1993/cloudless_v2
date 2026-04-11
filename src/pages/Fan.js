@@ -23,35 +23,41 @@ export class Fan extends DuctDirect {
     ];
   }
 
+  // Замените метод draw
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
-    this.drawRectangular(ctx, width_px, height_px, isSelected, scale, showColors);
-
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
-    const radius = height_px * 0.35;
+    const width_px = this.getWidth();
+    const radius = Math.min(width_px * 0.3, this.mmToPx(60));
+    const topLeft = this.getTopLeft();
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
+    // Линия подвода
     ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    ctx.strokeStyle = '#666';
-    ctx.lineWidth = Math.max(1, 1.5 / scale);
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(centerX - radius * 0.8, centerY);
     ctx.stroke();
 
-    const triangleSize = radius * 0.7;
-    const direction = this.flow > 0 ? 1 : -1;
+    // Линия отвода
     ctx.beginPath();
-    ctx.moveTo(centerX + triangleSize * direction, centerY);
-    ctx.lineTo(centerX - triangleSize * 0.8 * direction, centerY - triangleSize * 0.8);
-    ctx.lineTo(centerX - triangleSize * 0.8 * direction, centerY + triangleSize * 0.8);
+    ctx.moveTo(centerX + radius * 0.8, centerY);
+    ctx.lineTo(topLeft.x + width_px, centerY);
+    ctx.stroke();
+
+    // Треугольник (вентилятор)
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - radius);
+    ctx.lineTo(centerX + radius, centerY);
+    ctx.lineTo(centerX, centerY + radius);
     ctx.closePath();
-    ctx.strokeStyle = '#666';
+
+    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 
     ctx.restore();
@@ -60,7 +66,6 @@ export class Fan extends DuctDirect {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
   }
-
   toJSON() {
     return {
       ...super.toJSON(),
