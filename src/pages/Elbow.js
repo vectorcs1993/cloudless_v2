@@ -51,11 +51,7 @@ export class Elbow extends DuctBase {
 
   getCalloutText() {
     const baseText = `${super.getCalloutText()}`;
-    if (this._sectionType === 'round') {
-      return `${baseText}\nR: ${this._r} мм`;
-    } else {
-      return `${baseText}\nB: ${this._b} мм\nR: ${this._r} мм`;
-    }
+    return `${baseText}\nR: ${this._r} мм`;
   }
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
     this.createPath(ctx);
@@ -70,52 +66,18 @@ export class Elbow extends DuctBase {
   getParameters() {
     const baseParams = super.getParameters();
 
-    if (this._sectionType === 'round') {
-      return [
-        ...baseParams,
-        {
-          name: 'r',
-          label: 'R',
-          type: 'number',
-          step: 5,
-          min: 30,
-          value: this._r,
-          unit: 'мм'
-        },
-        {
-          name: 'segments',
-          label: 'N',
-          type: 'number',
-          step: 1,
-          min: 3,
-          max: 20,
-          value: this._segments,
-          unit: 'шт'
-        }
-      ];
-    } else {
-      return [
-        ...baseParams,
-        {
-          name: 'b',
-          label: 'B',
-          type: 'number',
-          step: 1,
-          min: 30,
-          value: this._b,
-          unit: 'мм'
-        },
-        {
-          name: 'r',
-          label: 'R',
-          type: 'number',
-          step: 5,
-          min: 30,
-          value: this._r,
-          unit: 'мм'
-        }
-      ];
-    }
+    return [
+      ...baseParams,
+      {
+        name: 'r',
+        label: 'R',
+        type: 'number',
+        step: 5,
+        min: 30,
+        value: this._r,
+        unit: 'мм'
+      }
+    ];
   }
 
   getPorts() {
@@ -152,15 +114,6 @@ export class Elbow extends DuctBase {
   }
 
   createPath(ctx) {
-    if (this._sectionType === 'round') {
-      this._createSegmentedPath(ctx);  // Круглый - сегментированный
-    } else {
-      this._createSmoothPath(ctx);     // Прямоугольный - плавный
-    }
-  }
-
-  // Плавный отвод (для прямоугольного сечения)
-  _createSmoothPath(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
@@ -189,57 +142,6 @@ export class Elbow extends DuctBase {
     ctx.restore();
   }
 
-  // Сегментированный отвод (для круглого сечения)
-  _createSegmentedPath(ctx) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-    const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._r);
-    const bendCenterX = topLeft.x;
-    const bendCenterY = topLeft.y + this.getHeight();
-    const outerRadius_px = radius_px + size_px;
-    const innerRadius_px = radius_px;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-
-    // Рисуем внешнюю сегментированную дугу
-    const startAngle = Math.PI * 1.5;
-    const endAngle = Math.PI * 2;
-    const angleStep = (endAngle - startAngle) / this._segments;
-
-    // Внешний контур (сегментированный)
-    for (let i = 0; i <= this._segments; i++) {
-      const angle = startAngle + angleStep * i;
-      const x = bendCenterX + outerRadius_px * Math.cos(angle);
-      const y = bendCenterY + outerRadius_px * Math.sin(angle);
-
-      if (i === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    }
-
-    // Внутренний контур (сегментированный, в обратном направлении)
-    for (let i = this._segments; i >= 0; i--) {
-      const angle = startAngle + angleStep * i;
-      const x = bendCenterX + innerRadius_px * Math.cos(angle);
-      const y = bendCenterY + innerRadius_px * Math.sin(angle);
-      ctx.lineTo(x, y);
-    }
-
-    ctx.closePath();
-
-    ctx.restore();
-  }
-
   drawCenterLines(ctx, scale, isDarkTheme) {
     const centerX = this.x;
     const centerY = this.y;
@@ -258,33 +160,16 @@ export class Elbow extends DuctBase {
 
     ctx.beginPath();
 
-    if (this._sectionType === 'round') {
-      // Для круглого - сегментированная центральная линия
-      const startAngle = Math.PI * 1.5;
-      const endAngle = Math.PI * 2;
-      const angleStep = (endAngle - startAngle) / this._segments;
+    // Плавная осевая линия дуги (для обоих типов сечений)
+    ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
 
-      for (let i = 0; i <= this._segments; i++) {
-        const angle = startAngle + angleStep * i;
-        const x = bendCenterX + centerRadius_px * Math.cos(angle);
-        const y = bendCenterY + centerRadius_px * Math.sin(angle);
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      }
-    } else {
-      // Для прямоугольного - плавная центральная линия
-      ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
-    }
-
+    // Подводящая горизонтальная линия
     const startX = bendCenterX;
     const startY = bendCenterY - centerRadius_px;
     ctx.moveTo(startX, startY);
     ctx.lineTo(topLeft.x, startY);
 
+    // Отводящая вертикальная линия
     const endX = bendCenterX + centerRadius_px;
     const endY = bendCenterY;
     ctx.moveTo(endX, endY);
@@ -315,7 +200,7 @@ export class Elbow extends DuctBase {
     // Используем временный canvas для проверки пути элемента
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     // Проверяем точку в основном пути
     this.createPath(tempCtx);
     if (tempCtx.isPointInPath(worldX, worldY)) {
@@ -333,23 +218,23 @@ export class Elbow extends DuctBase {
     const bendCenterY = topLeft.y + this.getHeight();
 
     // Проверяем расстояние до подводящей горизонтальной линии
-    const isNearHorizontalLine = 
-      local.x >= bendCenterX - hitTolerance && 
+    const isNearHorizontalLine =
+      local.x >= bendCenterX - hitTolerance &&
       local.x <= bendCenterX + centerRadius_px + hitTolerance &&
       Math.abs(local.y - (bendCenterY - centerRadius_px)) <= hitTolerance;
 
     // Проверяем расстояние до отводящей вертикальной линии
-    const isNearVerticalLine = 
+    const isNearVerticalLine =
       Math.abs(local.x - (bendCenterX + centerRadius_px)) <= hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px - hitTolerance && 
+      local.y >= bendCenterY - centerRadius_px - hitTolerance &&
       local.y <= bendCenterY + hitTolerance;
 
     // Проверяем расстояние до дуги (приближенно)
     const distFromBendCenter = Math.sqrt(
-      Math.pow(local.x - bendCenterX, 2) + 
+      Math.pow(local.x - bendCenterX, 2) +
       Math.pow(local.y - bendCenterY, 2)
     );
-    const isNearArc = 
+    const isNearArc =
       Math.abs(distFromBendCenter - centerRadius_px) <= hitTolerance &&
       local.x >= bendCenterX - hitTolerance &&
       local.y >= bendCenterY - centerRadius_px - hitTolerance;

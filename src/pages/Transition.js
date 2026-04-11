@@ -200,13 +200,13 @@ export class Transition extends DuctDirect {
     const centerY = this.y;
     const width_px = this.getWidth();
     const hitTolerance = 5; // Допуск 5px для удобства выделения
-    
+
     // Проверяем, находится ли точка на расстояние ~5px от центральной линии перехода
-    const isNearLine = 
-      local.x >= topLeft.x - hitTolerance && 
+    const isNearLine =
+      local.x >= topLeft.x - hitTolerance &&
       local.x <= topLeft.x + width_px + hitTolerance &&
       Math.abs(local.y - centerY) <= hitTolerance;
-    
+
     return isNearLine;
   }
 

@@ -463,7 +463,7 @@ export class Tee extends DuctBase {
     // Используем временный canvas для проверки пути элемента
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
-    
+
     // Проверяем точку в основном пути
     this.createPath(tempCtx);
     if (tempCtx.isPointInPath(worldX, worldY)) {
@@ -481,16 +481,16 @@ export class Tee extends DuctBase {
     const centerY = this.y;
 
     // Проверяем расстояние до горизонтальной линии
-    const isNearHorizontal = 
-      local.x >= topLeft.x - hitTolerance && 
+    const isNearHorizontal =
+      local.x >= topLeft.x - hitTolerance &&
       local.x <= topLeft.x + width_px + hitTolerance &&
       Math.abs(local.y - centerY) <= hitTolerance;
 
     // Проверяем расстояние до вертикальной линии (ответвления)
     const branchCenterX = centerX + offset_px;
-    const isNearVertical = 
+    const isNearVertical =
       Math.abs(local.x - branchCenterX) <= hitTolerance &&
-      local.y >= topLeft.y - hitTolerance && 
+      local.y >= topLeft.y - hitTolerance &&
       local.y <= centerY + hitTolerance;
 
     return isNearHorizontal || isNearVertical;
