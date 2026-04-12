@@ -46,18 +46,23 @@ export class CanvasRenderer {
 
   // Проверка, видим ли элемент (с учётом его размера)
   isElementVisible(element) {
+    // Получаем bounding box элемента в мировых координатах
+    const topLeft = element.getTopLeft();
     const width = element.getWidth();
     const height = element.getHeight();
-    const centerX = element.x;
-    const centerY = element.y;
 
-    const halfW = width / 2;
-    const halfH = height / 2;
+    // Учитываем поворот: bounding box может стать больше, поэтому просто используем прямоугольник,
+    // но для повёрнутых элементов лучше расширить проверку. Сделаем запас.
+    const margin = 100; // дополнительный запас в пикселях (мировых)
+    const minX = topLeft.x - margin;
+    const minY = topLeft.y - margin;
+    const maxX = topLeft.x + width + margin;
+    const maxY = topLeft.y + height + margin;
 
-    return !(centerX + halfW < this.visibleBounds.minX ||
-      centerX - halfW > this.visibleBounds.maxX ||
-      centerY + halfH < this.visibleBounds.minY ||
-      centerY - halfH > this.visibleBounds.maxY);
+    return !(maxX < this.visibleBounds.minX ||
+      minX > this.visibleBounds.maxX ||
+      maxY < this.visibleBounds.minY ||
+      minY > this.visibleBounds.maxY);
   }
 
   isCalloutVisible(callout, element) {
@@ -76,11 +81,13 @@ export class CanvasRenderer {
     const topLeft = this.screenToWorld(0, 0);
     const bottomRight = this.screenToWorld(rect.width, rect.height);
 
+    // Расширяем границы в зависимости от масштаба (чем больше зум, тем больше запас)
+    const margin = 500 / this.scale.value; // запас 500 пикселей в мировых координатах
     this.visibleBounds = {
-      minX: Math.min(topLeft.x, bottomRight.x) - 200,
-      minY: Math.min(topLeft.y, bottomRight.y) - 200,
-      maxX: Math.max(topLeft.x, bottomRight.x) + 200,
-      maxY: Math.max(topLeft.y, bottomRight.y) + 200
+      minX: Math.min(topLeft.x, bottomRight.x) - margin,
+      minY: Math.min(topLeft.y, bottomRight.y) - margin,
+      maxX: Math.max(topLeft.x, bottomRight.x) + margin,
+      maxY: Math.max(topLeft.y, bottomRight.y) + margin
     };
   }
 

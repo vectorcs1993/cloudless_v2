@@ -7,14 +7,14 @@ export class InteractionManager {
     this.layerManager = layerManager;
     this.options = options;
 
-    // Состояния
     this.isDragging = false;
     this.isPanning = false;
     this.isSelecting = false;
     this.dragElements = [];
     this.dragCallout = null;
     this.dragStartWorld = null;
-    this.dragStartPan = null;
+    this.dragStartPan = { x: 0, y: 0 };
+    this.dragStartScreen = { x: 0, y: 0 }; // для панорамирования
     this.dragStartPositions = [];
     this.selectionStart = null;
     this.autoUpdateConnections = true;
@@ -23,8 +23,6 @@ export class InteractionManager {
   setAutoUpdateConnections(enabled) {
     this.autoUpdateConnections = enabled;
   }
-
-  // ========== ВСПОМОГАТЕЛЬНЫЕ ==========
 
   isInteractive(element) {
     return !this.layerManager?.isLayerLocked(element);
@@ -69,8 +67,6 @@ export class InteractionManager {
     return all.find(el => el.id === id);
   }
 
-  // ========== ПЕРЕМЕЩЕНИЕ ==========
-
   moveElement(el, dx, dy) {
     if (!this.isInteractive(el)) return;
     el.x += dx;
@@ -87,7 +83,6 @@ export class InteractionManager {
   }
 
   moveWithSnap(elements, dx, dy, startPositions) {
-    // Возврат на старт
     for (const p of startPositions) {
       p.el.x = p.x;
       p.el.y = p.y;
@@ -103,17 +98,12 @@ export class InteractionManager {
     for (const el of elements) {
       if (el.ports) movingPorts.push(...el.ports);
     }
-
     if (movingPorts.length === 0) {
       this.moveElements(elements, dx, dy);
       return;
     }
 
-    const movingIds = new Set();
-    for (const el of elements) {
-      movingIds.add(el.id);
-    }
-
+    const movingIds = new Set(elements.map(el => el.id));
     let best = null;
     let bestDist = Infinity;
 
@@ -123,7 +113,6 @@ export class InteractionManager {
         if (movingIds.has(tp.elementId)) continue;
         const targetEl = this.findElementById(tp.elementId);
         if (targetEl && !this.isInteractive(targetEl)) continue;
-
         const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
         const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
         if (dist < bestDist && dist < 40) {
@@ -153,13 +142,12 @@ export class InteractionManager {
     }
   }
 
-  // ========== СОБЫТИЯ ==========
-
   onMouseDown(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
+    const rect = this.canvas.getBoundingClientRect();
+    const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
     if (e.button === 0) {
-      // Проверка выноски
       const callout = this.findCalloutAt(world.x, world.y);
       if (callout && this.isInteractive(callout.element)) {
         this.dragCallout = callout;
@@ -170,70 +158,48 @@ export class InteractionManager {
         return;
       }
 
-      // Проверка элемента
       const element = this.findElementAt(world.x, world.y);
-
       if (element) {
         if (!this.isInteractive(element)) return;
-
-        // Управление выделением
         if (!e.ctrlKey && !e.metaKey) {
-          // Если элемент не выделен - выделяем только его
           if (!this.renderer.selectedElements.includes(element)) {
             this.renderer.setSelectedElements([element]);
           }
         } else {
           const selected = [...this.renderer.selectedElements];
           const idx = selected.findIndex(el => el.id === element.id);
-          if (idx === -1) {
-            selected.push(element);
-          } else {
-            selected.splice(idx, 1);
-          }
+          idx === -1 ? selected.push(element) : selected.splice(idx, 1);
           this.renderer.setSelectedElements(selected);
         }
-
-        // Начало перетаскивания - берём ВСЕ выделенные элементы
         this.isDragging = true;
         this.dragElements = [...this.renderer.selectedElements].filter(el => this.isInteractive(el));
-
-        // Сохраняем начальные позиции ВСЕХ перетаскиваемых элементов
         this.dragStartWorld = world;
-        this.dragStartPositions = [];
-        for (const el of this.dragElements) {
-          this.dragStartPositions.push({ el, x: el.x, y: el.y });
-        }
-
+        this.dragStartPositions = this.dragElements.map(el => ({ el, x: el.x, y: el.y }));
         this.canvas.style.cursor = 'grabbing';
       } else {
-        // Снятие выделения при клике на пустое место (если не зажат Ctrl)
         if (!e.ctrlKey && !e.metaKey) {
           this.renderer.setSelectedElements([]);
         }
-
-        // Начало выделения прямоугольником
         this.isSelecting = true;
-        const rect = this.canvas.getBoundingClientRect();
-        this.selectionStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        this.selectionManager?.startSelectionRect(this.selectionStart.x, this.selectionStart.y);
-        this.renderer.startSelectionRect(this.selectionStart.x, this.selectionStart.y);
+        this.selectionStart = { x: screen.x, y: screen.y };
+        this.selectionManager?.startSelectionRect(screen.x, screen.y);
+        this.renderer.startSelectionRect(screen.x, screen.y);
       }
     } else if (e.button === 1 || e.button === 2) {
-      // Панорамирование
       e.preventDefault();
       this.isPanning = true;
-      this.dragStartWorld = world;
       this.dragStartPan = { x: this.options.panX.value, y: this.options.panY.value };
+      this.dragStartScreen = { x: screen.x, y: screen.y };
       this.canvas.style.cursor = 'grabbing';
     }
-
     this.renderer.draw();
   }
 
   onMouseMove(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
+    const rect = this.canvas.getBoundingClientRect();
+    const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
-    // Перетаскивание выноски
     if (this.dragCallout) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
@@ -244,7 +210,6 @@ export class InteractionManager {
       return;
     }
 
-    // Перетаскивание элементов - ВСЕХ выделенных
     if (this.isDragging && this.dragElements.length > 0) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
@@ -253,64 +218,50 @@ export class InteractionManager {
       return;
     }
 
-    // Панорамирование
     if (this.isPanning) {
-      const dx = world.x - this.dragStartWorld.x;
-      const dy = world.y - this.dragStartWorld.y;
-      this.options.panX.value = this.dragStartPan.x + dx * this.options.scale.value;
-      this.options.panY.value = this.dragStartPan.y + dy * this.options.scale.value;
+      const deltaX = screen.x - this.dragStartScreen.x;
+      const deltaY = screen.y - this.dragStartScreen.y;
+      this.options.panX.value = this.dragStartPan.x + deltaX;
+      this.options.panY.value = this.dragStartPan.y + deltaY;
       this.renderer.draw();
       return;
     }
 
-    // Выделение прямоугольником
     if (this.isSelecting && this.selectionStart) {
-      const rect = this.canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      this.selectionManager?.updateSelectionRect(x, y);
-      this.renderer.updateSelectionRect(x, y);
+      this.selectionManager?.updateSelectionRect(screen.x, screen.y);
+      this.renderer.updateSelectionRect(screen.x, screen.y);
       this.renderer.draw();
       return;
     }
 
-    // Подсветка под курсором
     const element = this.findElementAt(world.x, world.y);
     this.renderer.setHighlightedElements(element ? [element] : []);
-
     if (this.options.showPorts?.value) {
       const port = this.findPortAt(world.x, world.y);
       this.renderer.setHighlightedPort(port);
-      if (port) this.canvas.style.cursor = 'pointer';
-      else this.canvas.style.cursor = element ? 'pointer' : 'default';
+      this.canvas.style.cursor = port ? 'pointer' : (element ? 'pointer' : 'default');
     } else {
       this.canvas.style.cursor = element ? 'pointer' : 'default';
     }
-
     this.renderer.draw();
   }
 
   onMouseUp(e) {
-    // Завершение выделения прямоугольником
     if (this.isSelecting) {
       const selected = this.selectionManager?.endSelectionRect(
         this.options.panX.value, this.options.panY.value, this.options.scale.value, this.layerManager
       ) || [];
-      if (selected.length) {
-        this.renderer.setSelectedElements(selected);
-      }
+      if (selected.length) this.renderer.setSelectedElements(selected);
       this.renderer.endSelectionRect();
       this.isSelecting = false;
       this.selectionStart = null;
       this.renderer.draw();
     }
 
-    // Завершение перетаскивания - обновление связей
-    if (this.isDragging && this.dragElements.length > 0 && this.autoUpdateConnections) {
+    if (this.isDragging && this.dragElements.length && this.autoUpdateConnections) {
       this.connectionManager?.updateAllPortsAndConnections(40, this.layerManager);
     }
 
-    // Сброс состояний
     this.isDragging = false;
     this.isPanning = false;
     this.dragElements = [];
@@ -318,7 +269,6 @@ export class InteractionManager {
     this.dragStartPositions = [];
     this.canvas.style.cursor = '';
 
-    // Очистка подсветки порта
     setTimeout(() => {
       this.renderer.setHighlightedPort(null);
       this.renderer.draw();
@@ -330,7 +280,6 @@ export class InteractionManager {
     const before = this.renderer.screenToWorld(e.clientX, e.clientY);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(Math.max(this.options.scale.value * delta, 0.2), 5);
-
     if (newScale !== this.options.scale.value) {
       this.options.scale.value = newScale;
       const after = this.renderer.screenToWorld(e.clientX, e.clientY);
