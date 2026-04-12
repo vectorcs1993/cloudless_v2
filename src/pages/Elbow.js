@@ -224,7 +224,7 @@ export class Elbow extends DuctBase {
       return false;
     }
 
-    // Проверяем линии с учетом толщины (2 * _hitTolerance)
+    const tolerance = this._hitTolerance;
     const local = this.transformToLocalCoords(worldX, worldY);
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
@@ -233,28 +233,16 @@ export class Elbow extends DuctBase {
     const bendCenterX = topLeft.x;
     const bendCenterY = topLeft.y + this.getHeight();
 
-    // Проверяем расстояние до подводящей горизонтальной линии
-    const isOnHorizontalLine =
-      local.x >= bendCenterX &&
-      local.x <= bendCenterX + centerRadius_px &&
-      Math.abs(local.y - (bendCenterY - centerRadius_px)) <= this._hitTolerance;
-
-    // Проверяем расстояние до отводящей вертикальной линии
-    const isOnVerticalLine =
-      Math.abs(local.x - (bendCenterX + centerRadius_px)) <= this._hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px &&
-      local.y <= bendCenterY;
-
-    // Проверяем расстояние до дуги
     const dx = local.x - bendCenterX;
     const dy = local.y - bendCenterY;
     const distFromBendCenter = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
     const isOnArc =
-      Math.abs(distFromBendCenter - centerRadius_px) <= this._hitTolerance &&
+      Math.abs(distFromBendCenter - centerRadius_px) <= tolerance &&
       angle >= -90 && angle <= 0;
 
-    return isOnHorizontalLine || isOnVerticalLine || isOnArc;
+    return isOnArc;
   }
 
 
