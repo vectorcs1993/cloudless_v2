@@ -44,7 +44,7 @@ export class Fan extends DuctDirect {
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-centerX, -centerY);
 
-    ctx.lineWidth = 2 * this._hitTolerance;
+    ctx.lineWidth = this.lineWidth;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
     } else if (isHighlighted) {

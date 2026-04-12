@@ -223,7 +223,7 @@ export class Group extends BaseElement {
     // Рисуем рамку группы
     if (this.width > 0 && this.height > 0) {
       ctx.save();
-      ctx.lineWidth = 2 * this._hitTolerance;
+      ctx.lineWidth = this.lineWidth;
       if (isSelected) {
         ctx.strokeStyle = '#ff6600';
       } else if (isHighlighted) {

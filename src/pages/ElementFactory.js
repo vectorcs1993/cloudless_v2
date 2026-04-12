@@ -25,6 +25,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) duct.rotation = params.rotation;
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
+        if (params.lineWidth !== undefined) duct.lineWidth = params.lineWidth;
         duct.showCallout = showCallout;
         return duct;
       case 'transition':
@@ -32,6 +33,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) transition.rotation = params.rotation;
         if (params.name) transition.name = params.name;
         if (params.color) transition.color = params.color;
+        if (params.lineWidth !== undefined) transition.lineWidth = params.lineWidth;
         transition.showCallout = showCallout;
         return transition;
       case 'tee':
@@ -42,6 +44,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) tee.rotation = params.rotation;
         if (params.name) tee.name = params.name;
         if (params.color) tee.color = params.color;
+        if (params.lineWidth !== undefined) tee.lineWidth = params.lineWidth;
         tee.showCallout = showCallout;
         return tee;
       case 'cross':
@@ -51,6 +54,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) cross.rotation = params.rotation;
         if (params.name) cross.name = params.name;
         if (params.color) cross.color = params.color;
+        if (params.lineWidth !== undefined) cross.lineWidth = params.lineWidth;
         cross.showCallout = showCallout;
         return cross;
       case 'elbow':
@@ -59,6 +63,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
         if (params.name) elbow.name = params.name;
         if (params.color) elbow.color = params.color;
+        if (params.lineWidth !== undefined) elbow.lineWidth = params.lineWidth;
         elbow.showCallout = showCallout;
         return elbow;
       case 'fan':
@@ -68,6 +73,7 @@ export class ElementFactory {
         if (params.rotation !== undefined) fan.rotation = params.rotation;
         if (params.name) fan.name = params.name;
         if (params.color) fan.color = params.color;
+        if (params.lineWidth !== undefined) fan.lineWidth = params.lineWidth;
         fan.showCallout = showCallout;
         return fan;
       case 'group':
@@ -90,6 +96,7 @@ export class ElementFactory {
           group.elements = params.elements.map(elJson => this.createFromJSON(elJson));
         }
 
+        if (params.lineWidth !== undefined) group.lineWidth = params.lineWidth;
         group.showCallout = showCallout;
         return group;
       default:
@@ -123,6 +130,7 @@ export class ElementFactory {
         elements: jsonData.elements,
         name: jsonData.name,
         color: jsonData.color,
+        lineWidth: jsonData.lineWidth,
         callouts: jsonData.callouts,
         width: jsonData.width,
         height: jsonData.height

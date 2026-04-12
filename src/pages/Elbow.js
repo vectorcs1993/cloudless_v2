@@ -89,7 +89,7 @@ export class Elbow extends DuctBase {
     } else {
       ctx.strokeStyle = this.color;
     }
-    ctx.lineWidth = 2 * this._hitTolerance;
+    ctx.lineWidth = this.lineWidth;
     ctx.stroke();
 
     ctx.restore();

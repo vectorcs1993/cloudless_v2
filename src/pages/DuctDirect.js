@@ -106,7 +106,7 @@ export class DuctDirect extends DuctBase {
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width_px, centerY);
 
-    ctx.lineWidth = 2 * this._hitTolerance;
+    ctx.lineWidth = this.lineWidth;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
     } else if (isHighlighted) {

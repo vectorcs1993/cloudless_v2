@@ -89,7 +89,8 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
-    this._hitTolerance = 10; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
+    this._lineWidth = 3; // Толщина линии, px
+    this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
   }
   get showCallout() {
     return this._showCallout;
@@ -107,6 +108,18 @@ export class BaseElement {
     }
     this.updateCalloutText();
   }
+
+  get lineWidth() {
+    return this._lineWidth;
+  }
+
+  set lineWidth(value) {
+    const newValue = Math.max(1, Math.min(5, Number(value) || 1));
+    if (this._lineWidth === newValue) return;
+    this._lineWidth = newValue;
+    this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
+  }
+
   // Получение текущего масштаба мм/px
   getMmPerPx() {
     return globalScale.getMmPerPx();
@@ -150,7 +163,7 @@ export class BaseElement {
   hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
 
   setStrokeStyle(ctx, scale, isSelected, isHighlighted, isDarkTheme) {
-    ctx.lineWidth = 2 * this._hitTolerance;
+    ctx.lineWidth = this.lineWidth;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
     } else if (isHighlighted) {
@@ -198,6 +211,7 @@ export class BaseElement {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
       { name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color },
+      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 1, min: 1, max: 5, value: this.lineWidth, unit: 'px' },
     ];
   }
 
@@ -355,7 +369,9 @@ export class BaseElement {
       x: this.x,
       y: this.y,
       name: this.name,
-      color: this.color, rotation: this.rotation,
+      color: this.color,
+      rotation: this.rotation,
+      lineWidth: this.lineWidth,
       ports: this.ports.map(p => p.toJSON()),
       callouts: this.callouts.map(c => c.toJSON()),
       showCallout: this.showCallout,
