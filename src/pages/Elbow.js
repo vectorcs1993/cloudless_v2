@@ -262,7 +262,7 @@ export class Elbow extends DuctBase {
     // Рисуем дугу (центральная линия)
     ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
 
-    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.lineWidth = 2 * this._hitTolerance;
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 

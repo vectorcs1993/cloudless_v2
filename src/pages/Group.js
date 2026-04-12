@@ -223,7 +223,7 @@ export class Group extends BaseElement {
     // Рисуем рамку группы
     if (this.width > 0 && this.height > 0) {
       ctx.save();
-      ctx.lineWidth = Math.max(2, 3 / scale);
+      ctx.lineWidth = 2 * this._hitTolerance;
       ctx.strokeStyle = isSelected ? '#ff6600' : '#888888';
       ctx.setLineDash([5 / scale, 5 / scale]);
       const topLeft = this.getTopLeft();

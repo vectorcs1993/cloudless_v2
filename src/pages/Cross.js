@@ -345,7 +345,7 @@ export class Cross extends DuctBase {
     ctx.moveTo(centerX, topLeft.y);
     ctx.lineTo(centerX, topLeft.y + height_px);
 
-    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.lineWidth = 2 * this._hitTolerance;
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 

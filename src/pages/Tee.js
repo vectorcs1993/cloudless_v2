@@ -402,7 +402,7 @@ export class Tee extends DuctBase {
     ctx.moveTo(branchX, centerY);
     ctx.lineTo(branchX, topLeft.y);
 
-    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.lineWidth = 2 * this._hitTolerance;
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 

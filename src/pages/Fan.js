@@ -56,7 +56,7 @@ export class Fan extends DuctDirect {
     ctx.lineTo(centerX, centerY + radius);
     ctx.closePath();
 
-    ctx.lineWidth = Math.max(2, 3 / scale);
+    ctx.lineWidth = 2 * this._hitTolerance;
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
     ctx.stroke();
 

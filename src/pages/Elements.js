@@ -89,7 +89,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
-    this._hitTolerance = 1; // Допуск для обнаружения элемента при клике
+    this._hitTolerance = 3; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
   }
   get showCallout() {
     return this._showCallout;
@@ -150,7 +150,7 @@ export class BaseElement {
   hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
 
   setStrokeStyle(ctx, scale, isSelected, isDarkTheme) {
-    ctx.lineWidth = Math.max(1, 2 / scale);
+    ctx.lineWidth = 2 * this._hitTolerance;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
     } else {
