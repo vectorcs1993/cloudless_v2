@@ -30,14 +30,14 @@ export class Fan extends DuctDirect {
     const centerY = this.y;
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const radius = Math.min(width_px * 0.3, this.mmToPx(60));
     const topLeft = this.getTopLeft();
-    const triangleLeftX = centerX - radius / 2;
-    const triangleTipX = centerX + radius;
+    const connectorLength = Math.min(this.mmToPx(10), width_px * 0.15);
+    const triangleLeftX = topLeft.x + connectorLength;
+    const triangleTipX = topLeft.x + width_px - connectorLength;
     const leftPortX = topLeft.x;
     const rightPortX = topLeft.x + width_px;
-    const topY = centerY - radius;
-    const bottomY = centerY + radius;
+    const topY = centerY - height_px / 2;
+    const bottomY = centerY + height_px / 2;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -78,12 +78,13 @@ export class Fan extends DuctDirect {
   }
 
   getWidth() {
-    // Фиксированная ширина вентилятора, параметры A/B не влияют на отрисовку
-    return this.mmToPx(125);
+    // Ширина отрисовки по параметру A
+    return this.mmToPx(this._a);
   }
 
   getHeight() {
-    return this.mmToPx(75);
+    // Высота треугольника по параметру B
+    return this.mmToPx(this._b);
   }
 
   toJSON() {
@@ -105,13 +106,13 @@ export class Fan extends DuctDirect {
     const topLeft = this.getTopLeft();
     const centerX = this.x;
     const centerY = this.y;
-    const radius = Math.min(width_px * 0.3, this.mmToPx(60));
-    const triangleLeftX = centerX - radius / 2;
-    const triangleTipX = centerX + radius;
+    const height_px = this.getHeight();
+    const triangleLeftX = topLeft.x + Math.min(this.mmToPx(10), width_px * 0.15);
+    const triangleTipX = topLeft.x + width_px - Math.min(this.mmToPx(10), width_px * 0.15);
     const leftPortX = topLeft.x;
     const rightPortX = topLeft.x + width_px;
-    const topY = centerY - radius;
-    const bottomY = centerY + radius;
+    const topY = centerY - height_px / 2;
+    const bottomY = centerY + height_px / 2;
 
     // Проверяем левую линию подвода от треугольника до порта
     const isOnLeftConnector =
