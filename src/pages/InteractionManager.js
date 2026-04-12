@@ -445,20 +445,16 @@ export class InteractionManager {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       this.renderer.setHighlightedPort(portUnderCursor);
       if (portUnderCursor) {
-        this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
         cursorStyle = 'pointer';
       }
       elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
       if (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) {
         cursorStyle = 'pointer';
-      } else if (!portUnderCursor) {
-        this.renderer.clearTooltip();
       }
     } else {
       elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
       cursorStyle = (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) ? 'pointer' : 'default';
       this.renderer.setHighlightedPort(null);
-      this.renderer.clearTooltip();
     }
 
     if (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) {
@@ -530,13 +526,11 @@ export class InteractionManager {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       if (portUnderCursor && this.options.showPorts.value) {
         this.renderer.setHighlightedPort(portUnderCursor);
-        this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
         this.canvas.style.cursor = 'pointer';
       } else {
         const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
         this.canvas.style.cursor = (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) ? 'pointer' : 'default';
         this.renderer.setHighlightedPort(null);
-        this.renderer.clearTooltip();
       }
       this.renderer.draw();
     }

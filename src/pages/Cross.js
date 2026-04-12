@@ -271,7 +271,7 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const size_px = this.getSizePx();
+    const size_px = this.mmToPx(this._a);
     const radius_px = size_px / 2;
 
     ctx.save();
@@ -300,7 +300,7 @@ export class Cross extends DuctBase {
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const height_px = this.getHeight();
-    const a_px = this.getSizePx();
+    const a_px = this.mmToPx(this._a);
 
     ctx.save();
     ctx.translate(centerX, centerY);

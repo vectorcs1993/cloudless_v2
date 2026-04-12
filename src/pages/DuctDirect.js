@@ -1,4 +1,5 @@
 import { BaseElement, DuctBase } from './Elements.js';
+import { Port } from './Port.js';
 
 // ========== ПРЯМОЙ ВОЗДУХОВОД ==========
 export class DuctDirect extends DuctBase {
@@ -84,7 +85,24 @@ export class DuctDirect extends DuctBase {
   }
 
   getPorts() {
-    return this.createLinearPorts(this.getWidth(), this.getHeight());
+    const ports = [];
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+
+    const inletPos = this.rotatePoint(topLeft.x, centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
+      this.id, 'inlet', 'left', 0, this.getHeight() / 2, inletPos.x, inletPos.y
+    ));
+
+    const outletPos = this.rotatePoint(topLeft.x + this.getWidth(), centerY, centerX, centerY, rotation);
+    ports.push(new Port(
+      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
+      this.id, 'outlet', 'right', this.getWidth(), this.getHeight() / 2, outletPos.x, outletPos.y
+    ));
+    return ports;
   }
 
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
@@ -106,7 +124,7 @@ export class DuctDirect extends DuctBase {
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width_px, centerY);
 
-    ctx.lineWidth = this.lineWidth;
+    ctx.lineWidth = 2 * this._hitTolerance;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
     } else if (isHighlighted) {

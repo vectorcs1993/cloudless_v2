@@ -303,7 +303,7 @@ export class Tee extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
-    const size_px = this.getSizePx();
+    const size_px = this.mmToPx(this._a);
     const offset_px = this.mmToPx(this._l3);
 
     ctx.save();
@@ -379,7 +379,7 @@ export class Tee extends DuctBase {
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
-    const size_px = this.getSizePx();
+    const size_px = this.mmToPx(this._a);
     const offset_px = this.mmToPx(this._l3);
 
     ctx.save();

@@ -30,7 +30,6 @@ export class Port {
   }
 
   getDirectionName() {
-    // Возвращаем просто "Порт" для всех, без различий
     return 'Порт';
   }
 

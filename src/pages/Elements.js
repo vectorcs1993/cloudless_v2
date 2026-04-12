@@ -388,10 +388,6 @@ export class DuctBase extends BaseElement {
     this.updateCalloutText();
   }
 
-  // Размер в пикселях для отрисовки
-  getSizePx() {
-    return this.mmToPx(this._a);
-  }
   getCalloutText() {
     return `${super.getCalloutText()}\nA: ${this._a} мм`;
   }
@@ -415,56 +411,6 @@ export class DuctBase extends BaseElement {
         unit: 'мм'
       },
     ];
-  }
-
-  createLinearPorts(width_px, height_px, offsetX = 0, offsetY = 0) {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-
-    const inletPos = this.rotatePoint(topLeft.x + offsetX, centerY + offsetY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', offsetX, height_px / 2 + offsetY, inletPos.x, inletPos.y
-    ));
-
-    const outletPos = this.rotatePoint(topLeft.x + width_px - offsetX, centerY + offsetY, centerX, centerY, rotation);
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', width_px - offsetX, height_px / 2 + offsetY, outletPos.x, outletPos.y
-    ));
-
-    return ports;
-  }
-
-  drawRectangular(ctx, width_px, height_px, isSelected, scale, showColors) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-    ctx.beginPath();
-
-    ctx.rect(topLeft.x, topLeft.y, width_px, height_px);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
-    }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
-
-    ctx.restore();
-  }
-
-  hitTestRectangular(worldX, worldY, width_px, height_px) {
-    const local = this.transformToLocalCoords(worldX, worldY);
-    const topLeft = this.getTopLeft();
-    return local.x >= topLeft.x && local.x <= topLeft.x + width_px &&
-      local.y >= topLeft.y && local.y <= topLeft.y + height_px;
   }
 
   toJSON() {
