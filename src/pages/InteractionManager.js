@@ -49,17 +49,21 @@ export class InteractionManager {
   }
 
   applyPortSnappingForMultiple(elements, deltaWorldX, deltaWorldY, startPositions) {
+    // Возвращаем элементы на исходные позиции
     for (const pos of startPositions) {
       this.setElementPosition(pos.element, pos.x, pos.y);
     }
 
     if (!this.options.snapToPorts.value) {
       this.moveElements(elements, deltaWorldX, deltaWorldY);
+      // Обновляем порты после перемещения
+      for (const element of elements) {
+        if (element.updatePorts) element.updatePorts();
+      }
       return;
     }
 
     const movingPorts = this.getAllPortsFromElements(elements);
-
     const movingElementIds = new Set();
     for (const element of elements) {
       movingElementIds.add(element.id);
@@ -67,12 +71,14 @@ export class InteractionManager {
 
     if (movingPorts.length === 0) {
       this.moveElements(elements, deltaWorldX, deltaWorldY);
+      for (const element of elements) {
+        if (element.updatePorts) element.updatePorts();
+      }
       return;
     }
 
     let bestMatch = null;
     let bestDistance = Infinity;
-
     const allPorts = this.connectionManager.getAllPorts();
 
     for (const movingPort of movingPorts) {
@@ -111,6 +117,11 @@ export class InteractionManager {
     } else {
       this.moveElements(elements, deltaWorldX, deltaWorldY);
       this.renderer.setHighlightedPort(null);
+    }
+
+    // Обновляем порты после перемещения
+    for (const element of elements) {
+      if (element.updatePorts) element.updatePorts();
     }
   }
 
@@ -450,6 +461,7 @@ export class InteractionManager {
   }
 
   onMouseUp(e) {
+    // Завершаем выделение прямоугольником
     if (this.isSelecting) {
       const selected = this.selectionManager.endSelectionRect(
         this.options.panX.value,
@@ -467,6 +479,7 @@ export class InteractionManager {
       this.renderer.draw();
     }
 
+    // Завершаем перетаскивание элементов
     if (this.isDragging && this.draggingElements.length > 0) {
       const movedElements = [...this.draggingElements];
       this.isDragging = false;
@@ -475,22 +488,29 @@ export class InteractionManager {
       this.currentSnappedPorts = null;
       if (this.canvas) this.canvas.style.cursor = '';
 
-      if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElements.length > 0) {
-        setTimeout(() => {
-          const restored = this.connectionManager.updateAllPortsAndConnections(5, this.layerManager);
-          if (restored > 0) {
-            console.log(`Автоматически восстановлено ${restored} связей`);
+      // СИНХРОННОЕ ОБНОВЛЕНИЕ СВЯЗЕЙ
+      if (this.autoUpdateConnections && this.options.snapToPorts.value) {
+        // Сначала обновляем порты у всех перемещенных элементов
+        for (const element of movedElements) {
+          if (element.updatePorts) {
+            element.updatePorts();
           }
-          this.renderer.draw();
-        }, 50);
-      } else {
-        this.renderer.draw();
+        }
+
+        // Затем обновляем все связи
+        const result = this.connectionManager.updateAllPortsAndConnections(40, this.layerManager);
+        console.log(`Связи после перемещения: разорвано ${result.broken}, создано ${result.connected}`);
       }
+
+      this.renderer.draw();
     }
 
+    // Завершаем перетаскивание выноски
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
+      this.draggingCalloutParentGroup = null;
+
       if (this.canvas) this.canvas.style.cursor = '';
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
@@ -505,12 +525,14 @@ export class InteractionManager {
       this.renderer.draw();
     }
 
+    // Завершаем панорамирование
     if (this.isPanning) {
       this.isPanning = false;
       if (this.canvas) this.canvas.style.cursor = '';
       this.renderer.draw();
     }
 
+    // Очищаем подсветку порта
     setTimeout(() => {
       if (!this.isDragging && !this.draggingCallout && !this.isSelecting && this.renderer) {
         if (this.renderer.setHighlightedPort) {

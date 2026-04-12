@@ -466,7 +466,9 @@ const onParameterChange = (value, paramName) => {
   selectedElement.value[paramName] = value;
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
-  if (connectionManager && autoUpdateConnections.value) connectionManager.updateAllPortsAndConnections(40);
+
+  // Принудительное обновление связей
+  forceUpdateConnections();
   scheduleRender();
 };
 
@@ -725,7 +727,20 @@ const saveToLocalStorage = () => {
   localStorage.setItem('hvac_editor_data', JSON.stringify(data));
   showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
-
+const forceUpdateConnections = () => {
+  if (connectionManager && autoUpdateConnections.value) {
+    // Обновляем порты у всех элементов
+    for (const el of allElements.value) {
+      if (el.updatePorts) el.updatePorts();
+    }
+    // Обновляем связи
+    const result = connectionManager.updateAllPortsAndConnections(40, layerManager);
+    if (result.broken > 0 || result.connected > 0) {
+      console.log(`Связи обновлены: разорвано ${result.broken}, создано ${result.connected}`);
+    }
+    scheduleRender();
+  }
+};
 const loadFromLocalStorage = () => {
   const savedData = localStorage.getItem('hvac_editor_data');
   if (!savedData) {
@@ -738,6 +753,8 @@ const loadFromLocalStorage = () => {
   }
   try {
     const data = JSON.parse(savedData);
+
+    // Восстанавливаем слои и элементы
     if (data.layers?.length) {
       layers.value = data.layers.map(layer => ({
         ...layer,
@@ -747,6 +764,7 @@ const loadFromLocalStorage = () => {
       const oldElements = data.elements?.map(elJson => ElementFactory.createFromJSON(elJson)) || [];
       layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: oldElements }];
     }
+
     activeLayerId.value = data.activeLayerId || layers.value[0]?.id || 'layer_default';
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
@@ -764,10 +782,19 @@ const loadFromLocalStorage = () => {
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
 
+    // Обновляем порты и выноски
     for (const el of allElements.value) {
       el.updatePorts?.();
       el.updateCalloutText?.();
     }
+
+    // ВАЖНО: Восстанавливаем связи между портами
+    setTimeout(() => {
+      const restored = connectionManager?.updateAllPortsAndConnections?.(10, layerManager);
+      console.log(`Восстановлено: ${restored.connected}, разорвано: ${restored.broken}`);
+      scheduleRender();
+    }, 100);
+
     updateSelection([]);
     scheduleRender();
   } catch (error) {
@@ -792,7 +819,7 @@ const resetToDefault = () => {
 const updateAllPortsAndConnections = () => {
   const restored = connectionManager?.updateAllPortsAndConnections?.(5, layerManager) || 0;
   scheduleRender();
-  showNotify({ type: 'positive', message: `Восстановлено ${restored} связей!`, timeout: 2000 });
+  showNotify({ type: 'positive', message: `Восстановлено: ${restored.connected}, разорвано: ${restored.broken}`, timeout: 2000 });
 };
 
 // ========== DRAG & DROP ==========
@@ -887,10 +914,13 @@ const onDrop = (e) => {
 const rotateElement = (angleDeg) => {
   if (!selectedElement.value) return;
   const el = selectedElement.value;
+
   el.rotation = (el.rotation + angleDeg + 360) % 360;
   el.updatePorts?.();
   el.updateCalloutText?.();
-  connectionManager?.updateAllPortsAndConnections(40);
+
+  // Принудительное обновление связей
+  forceUpdateConnections();
   scheduleRender();
 };
 
@@ -909,11 +939,20 @@ const moveDown = () => { if (selectedElement.value) { zIndexManager?.moveDown(se
 const deleteSelected = () => {
   if (!selectedElements.value.length) return;
   const toDelete = new Set(selectedElements.value.map(el => el.id));
-  for (const el of selectedElements.value) connectionManager?.disconnectElement(el);
+
+  // Сначала разрываем все связи удаляемых элементов
+  for (const el of selectedElements.value) {
+    connectionManager?.disconnectElement(el);
+  }
+
+  // Удаляем элементы из слоев
   for (const layer of layers.value) {
     layer.elements = layer.elements.filter(el => !toDelete.has(el.id));
   }
   layers.value = [...layers.value];
+
+  // Обновляем связи
+  forceUpdateConnections();
   updateSelection([]);
   scheduleRender();
 };
@@ -1025,6 +1064,17 @@ watch(mmPerPx, (val) => {
 });
 
 watch(allElements, () => {
+  debouncedDraw();
+}, { deep: true });
+
+let updateTimeout = null;
+watch(allElements, () => {
+  if (autoUpdateConnections.value && connectionManager) {
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(() => {
+      forceUpdateConnections();
+    }, 100);
+  }
   debouncedDraw();
 }, { deep: true });
 </script>

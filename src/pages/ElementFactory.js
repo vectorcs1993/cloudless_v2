@@ -109,7 +109,7 @@ export class ElementFactory {
         anglel2: jsonData.anglel2,
         showCallout: jsonData.showCallout !== undefined ? jsonData.showCallout : true,
         r: jsonData.r,
-        direction: jsonData.direction, // ДОБАВЛЕНО: поддержка направления из JSON
+        direction: jsonData.direction,
         length_mm: jsonData.length_mm,
         flow: jsonData.flow,
         pressure: jsonData.pressure,
@@ -117,9 +117,6 @@ export class ElementFactory {
         name: jsonData.name,
         color: jsonData.color,
         lineWidth: jsonData.lineWidth,
-        callouts: jsonData.callouts,
-        width: jsonData.width,
-        height: jsonData.height
       }
     );
 
@@ -129,6 +126,7 @@ export class ElementFactory {
         p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
       ));
 
+      // Восстанавливаем связи портов
       element.ports.forEach(port => {
         const foundPort = jsonData.ports.find(op => op.id === port.id);
         if (foundPort) {
