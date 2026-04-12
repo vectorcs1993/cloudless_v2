@@ -372,7 +372,7 @@ export class InteractionManager {
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
       if (clickedElement && this.isElementInteractive(clickedElement)) {
         this.connectionManager.disconnectElement(clickedElement);
-        clickedElement.rotation = ((clickedElement.rotation || 0) + 90) % 360;
+        clickedElement.rotation = ((clickedElement.rotation || 0) + 45) % 360;
         clickedElement.updatePorts();
         clickedElement.updateCalloutText();
         this.renderer.draw();

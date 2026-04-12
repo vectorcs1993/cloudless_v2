@@ -222,6 +222,8 @@
                     <div class="q-mt-md">
                       <div class="text-subtitle2 q-mb-sm">Поворот</div>
                       <q-btn-group spread :dark="isDarkTheme">
+                        <q-btn :dark="isDarkTheme" label="↺ 45°" @click="rotateLeft45" />
+                        <q-btn :dark="isDarkTheme" label="↻ 45°" @click="rotateRight45" />
                         <q-btn :dark="isDarkTheme" label="↺ 90°" @click="rotateLeft90" />
                         <q-btn :dark="isDarkTheme" label="↻ 90°" @click="rotateRight90" />
                         <q-btn :dark="isDarkTheme" label="↺ 180°" @click="rotateLeft180" />
@@ -901,7 +903,8 @@ const rotateElement = (angleDeg) => {
   connectionManager?.updateAllPortsAndConnections(40);
   scheduleRender();
 };
-
+const rotateLeft45 = () => rotateElement(-45);
+const rotateRight45 = () => rotateElement(45);
 const rotateLeft90 = () => rotateElement(-90);
 const rotateRight90 = () => rotateElement(90);
 const rotateLeft180 = () => rotateElement(-180);

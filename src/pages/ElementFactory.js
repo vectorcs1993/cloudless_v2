@@ -41,6 +41,7 @@ export class ElementFactory {
         if (params.l1 !== undefined) tee.l1 = params.l1;
         if (params.l2 !== undefined) tee.l2 = params.l2;
         if (params.l3 !== undefined) tee.l3 = params.l3;
+        if (params.anglel2 !== undefined) tee.angle = params.anglel2;
         if (params.rotation !== undefined) tee.rotation = params.rotation;
         if (params.name) tee.name = params.name;
         if (params.color) tee.color = params.color;
@@ -121,6 +122,7 @@ export class ElementFactory {
         l1: jsonData.l1,
         l2: jsonData.l2,
         l3: jsonData.l3,
+        anglel2: jsonData.anglel2,
         showCallout: jsonData.showCallout !== undefined ? jsonData.showCallout : true,
         r: jsonData.r,
         length_mm: jsonData.length_mm,
