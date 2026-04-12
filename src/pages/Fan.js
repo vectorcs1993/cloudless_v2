@@ -3,7 +3,7 @@ import { BaseElement } from './Elements.js';
 
 // ========== ВЕНТИЛЯТОР ==========
 export class Fan extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', width = 440, length = 550) {
+  constructor(id, x_px, y_px, sectionType = 'round', width = 150, length = 300) {
     super(id, x_px, y_px, sectionType, width, length);
     this.type = 'fan';
     this.name = `${BaseElement.getAvailableTypes().fan} ${id}`;
@@ -24,7 +24,7 @@ export class Fan extends DuctDirect {
   }
 
   // Замените метод draw
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
@@ -45,7 +45,13 @@ export class Fan extends DuctDirect {
     ctx.translate(-centerX, -centerY);
 
     ctx.lineWidth = 2 * this._hitTolerance;
-    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    if (isSelected) {
+      ctx.strokeStyle = '#e5ff00';
+    } else if (isHighlighted) {
+      ctx.strokeStyle = '#00c8ff';
+    } else {
+      ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
+    }
 
     // Линия подвода от треугольника до левого порта
     ctx.beginPath();

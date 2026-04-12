@@ -53,12 +53,12 @@ export class Elbow extends DuctBase {
     const baseText = `${super.getCalloutText()}`;
     return `${baseText}\nR: ${this._r} мм`;
   }
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     this.createPath(ctx);
     if (showColors) {
       this.setFillStyle(ctx, isSelected, false);
     }
-    this.setStrokeStyle(ctx, scale, isSelected, false);
+    this.setStrokeStyle(ctx, scale, isSelected, isHighlighted, false);
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
@@ -223,7 +223,7 @@ export class Elbow extends DuctBase {
     return isOnHorizontalLine || isOnVerticalLine || isOnArc;
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
@@ -245,7 +245,13 @@ export class Elbow extends DuctBase {
     ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
 
     ctx.lineWidth = 2 * this._hitTolerance;
-    ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
+    if (isSelected) {
+      ctx.strokeStyle = '#e5ff00';
+    } else if (isHighlighted) {
+      ctx.strokeStyle = '#00c8ff';
+    } else {
+      ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
+    }
     ctx.stroke();
 
     // Рисуем прямую подводящую линию

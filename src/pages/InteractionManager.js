@@ -440,25 +440,33 @@ export class InteractionManager {
     }
 
     let cursorStyle = 'default';
+    let elementUnderCursor = null;
     if (this.options.showPorts.value) {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       this.renderer.setHighlightedPort(portUnderCursor);
       if (portUnderCursor) {
         this.renderer.setTooltipPort(portUnderCursor, screenX, screenY);
         cursorStyle = 'pointer';
-      } else {
+      }
+      elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
+      if (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) {
+        cursorStyle = 'pointer';
+      } else if (!portUnderCursor) {
         this.renderer.clearTooltip();
-        const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
-        if (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) {
-          cursorStyle = 'pointer';
-        }
       }
     } else {
-      const elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
+      elementUnderCursor = this.findElementAt(worldPos.x, worldPos.y);
       cursorStyle = (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) ? 'pointer' : 'default';
       this.renderer.setHighlightedPort(null);
       this.renderer.clearTooltip();
     }
+
+    if (elementUnderCursor && this.isElementInteractive(elementUnderCursor)) {
+      this.renderer.setHighlightedElements([elementUnderCursor]);
+    } else {
+      this.renderer.clearHighlightedElements();
+    }
+
     this.canvas.style.cursor = cursorStyle;
     this.renderer.draw();
   }

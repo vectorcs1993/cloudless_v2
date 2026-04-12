@@ -89,7 +89,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
-    this._hitTolerance = 1; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
+    this._hitTolerance = 3; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
   }
   get showCallout() {
     return this._showCallout;
@@ -146,13 +146,15 @@ export class BaseElement {
   getWidth() { throw new Error('Метод getWidth должен быть переопределен'); }
   getHeight() { throw new Error('Метод getHeight должен быть переопределен'); }
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
-  draw(ctx, scale, isSelected, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
   hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
 
-  setStrokeStyle(ctx, scale, isSelected, isDarkTheme) {
+  setStrokeStyle(ctx, scale, isSelected, isHighlighted, isDarkTheme) {
     ctx.lineWidth = 2 * this._hitTolerance;
     if (isSelected) {
       ctx.strokeStyle = '#e5ff00';
+    } else if (isHighlighted) {
+      ctx.strokeStyle = '#00c8ff';
     } else {
       ctx.strokeStyle = '#666';
     }

@@ -203,12 +203,12 @@ export class Group extends BaseElement {
     this.updateBounds();
   }
 
-  draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors) {
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors) {
     // Рисуем все элементы группы
     if (this.elements && Array.isArray(this.elements)) {
       this.elements.forEach(element => {
         if (element && element.draw) {
-          element.draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors);
+          element.draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors);
         }
       });
     }
@@ -224,7 +224,13 @@ export class Group extends BaseElement {
     if (this.width > 0 && this.height > 0) {
       ctx.save();
       ctx.lineWidth = 2 * this._hitTolerance;
-      ctx.strokeStyle = isSelected ? '#ff6600' : '#888888';
+      if (isSelected) {
+        ctx.strokeStyle = '#ff6600';
+      } else if (isHighlighted) {
+        ctx.strokeStyle = '#00c8ff';
+      } else {
+        ctx.strokeStyle = '#888888';
+      }
       ctx.setLineDash([5 / scale, 5 / scale]);
       const topLeft = this.getTopLeft();
       ctx.strokeRect(topLeft.x, topLeft.y, this.width, this.height);

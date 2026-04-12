@@ -7,6 +7,7 @@ export class CanvasRenderer {
     this.panX = options.panX;
     this.panY = options.panY;
     this.selectedElements = [];
+    this.highlightedElements = [];
     this.highlightedPort = null;
     this.selectionRect = null;
     this.tooltipPort = null;
@@ -100,8 +101,9 @@ export class CanvasRenderer {
     for (const element of visibleElements) {
       if (this.isElementVisible(element)) {
         const isSelected = this.selectedElements.some(sel => sel && sel.id === element.id);
+        const isHighlighted = this.highlightedElements.some(sel => sel && sel.id === element.id);
         try {
-          element.draw(ctx, this.scale.value, isSelected, this.options.isDarkTheme.value,
+          element.draw(ctx, this.scale.value, isSelected, isHighlighted, this.options.isDarkTheme.value,
             this.options.showPorts.value, this.options.showColors.value,
             this.options.showElementAxes.value);
           drawnCount++;
@@ -201,6 +203,14 @@ export class CanvasRenderer {
 
   setSelectedElements(elements) {
     this.selectedElements = Array.isArray(elements) ? elements : [elements];
+  }
+
+  setHighlightedElements(elements) {
+    this.highlightedElements = Array.isArray(elements) ? elements : [elements];
+  }
+
+  clearHighlightedElements() {
+    this.highlightedElements = [];
   }
 
   setHighlightedPort(port) {
