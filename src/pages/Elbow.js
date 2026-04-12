@@ -189,25 +189,7 @@ export class Elbow extends DuctBase {
       return false;
     }
 
-    // Сначала проверяем основной путь
-    if (ctx) {
-      this.createPath(ctx);
-      if (ctx.isPointInPath(worldX, worldY)) {
-        return true;
-      }
-    }
-
-    // Используем временный canvas для проверки пути элемента
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-
-    // Проверяем точку в основном пути
-    this.createPath(tempCtx);
-    if (tempCtx.isPointInPath(worldX, worldY)) {
-      return true;
-    }
-
-    // Используем protected hitTolerance из BaseElement
+    // Проверяем линии с учетом толщины (2 * _hitTolerance)
     const local = this.transformToLocalCoords(worldX, worldY);
     const topLeft = this.getTopLeft();
     const size_px = this.getSizePx();
@@ -217,28 +199,28 @@ export class Elbow extends DuctBase {
     const bendCenterY = topLeft.y + this.getHeight();
 
     // Проверяем расстояние до подводящей горизонтальной линии
-    const isNearHorizontalLine =
-      local.x >= bendCenterX - this._hitTolerance &&
-      local.x <= bendCenterX + centerRadius_px + this._hitTolerance &&
+    const isOnHorizontalLine =
+      local.x >= bendCenterX &&
+      local.x <= bendCenterX + centerRadius_px &&
       Math.abs(local.y - (bendCenterY - centerRadius_px)) <= this._hitTolerance;
 
     // Проверяем расстояние до отводящей вертикальной линии
-    const isNearVerticalLine =
+    const isOnVerticalLine =
       Math.abs(local.x - (bendCenterX + centerRadius_px)) <= this._hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px - this._hitTolerance &&
-      local.y <= bendCenterY + this._hitTolerance;
+      local.y >= bendCenterY - centerRadius_px &&
+      local.y <= bendCenterY;
 
-    // Проверяем расстояние до дуги (приближенно)
+    // Проверяем расстояние до дуги
     const distFromBendCenter = Math.sqrt(
       Math.pow(local.x - bendCenterX, 2) +
       Math.pow(local.y - bendCenterY, 2)
     );
-    const isNearArc =
+    const isOnArc =
       Math.abs(distFromBendCenter - centerRadius_px) <= this._hitTolerance &&
-      local.x >= bendCenterX - this._hitTolerance &&
-      local.y >= bendCenterY - centerRadius_px - this._hitTolerance;
+      local.x >= bendCenterX &&
+      local.y >= bendCenterY - centerRadius_px;
 
-    return isNearHorizontalLine || isNearVerticalLine || isNearArc;
+    return isOnHorizontalLine || isOnVerticalLine || isOnArc;
   }
 
   draw(ctx, scale, isSelected, isDarkTheme, showPorts, showColors, showElementAxes) {

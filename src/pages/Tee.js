@@ -298,22 +298,12 @@ export class Tee extends DuctBase {
   }
 
   createPath(ctx) {
-    if (this._sectionType === 'round') {
-      this._createRoundTee(ctx);
-    } else {
-      this._createRectangularTee(ctx);
-    }
-  }
-
-  // Круглый Т-образный тройник
-  _createRoundTee(ctx) {
     const rotation = this.rotation || 0;
     const centerX = this.x;
     const centerY = this.y;
     const topLeft = this.getTopLeft();
     const width_px = this.getWidth();
     const size_px = this.getSizePx();
-    const radius_px = size_px / 2;
     const offset_px = this.mmToPx(this._l3);
 
     ctx.save();
@@ -324,52 +314,16 @@ export class Tee extends DuctBase {
     ctx.beginPath();
 
     // Горизонтальная труба
-    const horizontalY = centerY - radius_px;
+    const horizontalY = centerY - size_px / 2;
     ctx.rect(topLeft.x, horizontalY, width_px, size_px);
 
-    // Ответвление вверх от верхней стенки
-    const branchX = centerX + offset_px - radius_px;
+    // Ответвление от горизонтальной трубы
+    const branchX = centerX + offset_px - size_px / 2;
     const branchTop = topLeft.y;
     const connectionY = horizontalY;
 
     if (branchTop < connectionY) {
       ctx.rect(branchX, branchTop, size_px, connectionY - branchTop);
-    }
-
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Прямоугольный Т-образный тройник
-  _createRectangularTee(ctx) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-    const width_px = this.getWidth();
-    const a_px = this.getSizePx();
-    const offset_px = this.mmToPx(this._l3);
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-
-    // Горизонтальная труба
-    const horizontalY = centerY - a_px / 2;
-    ctx.rect(topLeft.x, horizontalY, width_px, a_px);
-
-    // Ответвление вверх от верхней стенки
-    const branchX = centerX + offset_px - a_px / 2;
-    const branchTop = topLeft.y;
-    const connectionY = horizontalY;
-
-    if (branchTop < connectionY) {
-      ctx.rect(branchX, branchTop, a_px, connectionY - branchTop);
     }
 
     ctx.closePath();
@@ -452,47 +406,30 @@ export class Tee extends DuctBase {
       return false;
     }
 
-    // Сначала проверяем основной путь
-    if (ctx) {
-      this.createPath(ctx);
-      if (ctx.isPointInPath(worldX, worldY)) {
-        return true;
-      }
-    }
-
-    // Используем временный canvas для проверки пути элемента
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-
-    // Проверяем точку в основном пути
-    this.createPath(tempCtx);
-    if (tempCtx.isPointInPath(worldX, worldY)) {
-      return true;
-    }
-
-    // Используем protected hitTolerance из BaseElement
+    // Проверяем линии с учетом толщины (2 * _hitTolerance)
     const topLeft = this.getTopLeft();
     const local = this.transformToLocalCoords(worldX, worldY);
     const width_px = this.getWidth();
-    const height_px = this.getHeight();
     const offset_px = this.mmToPx(this._l3);
     const centerX = this.x;
     const centerY = this.y;
 
-    // Проверяем расстояние до горизонтальной линии
-    const isNearHorizontal =
-      local.x >= topLeft.x - this._hitTolerance &&
-      local.x <= topLeft.x + width_px + this._hitTolerance &&
+    // Проверяем расстояние до горизонтальной линии (магистраль)
+    // Линия с толщиной: centerY ± _hitTolerance
+    const isOnHorizontal =
+      local.x >= topLeft.x &&
+      local.x <= topLeft.x + width_px &&
       Math.abs(local.y - centerY) <= this._hitTolerance;
 
-    // Проверяем расстояние до вертикальной линии (ответвления)
+    // Проверяем расстояние до вертикальной линии (ответвление)
+    // Линия с толщиной: branchCenterX ± _hitTolerance
     const branchCenterX = centerX + offset_px;
-    const isNearVertical =
+    const isOnVertical =
       Math.abs(local.x - branchCenterX) <= this._hitTolerance &&
-      local.y >= topLeft.y - this._hitTolerance &&
-      local.y <= centerY + this._hitTolerance;
+      local.y >= topLeft.y &&
+      local.y <= centerY;
 
-    return isNearHorizontal || isNearVertical;
+    return isOnHorizontal || isOnVertical;
   }
 
   toJSON() {

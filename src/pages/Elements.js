@@ -89,7 +89,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
-    this._hitTolerance = 3; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
+    this._hitTolerance = 1; // Толщина линии: 2 * _hitTolerance = 4px (минимальная толщина)
   }
   get showCallout() {
     return this._showCallout;

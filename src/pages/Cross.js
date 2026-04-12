@@ -390,25 +390,7 @@ export class Cross extends DuctBase {
       return false;
     }
 
-    // Сначала проверяем основной путь
-    if (ctx) {
-      this.createPath(ctx);
-      if (ctx.isPointInPath(worldX, worldY)) {
-        return true;
-      }
-    }
-
-    // Используем временный canvas для проверки пути элемента
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-
-    // Проверяем точку в основном пути
-    this.createPath(tempCtx);
-    if (tempCtx.isPointInPath(worldX, worldY)) {
-      return true;
-    }
-
-    // Используем protected hitTolerance из BaseElement
+    // Проверяем линии с учетом толщины (2 * _hitTolerance)
     const topLeft = this.getTopLeft();
     const local = this.transformToLocalCoords(worldX, worldY);
     const width_px = this.getWidth();
@@ -417,18 +399,18 @@ export class Cross extends DuctBase {
     const centerY = this.y;
 
     // Проверяем расстояние до горизонтальной линии
-    const isNearHorizontal =
-      local.x >= topLeft.x - this._hitTolerance &&
-      local.x <= topLeft.x + width_px + this._hitTolerance &&
+    const isOnHorizontal =
+      local.x >= topLeft.x &&
+      local.x <= topLeft.x + width_px &&
       Math.abs(local.y - centerY) <= this._hitTolerance;
 
     // Проверяем расстояние до вертикальной линии
-    const isNearVertical =
+    const isOnVertical =
       Math.abs(local.x - centerX) <= this._hitTolerance &&
-      local.y >= topLeft.y - this._hitTolerance &&
-      local.y <= topLeft.y + height_px + this._hitTolerance;
+      local.y >= topLeft.y &&
+      local.y <= topLeft.y + height_px;
 
-    return isNearHorizontal || isNearVertical;
+    return isOnHorizontal || isOnVertical;
   }
 
   toJSON() {

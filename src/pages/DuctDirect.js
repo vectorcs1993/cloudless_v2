@@ -123,14 +123,13 @@ export class DuctDirect extends DuctBase {
     const centerY = this.y;
     const width_px = this.getWidth();
 
-    // Проверяем, находится ли точка на расстояние ~hitTolerance от линии
-    // Линия идёт по горизонтали от topLeft.x до topLeft.x + width_px на высоте centerY
-    const isNearLine =
-      local.x >= topLeft.x - this._hitTolerance &&
-      local.x <= topLeft.x + width_px + this._hitTolerance &&
+    // Проверяем, находится ли курсор ровно на линии
+    const isOnLine =
+      local.x >= topLeft.x &&
+      local.x <= topLeft.x + width_px &&
       Math.abs(local.y - centerY) <= this._hitTolerance;
 
-    return isNearLine;
+    return isOnLine;
   }
 
   drawCenterLines(ctx, scale, isDarkTheme) {
