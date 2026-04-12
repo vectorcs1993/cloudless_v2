@@ -321,7 +321,11 @@ export class InteractionManager {
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
 
       if (clickedElement) {
-        if (!this.isElementInteractive(clickedElement)) return;
+        // Проверяем: можно ли взаимодействовать с элементом (не заблокирован)
+        if (!this.isElementInteractive(clickedElement)) {
+          console.log('Элемент на заблокированном слое, выделение запрещено');
+          return;
+        }
 
         if (isCtrlPressed) {
           const index = this.renderer.selectedElements.findIndex(el => el.id === clickedElement.id);
@@ -335,7 +339,8 @@ export class InteractionManager {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
         } else {
-          if (!this.renderer.selectedElements.includes(clickedElement)) {
+          // Обычный клик: выделяем только этот элемент
+          if (this.renderer.selectedElements.length !== 1 || this.renderer.selectedElements[0].id !== clickedElement.id) {
             this.renderer.selectedElements = [clickedElement];
             this.renderer.draw();
             if (this.onElementMoveCallback) {
@@ -345,13 +350,17 @@ export class InteractionManager {
         }
         this.startDrag(e);
       } else {
+        // Клик на пустое место - очищаем выделение
         if (!isCtrlPressed) {
           this.renderer.selectedElements = [];
           this.renderer.draw();
+          // ВАЖНО: вызываем callback, чтобы обновить selectedElements в App.vue
           if (this.onElementMoveCallback) {
-            this.onElementMoveCallback(this.renderer.selectedElements);
+            this.onElementMoveCallback([]);
           }
         }
+
+        // Начинаем выделение прямоугольником
         this.isSelecting = true;
         const rect = this.canvas.getBoundingClientRect();
         const screenPos = {
@@ -488,18 +497,14 @@ export class InteractionManager {
       this.currentSnappedPorts = null;
       if (this.canvas) this.canvas.style.cursor = '';
 
-      // СИНХРОННОЕ ОБНОВЛЕНИЕ СВЯЗЕЙ
-      if (this.autoUpdateConnections && this.options.snapToPorts.value) {
-        // Сначала обновляем порты у всех перемещенных элементов
-        for (const element of movedElements) {
-          if (element.updatePorts) {
-            element.updatePorts();
-          }
-        }
+      // Обновляем порты
+      for (const element of movedElements) {
+        if (element.updatePorts) element.updatePorts();
+      }
 
-        // Затем обновляем все связи
-        const result = this.connectionManager.updateAllPortsAndConnections(40, this.layerManager);
-        console.log(`Связи после перемещения: разорвано ${result.broken}, создано ${result.connected}`);
+      // ОДНО обновление связей (без setTimeout)
+      if (this.autoUpdateConnections && this.options.snapToPorts.value) {
+        this.connectionManager.updateAllPortsAndConnections(40, this.layerManager);
       }
 
       this.renderer.draw();

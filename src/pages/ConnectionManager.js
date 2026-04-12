@@ -3,8 +3,10 @@ export class ConnectionManager {
     this.elements = elements;
     this.layerManager = layerManager;
     this.connections = new Map();
+    this.isUpdating = false;
   }
 
+  // МЕТОД ДОЛЖЕН БЫТЬ ОБЪЯВЛЕН
   getAllPorts() {
     const allPorts = [];
     const allElements = this.elements.value || [];
@@ -43,7 +45,6 @@ export class ConnectionManager {
   connectPorts(port1, port2) {
     if (!this.canConnectPorts(port1, port2)) return false;
 
-    // Разрываем существующие соединения
     if (port1.isConnected()) {
       this.disconnectPort(port1);
     }
@@ -51,7 +52,6 @@ export class ConnectionManager {
       this.disconnectPort(port2);
     }
 
-    // Устанавливаем новые соединения
     port1.connectedElementId = port2.elementId;
     port1.connectedPortId = port2.id;
     port2.connectedElementId = port1.elementId;
@@ -110,63 +110,6 @@ export class ConnectionManager {
     return true;
   }
 
-  // ГЛАВНЫЙ МЕТОД - проверяем все связи и РВЕМ те, что разошлись
-  updateAllPortsAndConnections(maxDistance = 40, layerManager = null) {
-    let brokenCount = 0;
-    let connectedCount = 0;
-
-    const allPorts = this.getAllPorts();
-    const portMap = new Map();
-    for (const port of allPorts) {
-      portMap.set(port.id, port);
-    }
-
-    // ПЕРВЫЙ ПРОХОД: РВЕМ все связи, которые разошлись
-    for (const port of allPorts) {
-      if (port.isConnected()) {
-        const connectedPort = portMap.get(port.connectedPortId);
-
-        // Проверяем, существует ли связанный порт
-        if (!connectedPort) {
-          // Связанного порта нет - РВЕМ связь
-          this.disconnectPort(port);
-          brokenCount++;
-          continue;
-        }
-
-        // Проверяем, не слишком ли далеко порты друг от друга
-        const distance = Math.hypot(port.worldX - connectedPort.worldX, port.worldY - connectedPort.worldY);
-        if (distance > maxDistance) {
-          // Порты разошлись - РВЕМ связь
-          this.disconnectPort(port);
-          brokenCount++;
-          continue;
-        }
-
-        // Проверяем, что связь взаимная
-        if (connectedPort.connectedPortId !== port.id) {
-          this.disconnectPort(port);
-          brokenCount++;
-          continue;
-        }
-      }
-    }
-
-    // ВТОРОЙ ПРОХОД: ищем новые связи для портов без соединений
-    for (const port of allPorts) {
-      if (port.isConnected()) continue;
-
-      const bestMatch = this.findClosestPort(port, maxDistance);
-      if (bestMatch) {
-        this.connectPorts(port, bestMatch);
-        connectedCount++;
-      }
-    }
-
-    console.log(`Связи: разорвано ${brokenCount}, создано ${connectedCount}`);
-    return { broken: brokenCount, connected: connectedCount };
-  }
-
   findClosestPort(port, maxDistance = 40) {
     const allPorts = this.getAllPorts();
     let closestPort = null;
@@ -185,6 +128,68 @@ export class ConnectionManager {
     }
 
     return closestPort;
+  }
+
+  updateAllPortsAndConnections(maxDistance = 40, layerManager = null) {
+    if (this.isUpdating) {
+      console.log('Пропущен рекурсивный вызов updateAllPortsAndConnections');
+      return { broken: 0, connected: 0 };
+    }
+
+    this.isUpdating = true;
+    let brokenCount = 0;
+    let connectedCount = 0;
+
+    try {
+      const allPorts = this.getAllPorts();
+      const portMap = new Map();
+      for (const port of allPorts) {
+        portMap.set(port.id, port);
+      }
+
+      for (const port of allPorts) {
+        if (port.isConnected()) {
+          const connectedPort = portMap.get(port.connectedPortId);
+
+          if (!connectedPort) {
+            this.disconnectPort(port);
+            brokenCount++;
+            continue;
+          }
+
+          const distance = Math.hypot(port.worldX - connectedPort.worldX, port.worldY - connectedPort.worldY);
+          if (distance > maxDistance) {
+            this.disconnectPort(port);
+            brokenCount++;
+            continue;
+          }
+
+          if (connectedPort.connectedPortId !== port.id) {
+            this.disconnectPort(port);
+            brokenCount++;
+            continue;
+          }
+        }
+      }
+
+      for (const port of allPorts) {
+        if (port.isConnected()) continue;
+
+        const bestMatch = this.findClosestPort(port, maxDistance);
+        if (bestMatch) {
+          this.connectPorts(port, bestMatch);
+          connectedCount++;
+        }
+      }
+    } finally {
+      this.isUpdating = false;
+    }
+
+    if (brokenCount > 0 || connectedCount > 0) {
+      console.log(`Связи: разорвано ${brokenCount}, создано ${connectedCount}`);
+    }
+
+    return { broken: brokenCount, connected: connectedCount };
   }
 
   getAllConnections() {

@@ -169,7 +169,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                    }}</q-item-label></q-item-section>
+                        }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
@@ -492,12 +492,17 @@ const clearSelection = () => updateSelection([], true);
 
 const onParameterChange = (value, paramName) => {
   if (!selectedElement.value) return;
+  if (isElementLocked(selectedElement.value)) return;
+
   selectedElement.value[paramName] = value;
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
 
-  // Принудительное обновление связей
-  forceUpdateConnections();
+  // Прямой вызов без setTimeout
+  if (connectionManager && autoUpdateConnections.value) {
+    connectionManager.updateAllPortsAndConnections(40, layerManager);
+  }
+
   scheduleRender();
 };
 
@@ -787,6 +792,7 @@ const saveToLocalStorage = () => {
   localStorage.setItem('hvac_editor_data', JSON.stringify(data));
   showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
+// Функция принудительного обновления связей (без рекурсии)
 const forceUpdateConnections = () => {
   if (connectionManager && autoUpdateConnections.value) {
     // Обновляем порты у всех элементов
@@ -798,7 +804,6 @@ const forceUpdateConnections = () => {
     if (result.broken > 0 || result.connected > 0) {
       console.log(`Связи обновлены: разорвано ${result.broken}, создано ${result.connected}`);
     }
-    scheduleRender();
   }
 };
 
@@ -1007,14 +1012,18 @@ const onDrop = (e) => {
 
 const rotateElement = (angleDeg) => {
   if (!selectedElement.value) return;
-  const el = selectedElement.value;
+  if (isElementLocked(selectedElement.value)) return;
 
+  const el = selectedElement.value;
   el.rotation = (el.rotation + angleDeg + 360) % 360;
   el.updatePorts?.();
   el.updateCalloutText?.();
 
-  // Принудительное обновление связей
-  forceUpdateConnections();
+  // Прямой вызов без setTimeout
+  if (connectionManager && autoUpdateConnections.value) {
+    connectionManager.updateAllPortsAndConnections(40, layerManager);
+  }
+
   scheduleRender();
 };
 
@@ -1161,14 +1170,4 @@ watch(allElements, () => {
   debouncedDraw();
 }, { deep: true });
 
-let updateTimeout = null;
-watch(allElements, () => {
-  if (autoUpdateConnections.value && connectionManager) {
-    if (updateTimeout) clearTimeout(updateTimeout);
-    updateTimeout = setTimeout(() => {
-      forceUpdateConnections();
-    }, 100);
-  }
-  debouncedDraw();
-}, { deep: true });
 </script>

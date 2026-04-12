@@ -240,22 +240,30 @@ export class BaseElement {
     const centerY = this.y;
     const rotation = this.rotation || 0;
 
-    if (rotation === 0) {
-      return { x: worldX, y: worldY };
-    }
-
+    // Сначала смещаем относительно центра
     const dx = worldX - centerX;
     const dy = worldY - centerY;
+
+    if (rotation === 0) {
+      return { x: dx, y: dy };
+    }
+
+    // Затем поворачиваем обратно
     const angle = -rotation * Math.PI / 180;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const rotatedX = dx * cos - dy * sin;
-    const rotatedY = dx * sin + dy * cos;
 
     return {
-      x: rotatedX + centerX,
-      y: rotatedY + centerY
+      x: dx * cos - dy * sin,
+      y: dx * sin + dy * cos
     };
+  }
+
+  drawForHitTest(ctx) {
+    this.createPath(ctx);
+    ctx.lineWidth = this.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
   }
 
   updatePortsWorldCoordinates() {

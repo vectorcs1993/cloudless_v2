@@ -30,12 +30,21 @@ export class ElementFactory {
         return duct;
 
       case 'transition':
-        const transition = new Transition(id, x_px, y_px, sectionType, sectionType2, a, a2, b, c, c2);
+        const transition = new Transition(
+          id, x_px, y_px,
+          params.sectionType || 'round',
+          params.sectionType2 || 'round',
+          params.a || 125,
+          params.a2 || 200,
+          params.b || 500,
+          params.c || 125,
+          params.c2 || 150
+        );
         if (params.rotation !== undefined) transition.rotation = params.rotation;
         if (params.name) transition.name = params.name;
         if (params.color) transition.color = params.color;
         if (params.lineWidth !== undefined) transition.lineWidth = params.lineWidth;
-        transition.showCallout = showCallout;
+        transition.showCallout = params.showCallout !== undefined ? params.showCallout : true;
         return transition;
 
       case 'tee':

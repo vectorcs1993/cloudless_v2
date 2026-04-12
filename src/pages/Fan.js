@@ -1,167 +1,151 @@
-import { DuctDirect } from './DuctDirect.js';
 import { BaseElement } from './Elements.js';
+import { Port } from './Port.js';
 
-// ========== ВЕНТИЛЯТОР ==========
-export class Fan extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', width = 100, length = 150) {
-    super(id, x_px, y_px, sectionType, width, length);
-    this.type = 'fan';
-    this.name = `${BaseElement.getAvailableTypes().fan} ${id}`;
-    this.flow = 1000;
-    this.pressure = 500;
+export class Fan extends BaseElement {
+  constructor(id, x_px, y_px, sectionType = 'round', a = 100, b = 150) {
+    super(id, 'fan', x_px, y_px, `${BaseElement.getAvailableTypes().fan} ${id}`);
+    this._sectionType = sectionType;
+    this._a = a;
+    this._b = b;
+    this._flow = 1000;
+    this._pressure = 500;
+  }
+
+  get a() { return this._a; }
+  set a(value) { this._a = Math.max(50, Math.min(500, value)); this.updateCalloutText(); }
+
+  get b() { return this._b; }
+  set b(value) { this._b = Math.max(50, Math.min(500, value)); this.updateCalloutText(); }
+
+  get flow() { return this._flow; }
+  set flow(value) { this._flow = Math.max(0, value); this.updateCalloutText(); }
+
+  get pressure() { return this._pressure; }
+  set pressure(value) { this._pressure = Math.max(0, value); this.updateCalloutText(); }
+
+  get sectionType() { return this._sectionType; }
+  set sectionType(value) { this._sectionType = value; this.updateCalloutText(); }
+
+  getWidth() { return this.mmToPx(this._b); }
+  getHeight() { return this.mmToPx(this._a); }
+
+  getTopLeft() {
+    const width = this.getWidth();
+    const height = this.getHeight();
+    return { x: this.x - width / 2, y: this.y - height / 2 };
   }
 
   getCalloutText() {
-    return `${super.getCalloutText()}\nПроизводительность: ${this.flow} м³/ч\nНапор: ${this.pressure} Па`;
+    const sizeStr = this._sectionType === 'round' ? `⌀${this._a} мм` : `${this._a}x${this._b} мм`;
+    return `${this.name}\n${sizeStr}\nПроизводительность: ${this._flow} м³/ч\nНапор: ${this._pressure} Па`;
   }
 
   getParameters() {
     return [
       ...super.getParameters(),
-      { name: 'flow', label: 'Производительность', type: 'number', step: 100, value: this.flow, unit: 'м³/ч' },
-      { name: 'pressure', label: 'Напор', type: 'number', step: 1, value: this.pressure, unit: 'Па' }
+      { name: 'sectionType', label: 'Тип сечения', type: 'select', options: [{ value: 'rectangular', label: 'Прямоугольное' }, { value: 'round', label: 'Круглое' }], value: this._sectionType },
+      { name: 'a', label: this._sectionType === 'round' ? 'Диаметр' : 'Ширина', type: 'number', step: 10, min: 50, max: 500, value: this._a, unit: 'мм' },
+      { name: 'b', label: 'Высота', type: 'number', step: 10, min: 50, max: 500, value: this._b, unit: 'мм', visible: this._sectionType === 'rectangular' },
+      { name: 'flow', label: 'Производительность', type: 'number', step: 100, min: 0, value: this._flow, unit: 'м³/ч' },
+      { name: 'pressure', label: 'Напор', type: 'number', step: 50, min: 0, value: this._pressure, unit: 'Па' }
     ];
   }
 
-  // Замените метод draw
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
+  createPath(ctx) {
     const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
     const topLeft = this.getTopLeft();
-    const connectorLength = Math.min(this.mmToPx(10), width_px * 0.15);
-    const triangleLeftX = topLeft.x + connectorLength;
-    const triangleTipX = topLeft.x + width_px - connectorLength;
-    const leftPortX = topLeft.x;
-    const rightPortX = topLeft.x + width_px;
-    const topY = centerY - height_px / 2;
-    const bottomY = centerY + height_px / 2;
+    const width = this.getWidth();
+    const centerY = this.y;
 
     ctx.save();
-    ctx.translate(centerX, centerY);
+    ctx.translate(this.x, this.y);
     ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.lineWidth = this.lineWidth;
-    if (isSelected) {
-      ctx.strokeStyle = '#e5ff00';
-    } else if (isHighlighted) {
-      ctx.strokeStyle = '#00c8ff';
-    } else {
-      ctx.strokeStyle = this.color;
-    }
-
-    // Линия подвода от треугольника до левого порта
-    ctx.beginPath();
-    ctx.moveTo(triangleLeftX, centerY);
-    ctx.lineTo(leftPortX, centerY);
-    ctx.stroke();
-
-    // Линия отвода от треугольника до правого порта
-    ctx.beginPath();
-    ctx.moveTo(triangleTipX, centerY);
-    ctx.lineTo(rightPortX, centerY);
-    ctx.stroke();
-
-    // Треугольник (вентилятор) — центрированный правый треугольник
-    const baseX = triangleLeftX;
-    const tipX = triangleTipX;
+    ctx.translate(-this.x, -this.y);
 
     ctx.beginPath();
-    ctx.moveTo(baseX, topY);
-    ctx.lineTo(tipX, centerY);
-    ctx.lineTo(baseX, bottomY);
-    ctx.closePath();
-    ctx.stroke();
+    ctx.moveTo(topLeft.x, centerY);
+    ctx.lineTo(topLeft.x + width, centerY);
 
     ctx.restore();
+  }
 
-    if (showElementAxes) {
-      this.drawCenterLines(ctx, scale, isDarkTheme);
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
+    this.createPath(ctx);
+    if (isSelected) ctx.strokeStyle = '#e5ff00';
+    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
+    else ctx.strokeStyle = this.color;
+    ctx.lineWidth = this.lineWidth;
+    ctx.stroke();
+
+    // Рисуем кружок вентилятора
+    const rotation = this.rotation || 0;
+    const radius = this.getHeight() / 2;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+    if (showColors) {
+      ctx.fillStyle = this.color;
+      ctx.fill();
     }
-  }
+    ctx.stroke();
+    ctx.restore();
 
-  getWidth() {
-    // Ширина отрисовки по параметру A
-    return this.mmToPx(this._a);
-  }
-
-  getHeight() {
-    // Высота треугольника по параметру B
-    return this.mmToPx(this._b);
-  }
-
-  toJSON() {
-    return {
-      ...super.toJSON(),
-      type: 'fan',
-      flow: this.flow,
-      pressure: this.pressure,
-    };
+    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
   hitTest(worldX, worldY, ctx) {
-    const width_px = this.getWidth();
-    if (!width_px || width_px <= 0) {
-      return false;
-    }
+    const rotation = this.rotation || 0;
+    const radius = this.getHeight() / 2;
 
-    const local = this.transformToLocalCoords(worldX, worldY);
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+
+    const dx = worldX - this.x;
+    const dy = worldY - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    ctx.restore();
+
+    return dist <= radius;
+  }
+
+  getPorts() {
+    const ports = [];
+    const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
-    const centerX = this.x;
+    const width = this.getWidth();
     const centerY = this.y;
-    const height_px = this.getHeight();
-    const triangleLeftX = topLeft.x + Math.min(this.mmToPx(10), width_px * 0.15);
-    const triangleTipX = topLeft.x + width_px - Math.min(this.mmToPx(10), width_px * 0.15);
-    const leftPortX = topLeft.x;
-    const rightPortX = topLeft.x + width_px;
-    const topY = centerY - height_px / 2;
-    const bottomY = centerY + height_px / 2;
 
-    // Проверяем левую линию подвода от треугольника до порта
-    const isOnLeftConnector =
-      local.x >= leftPortX &&
-      local.x <= triangleLeftX &&
-      Math.abs(local.y - centerY) <= this._hitTolerance;
+    const inletPos = this.rotatePoint(topLeft.x, centerY, this.x, this.y, rotation);
+    const outletPos = this.rotatePoint(topLeft.x + width, centerY, this.x, this.y, rotation);
 
-    // Проверяем правую линию отвода от треугольника до порта
-    const isOnRightConnector =
-      local.x >= triangleTipX &&
-      local.x <= rightPortX &&
-      Math.abs(local.y - centerY) <= this._hitTolerance;
+    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || Date.now(), this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y));
+    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || Date.now(), this.id, 'outlet', 'right', width, 0, outletPos.x, outletPos.y));
 
-    // Проверяем треугольник (вентилятор) - центрированный правый треугольник
-    const tipX = triangleTipX;
-    const baseX = triangleLeftX;
-
-    const dist1 = this.pointToLineDistance(local, baseX, topY, tipX, centerY);
-    const isOnLine1 = dist1 <= this._hitTolerance;
-
-    const dist2 = this.pointToLineDistance(local, tipX, centerY, baseX, bottomY);
-    const isOnLine2 = dist2 <= this._hitTolerance;
-
-    const dist3 = this.pointToLineDistance(local, baseX, bottomY, baseX, topY);
-    const isOnLine3 = dist3 <= this._hitTolerance;
-
-    return isOnLeftConnector || isOnRightConnector || isOnLine1 || isOnLine2 || isOnLine3;
+    return ports;
   }
 
-  // Вспомогательный метод для расчета расстояния от точки до линии
-  pointToLineDistance(point, x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lenSq = dx * dx + dy * dy;
-
-    if (lenSq === 0) return Math.sqrt((point.x - x1) ** 2 + (point.y - y1) ** 2);
-
-    let t = ((point.x - x1) * dx + (point.y - y1) * dy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-
-    const closestX = x1 + t * dx;
-    const closestY = y1 + t * dy;
-
-    return Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
+  drawCenterLines(ctx, scale, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const topLeft = this.getTopLeft();
+    const width = this.getWidth();
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, this.y);
+    ctx.lineTo(topLeft.x + width, this.y);
+    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
+
+  toJSON() { return { ...super.toJSON(), a: this._a, b: this._b, flow: this._flow, pressure: this._pressure, sectionType: this._sectionType }; }
 }

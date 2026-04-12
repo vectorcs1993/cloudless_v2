@@ -1,226 +1,218 @@
-import { DuctDirect } from './DuctDirect.js';
+import { BaseElement, DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
-// ========== ПЕРЕХОД ==========
-export class Transition extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', sectionType2 = 'round', a1 = 125, a2 = 200, b = 500, c = 125, c2 = 125) {
-    super(id, x_px, y_px, sectionType, a1, b, c);
-    this.type = 'transition';
-    this.name = `Переход ${id}`;
+export class Transition extends DuctBase {
+  constructor(id, x_px, y_px, sectionType = 'round', sectionType2 = 'round', a = 125, a2 = 200, b = 500, c = 125, c2 = 150) {
+    super(id, 'transition', x_px, y_px, `${BaseElement.getAvailableTypes().transition} ${id}`, sectionType, a);
     this._sectionType2 = sectionType2;
     this._a2 = a2;
+    this._b = b;
+    this._c = c;
     this._c2 = c2;
   }
-  get sectionType2() { return this._sectionType2; }
-  set sectionType2(value) {
-    if (this._sectionType2 === value) return;
-    this._sectionType2 = value;
-    this.updatePorts();
-    this.updateCalloutText();
-  }
+
+  getSizePx() { return 0; }
 
   get a2() { return this._a2; }
   set a2(value) {
-    if (this._a2 === value) return;
-    this._a2 = value;
+    this._a2 = Math.max(20, Math.min(1000, value));
+    this.updateCalloutText();
+  }
+
+  get b() { return this._b; }
+  set b(value) {
+    this._b = Math.max(50, Math.min(3000, value));
     this.updatePorts();
     this.updateCalloutText();
   }
 
+  get c() { return this._c; }
+  set c(value) {
+    this._c = Math.max(20, Math.min(1000, value));
+    this.updateCalloutText();
+  }
 
   get c2() { return this._c2; }
   set c2(value) {
-    if (this._c2 === value) return;
-    this._c2 = value;
-    this.updatePorts();
+    this._c2 = Math.max(20, Math.min(1000, value));
     this.updateCalloutText();
   }
 
+  get sectionType2() { return this._sectionType2; }
+  set sectionType2(value) {
+    this._sectionType2 = value;
+    this.updateCalloutText();
+  }
 
   getWidth() {
-    return this.mmToPx(this._b); // _b это длина перехода
+    return this.mmToPx(this._b);
   }
 
   getHeight() {
-    const maxSize = Math.max(this._a, this._a2);
-    return this.mmToPx(maxSize);
+    return Math.max(this.mmToPx(this._a), this.mmToPx(this._a2));
   }
 
-  // Получаем левый верхний угол с учетом максимальной высоты
   getTopLeft() {
-    const width_px = this.getWidth();
-    const height_px = this.getHeight();
-
-    return {
-      x: this.x - width_px / 2,
-      y: this.y - height_px / 2
-    };
+    const width = this.getWidth();
+    const height = this.getHeight();
+    return { x: this.x - width / 2, y: this.y - height / 2 };
   }
 
-  getSizeAt(t) {
-    return this._a + (this._a2 - this._a) * t;
+  getEquivalentDiameter() {
+    const d1 = this._sectionType === 'round' ? this._a : (2 * this._a * this._c) / (this._a + this._c);
+    const d2 = this._sectionType2 === 'round' ? this._a2 : (2 * this._a2 * this._c2) / (this._a2 + this._c2);
+    return (d1 + d2) / 2;
   }
 
   getCalloutText() {
-    const length_m = this._b / 1000;
-    const size1_m = this._a / 1000;
-    const size2_m = this._a2 / 1000;
-    const avgArea = ((size1_m + size2_m) / 2 * length_m).toFixed(2);
-    const typeText = this._sectionType === 'round' ? '⌀' : '□';
-    const typeText2 = this._sectionType2 === 'round' ? '⌀' : '□';
-    const s1 = this._sectionType === 'round' ? this._a : `${this._a}x${this.c}`;
-    const s2 = this._sectionType2 === 'round' ? this._a2 : `${this._a2}x${this.c}`;
-    return `${this.name}\n${typeText}${s1} → ${typeText2}${s2} мм\nL: ${this._b} мм\nSср: ${avgArea} м²`;
+    const getSizeStr = (type, size, size2) => {
+      if (type === 'round') return `⌀${size}`;
+      return `${size}x${size2}`;
+    };
+    const inletStr = getSizeStr(this._sectionType, this._a, this._c);
+    const outletStr = getSizeStr(this._sectionType2, this._a2, this._c2);
+    const avgArea = (Math.PI * Math.pow(this.getEquivalentDiameter() / 2, 2)) / 1000000;
+    return `${this.name}\n${inletStr} → ${outletStr} мм\nL: ${this._b} мм\nSср: ${avgArea.toFixed(2)} м²`;
   }
 
   getParameters() {
-    return [
+    const params = [
       ...super.getParameters(),
       {
-        name: 'sectionType2', label: 'Тип сечения 2', type: 'select', options: [
+        name: 'sectionType2',
+        label: 'Тип сечения выхода',
+        type: 'select',
+        options: [
           { value: 'rectangular', label: 'Прямоугольное' },
           { value: 'round', label: 'Круглое' }
-        ], value: this.sectionType2
+        ],
+        value: this._sectionType2
       },
       {
         name: 'a2',
-        label: `A2`,
+        label: this._sectionType2 === 'round' ? 'Диаметр выхода' : 'Ширина выхода',
         type: 'number',
         step: 10,
         min: 20,
+        max: 1000,
         value: this._a2,
         unit: 'мм'
-      },
-      {
+      }
+    ];
+
+    if (this._sectionType2 === 'rectangular') {
+      params.push({
         name: 'c2',
-        label: `C2`,
+        label: 'Высота выхода',
         type: 'number',
         step: 10,
         min: 20,
+        max: 1000,
         value: this._c2,
         unit: 'мм'
-      },
-    ];
-  }
-
-  getPorts() {
-    const width_px = this.getWidth();
-    const height1_px = this.mmToPx(this._a);
-    const height2_px = this.mmToPx(this._a2);
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-
-    const ports = [];
-
-    // Левый порт (меньшее сечение)
-    const inletPos = this.rotatePoint(
-      topLeft.x,
-      centerY,
-      centerX, centerY, rotation
-    );
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'inlet')?.id || Date.now() + Math.random(),
-      this.id, 'inlet', 'left', 0, height1_px / 2, inletPos.x, inletPos.y
-    ));
-
-    // Правый порт (большее сечение)
-    const outletPos = this.rotatePoint(
-      topLeft.x + width_px,
-      centerY,
-      centerX, centerY, rotation
-    );
-    ports.push(new Port(
-      this.ports.find(p => p.direction === 'outlet')?.id || Date.now() + Math.random(),
-      this.id, 'outlet', 'right', width_px, height2_px / 2, outletPos.x, outletPos.y
-    ));
-
-    return ports;
-  }
-
-  // Замените метод draw
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const width_px = this.getWidth();
-    const topLeft = this.getTopLeft();
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-
-    // Центральная линия перехода
-    ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + width_px, centerY);
-
-    ctx.lineWidth = this.lineWidth;
-    if (isSelected) {
-      ctx.strokeStyle = '#e5ff00';
-    } else if (isHighlighted) {
-      ctx.strokeStyle = '#00c8ff';
-    } else {
-      ctx.strokeStyle = this.color;
+      });
     }
-    ctx.stroke();
 
-    ctx.restore();
+    params.push({
+      name: 'b',
+      label: 'Длина перехода',
+      type: 'number',
+      step: 10,
+      min: 50,
+      max: 3000,
+      value: this._b,
+      unit: 'мм'
+    });
 
-    if (showElementAxes) {
-      this.drawCenterLines(ctx, scale, isDarkTheme);
-    }
+    return params;
   }
 
-  drawCenterLines(ctx, scale, isDarkTheme) {
+  createPath(ctx) {
+    const rotation = this.rotation || 0;
+    const topLeft = this.getTopLeft();
     const width = this.getWidth();
-    const centerX = this.x;
     const centerY = this.y;
-    const rotation = this.rotation || 0;
-    const topLeft = this.getTopLeft();
 
     ctx.save();
-    ctx.translate(centerX, centerY);
+    ctx.translate(this.x, this.y);
     ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
+    ctx.translate(-this.x, -this.y);
 
     ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width, centerY);
 
+    ctx.restore();
+  }
+
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
+    this.createPath(ctx);
+    if (isSelected) ctx.strokeStyle = '#e5ff00';
+    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
+    else ctx.strokeStyle = this.color;
+    ctx.lineWidth = this.lineWidth;
+    ctx.stroke();
+    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
+  }
+
+  hitTest(worldX, worldY, ctx) {
+    this.createPath(ctx);
+    ctx.lineWidth = this.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    return ctx.isPointInStroke(worldX, worldY);
+  }
+
+  getPorts() {
+    const ports = [];
+    const rotation = this.rotation || 0;
+    const topLeft = this.getTopLeft();
+    const width = this.getWidth();
+    const centerY = this.y;
+
+    const inletPos = this.rotatePoint(topLeft.x, centerY, this.x, this.y, rotation);
+    const outletPos = this.rotatePoint(topLeft.x + width, centerY, this.x, this.y, rotation);
+
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
+      this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y
+    ));
+
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
+      this.id, 'outlet', 'right', width, 0, outletPos.x, outletPos.y
+    ));
+
+    return ports;
+  }
+
+  drawCenterLines(ctx, scale, isDarkTheme) {
+    const rotation = this.rotation || 0;
+    const topLeft = this.getTopLeft();
+    const width = this.getWidth();
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, this.y);
+    ctx.lineTo(topLeft.x + width, this.y);
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
     ctx.stroke();
-
     ctx.setLineDash([]);
     ctx.restore();
-  }
-
-  hitTest(worldX, worldY, ctx) {
-    const local = this.transformToLocalCoords(worldX, worldY);
-    const topLeft = this.getTopLeft();
-    const centerY = this.y;
-    const width_px = this.getWidth();
-
-    // Проверяем, находится ли курсор ровно на линии
-    const isOnLine =
-      local.x >= topLeft.x &&
-      local.x <= topLeft.x + width_px &&
-      Math.abs(local.y - centerY) <= this._hitTolerance;
-
-    return isOnLine;
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
       a2: this._a2,
+      b: this._b,
+      c: this._c,
       c2: this._c2,
-      sectionType2: this._sectionType2,
+      sectionType2: this._sectionType2
     };
   }
 }
