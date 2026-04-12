@@ -65,6 +65,7 @@ export class ElementFactory {
       case 'elbow':
         const elbow = new Elbow(id, x_px, y_px, sectionType, a);
         if (params.r !== undefined) elbow.r = params.r;
+        if (params.direction !== undefined) elbow.direction = params.direction; // ДОБАВЛЕНО: поддержка направления
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
         if (params.name) elbow.name = params.name;
         if (params.color) elbow.color = params.color;
@@ -108,6 +109,7 @@ export class ElementFactory {
         anglel2: jsonData.anglel2,
         showCallout: jsonData.showCallout !== undefined ? jsonData.showCallout : true,
         r: jsonData.r,
+        direction: jsonData.direction, // ДОБАВЛЕНО: поддержка направления из JSON
         length_mm: jsonData.length_mm,
         flow: jsonData.flow,
         pressure: jsonData.pressure,

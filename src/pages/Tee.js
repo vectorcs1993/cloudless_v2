@@ -7,7 +7,7 @@ export class Tee extends DuctBase {
     super(id, 'tee', x_px, y_px, `${BaseElement.getAvailableTypes().tee} ${id}`, sectionType, a);
     this._b = 100;                   // Высота для прямоугольного сечения
     this._l1 = 250;                  // Длина основной магистрали (горизонталь)
-    this._l2 = 250;                  // Длина ответвления
+    this._l2 = 150;                  // Длина ответвления
     this._l3 = 0;                    // Смещение ответвления от центра
     this._anglel2 = 90;                // Угол ответвления
   }
