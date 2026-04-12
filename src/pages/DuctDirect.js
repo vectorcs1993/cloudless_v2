@@ -68,6 +68,8 @@ export class DuctDirect extends DuctBase {
     return ports;
   }
 
+  // В DuctDirect.js, убедитесь что createPath правильно создает путь:
+
   createPath(ctx) {
     const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
@@ -79,7 +81,7 @@ export class DuctDirect extends DuctBase {
     ctx.rotate(rotation * Math.PI / 180);
     ctx.translate(-this.x, -this.y);
 
-    ctx.beginPath();
+    ctx.beginPath();  // ВАЖНО: beginPath должен быть здесь!
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(endX, centerY);
 
@@ -99,12 +101,46 @@ export class DuctDirect extends DuctBase {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
+  // В DuctDirect.js, замените метод hitTest на этот:
+
   hitTest(worldX, worldY, ctx) {
+    // Сохраняем состояние контекста
+    ctx.save();
+
+    // Применяем трансформации как при рисовании
+    const rotation = this.rotation || 0;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
+    // Создаем путь
     this.createPath(ctx);
-    ctx.lineWidth = this.lineWidth;
+
+    // Увеличиваем толщину линии для hit test (важно!)
+    const hitLineWidth = Math.max(this.lineWidth + 8, 15);
+    ctx.lineWidth = hitLineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    return ctx.isPointInStroke(worldX, worldY);
+
+    // Проверяем попадание в линию
+    let hit = ctx.isPointInStroke(worldX, worldY);
+
+    // Если не попали, проверяем точки вокруг (для надежности)
+    if (!hit) {
+      const offsets = [-3, -2, -1, 0, 1, 2, 3];
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          if (ctx.isPointInStroke(worldX + dx, worldY + dy)) {
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+    }
+
+    ctx.restore();
+    return hit;
   }
 
   drawCenterLines(ctx, scale, isDarkTheme) {

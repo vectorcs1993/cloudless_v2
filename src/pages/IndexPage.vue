@@ -169,7 +169,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                    }}</q-item-label></q-item-section>
+                        }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
@@ -322,7 +322,6 @@ import { Transition } from './Transition.js';
 import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
-import { Fan } from './Fan.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
 
@@ -925,7 +924,7 @@ const updateAllPortsAndConnections = () => {
 
 const createGhostElement = (type, x, y) => {
   const creators = {
-    duct: () => new DuctDirect(-1, x, y), fan: () => new Fan(-1, x, y),
+    duct: () => new DuctDirect(-1, x, y),
     tee: () => new Tee(-1, x, y), elbow: () => new Elbow(-1, x, y),
     cross: () => new Cross(-1, x, y), transition: () => new Transition(-1, x, y)
   };
@@ -988,7 +987,6 @@ const onDrop = (e) => {
   if (worldPos) {
     const creators = {
       duct: () => new DuctDirect(++nextElementId, worldPos.x, worldPos.y),
-      fan: () => new Fan(++nextElementId, worldPos.x, worldPos.y),
       tee: () => new Tee(++nextElementId, worldPos.x, worldPos.y),
       elbow: () => new Elbow(++nextElementId, worldPos.x, worldPos.y),
       cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y),
@@ -1124,15 +1122,20 @@ onMounted(() => {
   zIndexManager = new ZIndexManager(layers);
   connectionManager = new ConnectionManager(allElements, layerManager);
   renderer = new CanvasRenderer(mainCanvas.value, layers, renderOptions);
+
+  // ВАЖНО: передаем allElements (computed ref) в SelectionManager
   selectionManager = new SelectionManager(allElements, renderer, layerManager);
+
   interactionManager = new InteractionManager(
     mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager
   );
 
   zIndexManager.setRenderer(renderer);
+
   interactionManager.setOnElementMoveCallback?.((moving) => {
     if (!isUpdatingSelection) updateSelection(moving, true);
   });
+
   interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 

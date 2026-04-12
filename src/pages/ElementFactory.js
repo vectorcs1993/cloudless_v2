@@ -2,7 +2,6 @@ import { DuctDirect } from './DuctDirect.js';
 import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
-import { Fan } from './Fan.js';
 import { Transition } from './Transition.js';
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
@@ -81,18 +80,6 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) elbow.lineWidth = params.lineWidth;
         elbow.showCallout = showCallout;
         return elbow;
-
-      case 'fan':
-        const fan = new Fan(id, x_px, y_px, sectionType, a, b);
-        if (params.flow !== undefined) fan.flow = params.flow;
-        if (params.pressure !== undefined) fan.pressure = params.pressure;
-        if (params.rotation !== undefined) fan.rotation = params.rotation;
-        if (params.name) fan.name = params.name;
-        if (params.color) fan.color = params.color;
-        if (params.lineWidth !== undefined) fan.lineWidth = params.lineWidth;
-        fan.showCallout = showCallout;
-        return fan;
-
       default:
         throw new Error(`Unknown element type: ${type}`);
     }

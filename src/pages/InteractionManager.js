@@ -327,13 +327,15 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
+  // В методе onMouseDown, часть с выделением прямоугольником:
+
   onMouseDown(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (e.button === 0) {
       const isCtrlPressed = e.ctrlKey || e.metaKey;
 
-      // Сначала проверяем выноску
+      // Проверяем выноску
       const calloutHit = this.findCalloutAt(worldPos.x, worldPos.y);
       if (calloutHit) {
         this.startDragCallout(calloutHit, e);
@@ -345,15 +347,12 @@ export class InteractionManager {
 
       if (clickedElement) {
         if (!this.isElementInteractive(clickedElement)) {
-          console.log('Элемент на заблокированном слое, выделение запрещено');
           return;
         }
 
         if (isCtrlPressed) {
-          // Ctrl+клик: добавляем/убираем из выделения
           const currentSelection = [...this.renderer.selectedElements];
           const index = currentSelection.findIndex(el => el.id === clickedElement.id);
-
           if (index === -1) {
             currentSelection.push(clickedElement);
           } else {
@@ -361,16 +360,14 @@ export class InteractionManager {
           }
           this.updateSelection(currentSelection);
         } else {
-          // Обычный клик: выделяем только этот элемент
           if (this.renderer.selectedElements.length !== 1 || this.renderer.selectedElements[0].id !== clickedElement.id) {
             this.updateSelection([clickedElement]);
           }
         }
 
-        // Начинаем перетаскивание
         this.startDrag(e, clickedElement);
       } else {
-        // Клик на пустое место - очищаем выделение
+        // Клик на пустое место
         if (!isCtrlPressed) {
           this.updateSelection([]);
         }
@@ -383,6 +380,7 @@ export class InteractionManager {
           y: e.clientY - rect.top
         };
         this.selectionStart = screenPos;
+
         if (this.selectionManager) {
           this.selectionManager.startSelectionRect(screenPos.x, screenPos.y);
         }
@@ -402,6 +400,78 @@ export class InteractionManager {
         this.renderer.draw();
       }
     }
+  }
+
+  // ИСПРАВЛЕННЫЙ onMouseUp:
+
+  onMouseUp(e) {
+    // Завершаем выделение прямоугольником
+    if (this.isSelecting && this.selectionStart) {
+      let selected = [];
+
+      if (this.selectionManager) {
+        const panX = this.options.panX.value;
+        const panY = this.options.panY.value;
+        const scale = this.options.scale.value;
+
+        selected = this.selectionManager.endSelectionRect(panX, panY, scale, this.layerManager);
+      }
+
+      if (selected && selected.length > 0) {
+        this.updateSelection(selected);
+      } else if (selected && selected.length === 0 && !this.isDragging) {
+        // Если ничего не выделили и не было перетаскивания - очищаем выделение
+        this.updateSelection([]);
+      }
+
+      this.renderer.endSelectionRect();
+      this.isSelecting = false;
+      this.selectionStart = null;
+      this.renderer.draw();
+    }
+
+    // Завершаем перетаскивание элементов
+    if (this.isDragging && this.draggingElements.length > 0) {
+      const movedElements = [...this.draggingElements];
+      this.isDragging = false;
+      this.draggingElements = [];
+      this.dragStartElementsPositions = [];
+      this.currentSnappedPorts = null;
+      if (this.canvas) this.canvas.style.cursor = '';
+
+      for (const element of movedElements) {
+        if (element.updatePorts) element.updatePorts();
+      }
+
+      if (this.autoUpdateConnections && this.options.snapToPorts.value) {
+        this.connectionManager.updateAllPortsAndConnections(40, this.layerManager);
+      }
+
+      this.renderer.draw();
+    }
+
+    // Завершаем перетаскивание выноски
+    if (this.draggingCallout) {
+      this.draggingCallout = null;
+      this.draggingCalloutElement = null;
+      if (this.canvas) this.canvas.style.cursor = '';
+      this.renderer.draw();
+    }
+
+    // Завершаем панорамирование
+    if (this.isPanning) {
+      this.isPanning = false;
+      if (this.canvas) this.canvas.style.cursor = '';
+      this.renderer.draw();
+    }
+
+    // Очищаем подсветку порта
+    setTimeout(() => {
+      if (!this.isDragging && !this.draggingCallout && !this.isSelecting && this.renderer) {
+        this.renderer.setHighlightedPort(null);
+        this.renderer.draw();
+      }
+    }, 100);
   }
 
   onMouseMove(e) {
@@ -496,14 +566,17 @@ export class InteractionManager {
     if (this.isSelecting) {
       let selected = [];
       if (this.selectionManager) {
-        selected = this.selectionManager.endSelectionRect(
-          this.options.panX.value,
-          this.options.panY.value,
-          this.options.scale.value,
-          this.layerManager
-        );
+        // Убедимся, что передаем правильные значения
+        const panX = this.options.panX.value;
+        const panY = this.options.panY.value;
+        const scale = this.options.scale.value;
+
+        selected = this.selectionManager.endSelectionRect(panX, panY, scale, this.layerManager);
       }
+
+      // Обновляем выделение в renderer и UI
       this.updateSelection(selected);
+
       this.renderer.endSelectionRect();
       this.isSelecting = false;
       this.selectionStart = null;

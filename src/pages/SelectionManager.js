@@ -1,14 +1,36 @@
 export class SelectionManager {
   constructor(elements, renderer, layerManager = null) {
-    this.elements = elements; // reactive ref to elements
+    this.elements = elements;
     this.renderer = renderer;
     this.layerManager = layerManager;
     this.selectedElements = [];
     this.selectionRect = null;
   }
 
+  // Получение плоского массива всех элементов
+  getAllElements() {
+    if (!this.elements) return [];
+
+    // Если это ref с layers
+    if (this.elements.value && Array.isArray(this.elements.value) && this.elements.value[0]?.elements !== undefined) {
+      return this.elements.value.flatMap(layer => layer.elements || []);
+    }
+
+    // Если это ref с массивом элементов
+    if (this.elements.value && Array.isArray(this.elements.value)) {
+      return this.elements.value;
+    }
+
+    // Если это прямой массив
+    if (Array.isArray(this.elements)) {
+      return this.elements;
+    }
+
+    return [];
+  }
+
   setSelectedElements(elements) {
-    this.selectedElements = Array.isArray(elements) ? elements : (elements ? [elements] : []);
+    this.selectedElements = Array.isArray(elements) ? [...elements] : (elements ? [elements] : []);
     if (this.renderer) {
       this.renderer.setSelectedElements(this.selectedElements);
     }
@@ -42,121 +64,106 @@ export class SelectionManager {
     }
   }
 
-  isElementSelectable(element) {
-    if (!this.layerManager) return true;
-    return !this.layerManager.isLayerLocked(element);
-  }
-
-  getElementBounds(element) {
-    const width = element.getWidth();
-    const height = element.getHeight();
-    const topLeft = element.getTopLeft();
-    const rotation = element.rotation || 0;
-
-    if (rotation !== 0) {
-      const corners = [
-        { x: topLeft.x, y: topLeft.y },
-        { x: topLeft.x + width, y: topLeft.y },
-        { x: topLeft.x + width, y: topLeft.y + height },
-        { x: topLeft.x, y: topLeft.y + height }
-      ];
-
-      const angleRad = rotation * Math.PI / 180;
-      const cos = Math.cos(angleRad);
-      const sin = Math.sin(angleRad);
-      const centerX = element.x;
-      const centerY = element.y;
-
-      const rotatedCorners = corners.map(corner => {
-        const dx = corner.x - centerX;
-        const dy = corner.y - centerY;
-        return {
-          x: centerX + dx * cos - dy * sin,
-          y: centerY + dx * sin + dy * cos
-        };
-      });
-
-      const minX = Math.min(...rotatedCorners.map(c => c.x));
-      const minY = Math.min(...rotatedCorners.map(c => c.y));
-      const maxX = Math.max(...rotatedCorners.map(c => c.x));
-      const maxY = Math.max(...rotatedCorners.map(c => c.y));
-
-      return { minX, minY, maxX, maxY };
-    }
-
-    return {
-      minX: topLeft.x,
-      minY: topLeft.y,
-      maxX: topLeft.x + width,
-      maxY: topLeft.y + height
-    };
-  }
-
-  isElementIntersectsRect(element, worldRect) {
-    const bounds = this.getElementBounds(element);
-
-    return !(bounds.maxX < worldRect.minX ||
-      bounds.minX > worldRect.maxX ||
-      bounds.maxY < worldRect.minY ||
-      bounds.minY > worldRect.maxY);
-  }
-
+  // ГЛАВНЫЙ МЕТОД - выделение через hitTest элементов
   endSelectionRect(panX, panY, scale, layerManager = null) {
-    if (!this.selectionRect) return [];
+    if (!this.selectionRect || !this.renderer || !this.renderer.canvas) return [];
 
-    const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
-    const height = Math.abs(this.selectionRect.endY - this.selectionRect.startY);
+    const startX = this.selectionRect.startX;
+    const startY = this.selectionRect.startY;
+    const endX = this.selectionRect.endX;
+    const endY = this.selectionRect.endY;
 
-    const minSelectionSize = 5;
-    if (width < minSelectionSize && height < minSelectionSize) {
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+
+    // Слишком маленькое выделение - игнорируем (это был клик)
+    if (width < 5 && height < 5) {
       this.selectionRect = null;
-      if (this.renderer) {
-        this.renderer.endSelectionRect();
-      }
+      if (this.renderer) this.renderer.endSelectionRect();
       return [];
     }
 
-    const rect = {
-      minX: Math.min(this.selectionRect.startX, this.selectionRect.endX),
-      minY: Math.min(this.selectionRect.startY, this.selectionRect.endY),
-      maxX: Math.max(this.selectionRect.startX, this.selectionRect.endX),
-      maxY: Math.max(this.selectionRect.startY, this.selectionRect.endY)
-    };
-
-    // Конвертируем координаты выделения из экранных в мировые
+    // Прямоугольник выделения в МИРОВЫХ координатах
     const worldRect = {
-      minX: (rect.minX - panX) / scale,
-      minY: (rect.minY - panY) / scale,
-      maxX: (rect.maxX - panX) / scale,
-      maxY: (rect.maxY - panY) / scale
+      minX: (Math.min(startX, endX) - panX) / scale,
+      minY: (Math.min(startY, endY) - panY) / scale,
+      maxX: (Math.max(startX, endX) - panX) / scale,
+      maxY: (Math.max(startY, endY) - panY) / scale
     };
 
+    const allElements = this.getAllElements();
     const selected = [];
-    // ПОЛУЧАЕМ ЭЛЕМЕНТЫ ПРАВИЛЬНО
-    const allElements = this.elements.value || [];
+    const lm = layerManager || this.layerManager;
 
-    console.log('Selection rect:', rect, 'World rect:', worldRect);
-    console.log('Total elements:', allElements.length);
+    // Получаем canvas контекст для hit testing
+    const canvas = this.renderer.canvas;
+    const ctx = canvas.getContext('2d');
+
+    // Сохраняем и применяем трансформации как при рисовании
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(scale, scale);
+
+    // Шаг проверки зависит от масштаба (чем больше зум, тем мельче шаг)
+    const step = Math.max(5, 15 / scale);
 
     for (const element of allElements) {
-      try {
-        // Проверяем, можно ли выделить элемент
-        const currentLayerManager = layerManager || this.layerManager;
-        if (currentLayerManager && currentLayerManager.isLayerLocked(element)) {
-          continue;
-        }
+      // Пропускаем заблокированные элементы
+      if (lm && lm.isLayerLocked && lm.isLayerLocked(element)) {
+        continue;
+      }
 
-        if (this.isElementIntersectsRect(element, worldRect)) {
-          console.log('Element selected:', element.id, element.name);
-          selected.push(element);
+      // Быстрая проверка по bounding box
+      const elementBounds = this.getElementBounds(element);
+      if (elementBounds.maxX < worldRect.minX ||
+        elementBounds.minX > worldRect.maxX ||
+        elementBounds.maxY < worldRect.minY ||
+        elementBounds.minY > worldRect.maxY) {
+        continue;
+      }
+
+      // Точная проверка через hitTest
+      let hit = false;
+
+      // Проверяем точки внутри прямоугольника выделения
+      for (let x = worldRect.minX; x <= worldRect.maxX && !hit; x += step) {
+        for (let y = worldRect.minY; y <= worldRect.maxY && !hit; y += step) {
+          if (element.hitTest && element.hitTest(x, y, ctx)) {
+            hit = true;
+            break;
+          }
         }
-      } catch (error) {
-        console.warn('Error checking element intersection:', error);
+      }
+
+      // Дополнительно проверяем границы прямоугольника
+      if (!hit) {
+        const edges = [
+          // Верхняя граница
+          ...this.generatePointsOnLine(worldRect.minX, worldRect.minY, worldRect.maxX, worldRect.minY, step),
+          // Нижняя граница
+          ...this.generatePointsOnLine(worldRect.minX, worldRect.maxY, worldRect.maxX, worldRect.maxY, step),
+          // Левая граница
+          ...this.generatePointsOnLine(worldRect.minX, worldRect.minY, worldRect.minX, worldRect.maxY, step),
+          // Правая граница
+          ...this.generatePointsOnLine(worldRect.maxX, worldRect.minY, worldRect.maxX, worldRect.maxY, step)
+        ];
+
+        for (const point of edges) {
+          if (element.hitTest && element.hitTest(point.x, point.y, ctx)) {
+            hit = true;
+            break;
+          }
+        }
+      }
+
+      if (hit) {
+        selected.push(element);
       }
     }
 
-    console.log('Selected count:', selected.length);
+    ctx.restore();
 
+    // Обновляем выделение
     this.selectedElements = selected;
     if (this.renderer) {
       this.renderer.setSelectedElements(selected);
@@ -167,7 +174,38 @@ export class SelectionManager {
     return selected;
   }
 
+  // Генерация точек на линии
+  generatePointsOnLine(x1, y1, x2, y2, step) {
+    const points = [];
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    const steps = Math.max(1, Math.ceil(length / step));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      points.push({
+        x: x1 + (x2 - x1) * t,
+        y: y1 + (y2 - y1) * t
+      });
+    }
+    return points;
+  }
+
+  // Получение bounding box элемента
+  getElementBounds(element) {
+    const width = element.getWidth();
+    const height = element.getHeight();
+    const topLeft = element.getTopLeft();
+
+    return {
+      minX: topLeft.x,
+      minY: topLeft.y,
+      maxX: topLeft.x + width,
+      maxY: topLeft.y + height
+    };
+  }
+
   cleanup() {
-    // nothing to clean
+    this.selectionRect = null;
+    this.selectedElements = [];
   }
 }

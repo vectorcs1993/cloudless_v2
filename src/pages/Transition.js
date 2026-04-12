@@ -127,10 +127,11 @@ export class Transition extends DuctBase {
     return params;
   }
 
+  // ИСПРАВЛЕННЫЙ createPath
   createPath(ctx) {
     const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
-    const width = this.getWidth();
+    const endX = topLeft.x + this.getWidth();
     const centerY = this.y;
 
     ctx.save();
@@ -140,7 +141,7 @@ export class Transition extends DuctBase {
 
     ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + width, centerY);
+    ctx.lineTo(endX, centerY);
 
     ctx.restore();
   }
@@ -153,14 +154,6 @@ export class Transition extends DuctBase {
     ctx.lineWidth = this.lineWidth;
     ctx.stroke();
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
-  }
-
-  hitTest(worldX, worldY, ctx) {
-    this.createPath(ctx);
-    ctx.lineWidth = this.lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    return ctx.isPointInStroke(worldX, worldY);
   }
 
   getPorts() {

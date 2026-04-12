@@ -114,13 +114,41 @@ export class Tee extends DuctBase {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
-  // ТОЧНО КАК В DuctDirect
+  // В Tee.js и Cross.js, замените hitTest:
+
   hitTest(worldX, worldY, ctx) {
+    ctx.save();
+
+    const rotation = this.rotation || 0;
+    ctx.translate(this.x, this.y);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
     this.createPath(ctx);
-    ctx.lineWidth = this.lineWidth;
+    const hitLineWidth = Math.max(this.lineWidth + 8, 15);
+    ctx.lineWidth = hitLineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    return ctx.isPointInStroke(worldX, worldY);
+
+    let hit = ctx.isPointInStroke(worldX, worldY);
+
+    if (!hit) {
+      const offsets = [-3, -2, -1, 0, 1, 2, 3];
+      for (const dx of offsets) {
+        for (const dy of offsets) {
+          ctx.beginPath();
+          this.createPath(ctx);
+          if (ctx.isPointInStroke(worldX + dx, worldY + dy)) {
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+    }
+
+    ctx.restore();
+    return hit;
   }
 
   getPorts() {

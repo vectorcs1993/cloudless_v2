@@ -60,18 +60,6 @@ export const dragItems = Object.freeze([
       <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
     </svg>`
   },
-  {
-    type: 'fan',
-    label: 'Вентилятор',
-    color: '#f39c12',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="18" fill="#f39c12" stroke="#2c3e50" stroke-width="2"/>
-      <path d="M32 14 L32 8 M32 56 L32 50 M14 32 L8 32 M56 32 L50 32 M20 20 L16 16 M44 44 L48 48 M20 44 L16 48 M44 20 L48 16" stroke="#2c3e50" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="32" cy="32" r="6" fill="#e67e22"/>
-    </svg>`
-  },
 ]);
 
 // ========== БАЗОВЫЙ КЛАСС ЭЛЕМЕНТА ==========
@@ -145,7 +133,6 @@ export class BaseElement {
     return {
       'duct': 'Прямой воздуховод',
       'transition': 'Переход',
-      'fan': 'Вентилятор',
       'tee': 'Тройник',
       'elbow': 'Отвод',
       'cross': 'Крестовина',
@@ -157,8 +144,13 @@ export class BaseElement {
   getHeight() { throw new Error('Метод getHeight должен быть переопределен'); }
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
-  hitTest(worldX, worldY) { throw new Error('Метод hitTest должен быть переопределен'); }
-
+  hitTest(worldX, worldY, ctx) {
+    this.createPath(ctx);
+    ctx.lineWidth = this.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    return ctx.isPointInStroke(worldX, worldY);
+  }
   setStrokeStyle(ctx, scale, isSelected, isHighlighted, isDarkTheme) {
     ctx.lineWidth = this.lineWidth;
     if (isSelected) {
