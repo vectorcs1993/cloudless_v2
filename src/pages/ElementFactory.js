@@ -152,6 +152,11 @@ export class ElementFactory {
           port.connectedPortId = foundPort.connectedPortId || null;
         }
       });
+
+      // ВАЖНО: обновляем мировые координаты портов
+      if (typeof element.updatePorts === 'function') {
+        element.updatePorts();
+      }
     }
 
     // Восстанавливаем выноски (для не-групп, у групп уже восстановлены)
@@ -165,11 +170,7 @@ export class ElementFactory {
       element.showCallout = jsonData.showCallout;
     }
 
-    // Обновляем порты и выноски после загрузки
-    if (typeof element.updatePorts === 'function') {
-      element.updatePorts();
-    }
-
+    // Обновляем выноски после загрузки
     if (typeof element.updateCalloutText === 'function') {
       element.updateCalloutText();
     }

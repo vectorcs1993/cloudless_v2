@@ -34,10 +34,18 @@ export class LayerManager {
 
   // Проверка, заблокирован ли слой элемента
   isLayerLocked(element) {
-    if (!this.layers.value) return false;
+    if (!element) return false;
+
+    // Находим слой, содержащий элемент
     for (const layer of this.layers.value) {
       if (layer.elements.includes(element)) {
         return layer.locked;
+      }
+      // Проверяем, не находится ли элемент внутри группы
+      for (const el of layer.elements) {
+        if (el.type === 'group' && el.elements && el.elements.includes(element)) {
+          return layer.locked;
+        }
       }
     }
     return false;

@@ -27,6 +27,7 @@ export class Group extends BaseElement {
       const topLeft = this.getTopLeft();
       this.addCallout(this.x, topLeft.y - 50);
     }
+
   }
 
   get x() { return this._x; }
@@ -240,13 +241,31 @@ export class Group extends BaseElement {
   }
 
   hitTest(worldX, worldY, ctx) {
-    if (!this.elements) return false;
+    // Сначала проверяем попадание в дочерние элементы
+    if (this.elements && Array.isArray(this.elements)) {
+      for (const element of this.elements) {
+        if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
+          return true;
+        }
+      }
+    }
 
-    for (const element of this.elements) {
-      if (element && element.hitTest && element.hitTest(worldX, worldY, ctx)) {
+    // Если не попали в дочерние элементы, проверяем попадание в рамку группы
+    if (this.width > 0 && this.height > 0) {
+      const topLeft = this.getTopLeft();
+      const tolerance = this._hitTolerance || 5;
+
+      // Проверяем попадание в область рамки (с учетом допуска)
+      const isInBounds = worldX >= topLeft.x - tolerance &&
+        worldX <= topLeft.x + this.width + tolerance &&
+        worldY >= topLeft.y - tolerance &&
+        worldY <= topLeft.y + this.height + tolerance;
+
+      if (isInBounds) {
         return true;
       }
     }
+
     return false;
   }
 

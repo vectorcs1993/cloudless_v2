@@ -158,7 +158,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                        }}</q-item-label></q-item-section>
+                    }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
@@ -176,7 +176,7 @@
                     <q-list dense>
                       <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                         <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                            }}:</q-item-label></q-item-section>
+                        }}:</q-item-label></q-item-section>
                         <q-item-section>
                           <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]" />
                           <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
@@ -652,18 +652,30 @@ const onTreeNodeContextMenu = (event, node) => {
 
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
 
+// Исправленный метод copySelected - разрешаем копирование групп
 const copySelected = () => {
   if (!selectedElements.value.length) return;
-  if (selectedElements.value.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя копировать группы! Сначала разгруппируйте их', timeout: 3000 });
-    return;
-  }
-  clipboardElements.value = selectedElements.value.map(el => ({ ...el.toJSON(), callouts: [] }));
-  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, timeout: 1000 });
+
+  // Убираем ограничение на копирование групп
+  // Теперь можно копировать группы и их содержимое
+
+  clipboardElements.value = selectedElements.value.map(el => {
+    const json = el.toJSON();
+    // Очищаем выноски у копии, чтобы не было дублирования
+    json.callouts = [];
+    return json;
+  });
+
+  showNotify({
+    type: 'positive',
+    message: `Скопировано ${clipboardElements.value.length} элементов (включая группы)`,
+    timeout: 2000
+  });
 };
 
 const pasteElements = () => {
   if (!clipboardElements.value.length) return;
+
   const activeLayer = layerManager.getActiveLayer();
   if (!activeLayer) {
     showNotify({ type: 'warning', message: 'Нет активного слоя для вставки', timeout: 2000 });
@@ -675,26 +687,149 @@ const pasteElements = () => {
   }
 
   const newElements = [];
+  const oldIdToNewId = new Map();
+
+  // Смещение для вставки (50px вниз и вправо)
+  const offsetX = 50;
+  const offsetY = 50;
+
+  // Функция для рекурсивного обновления позиций элементов в группе
+  const updateElementPositions = (element, deltaX, deltaY) => {
+    if (element.x !== undefined) element.x += deltaX;
+    if (element.y !== undefined) element.y += deltaY;
+
+    if (element.type === 'group' && element.elements) {
+      element.elements.forEach(child => updateElementPositions(child, deltaX, deltaY));
+    }
+  };
+
+  // Функция для рекурсивного обновления портов
+  const updatePortsRecursive = (element) => {
+    if (element.updatePorts) {
+      element.updatePorts();
+    }
+    if (element.type === 'group' && element.elements) {
+      element.elements.forEach(child => updatePortsRecursive(child));
+    }
+  };
+
+  // Создаем глубокие копии JSON и обновляем ID
   for (const json of clipboardElements.value) {
-    const newJson = {
-      ...json, id: ++nextElementId, x: json.x + 50, y: json.y + 50,
-      ports: (json.ports || []).map(p => ({ ...p, id: ++nextPortId, connectedElementId: null, connectedPortId: null })),
-      callouts: []
-    };
+    // Глубокая копия JSON
+    const newJson = JSON.parse(JSON.stringify(json));
+
+    // Генерируем новые ID
+    const oldId = newJson.id;
+    const newId = ++nextElementId;
+    oldIdToNewId.set(oldId, newId);
+    newJson.id = newId;
+
+    // Обновляем ID портов
+    if (newJson.ports) {
+      newJson.ports.forEach(port => {
+        port.id = ++nextPortId;
+        port.elementId = newId;
+        port.connectedElementId = null;
+        port.connectedPortId = null;
+      });
+    }
+
+    // Обновляем ID вложенных элементов в группе
+    if (newJson.type === 'group' && newJson.elements) {
+      const updateChildIds = (children) => {
+        for (const child of children) {
+          const childOldId = child.id;
+          const childNewId = ++nextElementId;
+          oldIdToNewId.set(childOldId, childNewId);
+          child.id = childNewId;
+
+          if (child.ports) {
+            child.ports.forEach(port => {
+              port.id = ++nextPortId;
+              port.elementId = childNewId;
+              port.connectedElementId = null;
+              port.connectedPortId = null;
+            });
+          }
+
+          if (child.type === 'group' && child.elements) {
+            updateChildIds(child.elements);
+          }
+        }
+      };
+      updateChildIds(newJson.elements);
+    }
+
+    // Смещаем позицию
+    newJson.x = (newJson.x || 0) + offsetX;
+    newJson.y = (newJson.y || 0) + offsetY;
+    newJson.callouts = []; // Очищаем выноски
+
     const el = ElementFactory.createFromJSON(newJson);
-    el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
-    el.updatePorts?.();
-    el.addCallout?.(el.x, el.y - 150);
-    newElements.push(el);
+    if (el) {
+      el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
+
+      // Для групп обновляем позиции всех вложенных элементов
+      if (el.type === 'group' && el.elements) {
+        updateElementPositions(el, offsetX, offsetY);
+        el.updateBounds();
+      }
+
+      newElements.push(el);
+    }
   }
+
+  // Восстанавливаем связи между скопированными элементами
+  for (let i = 0; i < newElements.length; i++) {
+    const newEl = newElements[i];
+    const oldJson = clipboardElements.value[i];
+
+    if (newEl.ports && oldJson.ports) {
+      for (let pIdx = 0; pIdx < newEl.ports.length; pIdx++) {
+        const newPort = newEl.ports[pIdx];
+        const oldPort = oldJson.ports[pIdx];
+
+        if (oldPort.connectedElementId && oldPort.connectedPortId) {
+          const newTargetId = oldIdToNewId.get(oldPort.connectedElementId);
+          if (newTargetId) {
+            const targetElement = newElements.find(el => el.id === newTargetId);
+            if (targetElement && targetElement.ports) {
+              const targetPort = targetElement.ports.find(p => p.id === oldPort.connectedPortId);
+              if (targetPort) {
+                connectionManager.connectPorts(newPort, targetPort);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Обновляем порты у всех созданных элементов
+  for (const el of newElements) {
+    updatePortsRecursive(el);
+  }
+
+  // Добавляем элементы в слой
   activeLayer.elements.push(...newElements);
   layers.value = [...layers.value];
-  updateSelection(newElements);
-  scheduleRender();
-  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`, timeout: 2000 });
-};
 
-// ========== HOTKEYS ==========
+  // ВАЖНО: выделяем новые элементы и обновляем renderer
+  updateSelection(newElements);
+
+  // Принудительно обновляем выделение в renderer
+  if (renderer) {
+    renderer.setSelectedElements(newElements);
+  }
+
+  scheduleRender();
+
+  showNotify({
+    type: 'positive',
+    message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`,
+    timeout: 2000
+  });
+};
 
 const handleKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }

@@ -34,11 +34,213 @@ export class InteractionManager {
   }
 
   // Проверка, можно ли взаимодействовать с элементом
+  // В InteractionManager.js
   isElementInteractive(element) {
     if (!this.layerManager) return true;
+
+    // Если элемент - группа, проверяем её слой
+    if (element.type === 'group') {
+      return !this.layerManager.isLayerLocked(element);
+    }
+
     return !this.layerManager.isLayerLocked(element);
   }
+  // Добавьте этот метод в класс InteractionManager для рекурсивного сбора всех портов из элементов (включая группы)
 
+  getAllPortsFromElements(elements) {
+    const ports = [];
+
+    const collectPorts = (element) => {
+      if (element.type === 'group' && element.elements) {
+        // Рекурсивно собираем порты из элементов группы
+        for (const child of element.elements) {
+          collectPorts(child);
+        }
+      } else if (element.ports) {
+        // Добавляем порты обычного элемента
+        ports.push(...element.ports);
+      }
+    };
+
+    for (const element of elements) {
+      collectPorts(element);
+    }
+
+    return ports;
+  }
+
+  applyPortSnappingForMultiple(elements, deltaWorldX, deltaWorldY, startPositions) {
+    for (const pos of startPositions) {
+      this.setElementPosition(pos.element, pos.x, pos.y);
+    }
+
+    if (!this.options.snapToPorts.value) {
+      this.moveElements(elements, deltaWorldX, deltaWorldY);
+      return;
+    }
+
+    // Собираем все порты из перемещаемых элементов (включая группы)
+    const movingPorts = this.getAllPortsFromElements(elements);
+
+    // Собираем ID всех перемещаемых элементов (включая вложенные в группы)
+    const movingElementIds = new Set();
+    const collectElementIds = (element) => {
+      movingElementIds.add(element.id);
+      if (element.type === 'group' && element.elements) {
+        for (const child of element.elements) {
+          collectElementIds(child);
+        }
+      }
+    };
+    for (const element of elements) {
+      collectElementIds(element);
+    }
+
+    if (movingPorts.length === 0) {
+      this.moveElements(elements, deltaWorldX, deltaWorldY);
+      return;
+    }
+
+    // Ищем ближайший порт для прилипания
+    let bestMatch = null;
+    let bestDistance = Infinity;
+
+    // Получаем все порты из connectionManager
+    const allPorts = this.connectionManager.getAllPorts();
+
+    for (const movingPort of movingPorts) {
+      for (const targetPort of allPorts) {
+        // Пропускаем порты из тех же элементов (СВОИ ПОРТЫ!)
+        if (movingElementIds.has(targetPort.elementId)) continue;
+
+        // Пропускаем, если порт принадлежит тому же элементу, что и перемещаемый порт
+        if (movingPort.elementId === targetPort.elementId) continue;
+
+        // Проверяем, не заблокирован ли слой целевого элемента
+        if (this.layerManager) {
+          const targetElement = this.findElementById(targetPort.elementId);
+          if (targetElement && this.layerManager.isLayerLocked(targetElement)) continue;
+        }
+
+        // Предполагаемое новое положение порта после перемещения
+        const predictedX = movingPort.worldX + deltaWorldX;
+        const predictedY = movingPort.worldY + deltaWorldY;
+
+        const distance = Math.hypot(predictedX - targetPort.worldX, predictedY - targetPort.worldY);
+
+        if (distance < bestDistance && distance < 40) { // Максимальное расстояние прилипания 40px
+          bestDistance = distance;
+          bestMatch = {
+            movingPort,
+            targetPort,
+            offsetX: targetPort.worldX - movingPort.worldX,
+            offsetY: targetPort.worldY - movingPort.worldY
+          };
+        }
+      }
+    }
+
+    if (bestMatch) {
+      this.moveElements(elements, bestMatch.offsetX, bestMatch.offsetY);
+      this.renderer.setHighlightedPort(bestMatch.targetPort);
+
+      // Автоматически соединяем порты
+      if (this.autoUpdateConnections) {
+        this.connectPorts(bestMatch.movingPort, bestMatch.targetPort);
+      }
+    } else {
+      this.moveElements(elements, deltaWorldX, deltaWorldY);
+      this.renderer.setHighlightedPort(null);
+    }
+  }
+
+  startDrag(e) {
+    this.isDragging = true;
+    this.draggingElements = [...this.renderer.selectedElements];
+
+    // Фильтруем элементы на заблокированных слоях
+    this.draggingElements = this.draggingElements.filter(el => this.isElementInteractive(el));
+
+    if (this.draggingElements.length === 0) {
+      this.isDragging = false;
+      return;
+    }
+
+    this.dragStartElementsPositions = this.draggingElements.map(element => ({
+      element,
+      x: element.x,
+      y: element.y,
+      callouts: (element.callouts || []).map(callout => ({
+        callout,
+        x: callout.x,
+        y: callout.y
+      }))
+    }));
+
+    this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
+    this.currentSnappedPorts = [];
+
+    // Собираем все порты из перемещаемых элементов (включая группы)
+    const movingPorts = this.getAllPortsFromElements(this.draggingElements);
+
+    // Собираем ID всех перемещаемых элементов
+    const movingElementIds = new Set();
+    const collectIds = (element) => {
+      movingElementIds.add(element.id);
+      if (element.type === 'group' && element.elements) {
+        for (const child of element.elements) {
+          collectIds(child);
+        }
+      }
+    };
+    for (const element of this.draggingElements) {
+      collectIds(element);
+    }
+
+    for (const movingPort of movingPorts) {
+      if (movingPort.isConnected()) {
+        const targetElement = this.findElementById(movingPort.connectedElementId);
+        // Проверяем, что целевой элемент НЕ входит в перемещаемые
+        if (targetElement && !movingElementIds.has(targetElement.id) && this.isElementInteractive(targetElement)) {
+          const targetPort = targetElement.ports?.find(p => p.id === movingPort.connectedPortId);
+          if (targetPort) {
+            this.currentSnappedPorts.push({ movingPort, targetPort, element: this.draggingElements[0] });
+          }
+        }
+      }
+    }
+
+    this.canvas.style.cursor = 'grabbing';
+    this.renderer.draw();
+  }
+
+  // Исправленный метод moveElement для поддержки групп
+  moveElement(element, deltaX, deltaY) {
+    if (!this.isElementInteractive(element)) return;
+
+    if (element.type === 'group') {
+      // Для группы используем её метод move
+      element.move(deltaX, deltaY);
+      // Обновляем порты всех элементов в группе
+      if (element.elements) {
+        for (const child of element.elements) {
+          if (child.updatePorts) child.updatePorts();
+          if (child.updateCalloutText) child.updateCalloutText();
+        }
+      }
+    } else {
+      element.x += deltaX;
+      element.y += deltaY;
+      element.updatePorts();
+      if (element.callouts) {
+        element.callouts.forEach(callout => {
+          callout.x += deltaX;
+          callout.y += deltaY;
+        });
+      }
+      element.updateCalloutText();
+    }
+  }
   // Получение интерактивных элементов
   getInteractiveElements() {
     if (this.layerManager) {
@@ -176,71 +378,12 @@ export class InteractionManager {
     return null;
   }
 
-  startDrag(e) {
-    this.isDragging = true;
-    this.draggingElements = [...this.renderer.selectedElements];
-
-    // Фильтруем элементы на заблокированных слоях
-    this.draggingElements = this.draggingElements.filter(el => this.isElementInteractive(el));
-
-    if (this.draggingElements.length === 0) {
-      this.isDragging = false;
-      return;
-    }
-
-    this.dragStartElementsPositions = this.draggingElements.map(element => ({
-      element,
-      x: element.x,
-      y: element.y,
-      callouts: (element.callouts || []).map(callout => ({
-        callout,
-        x: callout.x,
-        y: callout.y
-      }))
-    }));
-    this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
-    this.currentSnappedPorts = [];
-    for (const element of this.draggingElements) {
-      if (element.type !== 'group') {
-        const connectedPort = element.ports?.find(p => p.isConnected());
-        if (connectedPort) {
-          const targetElement = this.findElementById(connectedPort.connectedElementId);
-          if (targetElement && !this.draggingElements.includes(targetElement) && this.isElementInteractive(targetElement)) {
-            const targetPort = targetElement.ports?.find(p => p.id === connectedPort.connectedPortId);
-            if (targetPort) {
-              this.currentSnappedPorts.push({ movingPort: connectedPort, targetPort, element });
-            }
-          }
-        }
-      }
-    }
-    this.canvas.style.cursor = 'grabbing';
-    this.renderer.draw();
-  }
 
   startPan(e) {
     this.isPanning = true;
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
     this.dragStartPan = { x: this.options.panX.value, y: this.options.panY.value };
     this.canvas.style.cursor = 'grabbing';
-  }
-
-  moveElement(element, deltaX, deltaY) {
-    if (!this.isElementInteractive(element)) return;
-    if (element.type === 'group') {
-      element.move(deltaX, deltaY);
-    } else {
-      element.x += deltaX;
-      element.y += deltaY;
-      element.updatePorts();
-      if (element.callouts) {
-        element.callouts.forEach(callout => {
-          callout.x += deltaX;
-          callout.y += deltaY;
-        });
-      }
-      element.updateCalloutText();
-    }
   }
 
   moveElements(elements, deltaX, deltaY) {
@@ -268,32 +411,6 @@ export class InteractionManager {
     }
     this.connectionManager.connectPorts(movingPort, targetPort);
     this.currentSnappedPorts = [{ movingPort, targetPort, element: this.draggingElements[0] }];
-  }
-
-  applyPortSnappingForMultiple(elements, deltaWorldX, deltaWorldY, startPositions) {
-    for (const pos of startPositions) {
-      this.setElementPosition(pos.element, pos.x, pos.y);
-    }
-
-    if (!this.options.snapToPorts.value) {
-      this.moveElements(elements, deltaWorldX, deltaWorldY);
-      return;
-    }
-
-    // Используем новый метод, который учитывает все перемещаемые элементы
-    const bestMatch = this.connectionManager.findClosestPortsForMovingWithMultiple(
-      elements, deltaWorldX, deltaWorldY, 40, this.layerManager
-    );
-
-    if (bestMatch) {
-      const adjustedDeltaX = deltaWorldX + bestMatch.offsetX;
-      const adjustedDeltaY = deltaWorldY + bestMatch.offsetY;
-      this.moveElements(elements, adjustedDeltaX, adjustedDeltaY);
-      this.renderer.setHighlightedPort(bestMatch.targetPort);
-    } else {
-      this.moveElements(elements, deltaWorldX, deltaWorldY);
-      this.renderer.setHighlightedPort(null);
-    }
   }
 
   updateSelectedElementReactive() {
