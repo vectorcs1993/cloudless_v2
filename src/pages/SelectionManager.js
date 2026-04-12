@@ -1,7 +1,8 @@
 export class SelectionManager {
-  constructor(elements, renderer) {
+  constructor(elements, renderer, layerManager = null) {
     this.elements = elements;
     this.renderer = renderer;
+    this.layerManager = layerManager; // Добавляем layerManager
     this.selectedElements = [];
     this.selectionRect = null;
     this.tempCanvas = null;
@@ -41,6 +42,12 @@ export class SelectionManager {
         this.renderer.updateSelectionRect(x, y);
       }
     }
+  }
+
+  // Проверка, можно ли выделить элемент (не заблокирован)
+  isElementSelectable(element) {
+    if (!this.layerManager) return true;
+    return !this.layerManager.isLayerLocked(element);
   }
 
   // Простая проверка пересечения через bounding box
@@ -138,6 +145,11 @@ export class SelectionManager {
 
     for (const element of this.elements.value) {
       try {
+        // ПРОВЕРЯЕМ: можно ли выделить элемент (не заблокирован)
+        if (!this.isElementSelectable(element)) {
+          continue; // Пропускаем заблокированные элементы
+        }
+
         if (this.isElementIntersectsRect(element, worldRect, scale)) {
           selected.push(element);
         }
