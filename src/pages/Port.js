@@ -11,8 +11,7 @@ export class Port {
     this.worldY = worldY;
     this.connectedElementId = null;
     this.connectedPortId = null;
-    // Фиксированный радиус порта в пикселях
-    this.radius = 5;
+    this.radius = 3;
   }
 
   isConnected() {
@@ -39,6 +38,23 @@ export class Port {
     const dy = pointY - centerY;
     this.worldX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX;
     this.worldY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
+  }
+
+  // Простой метод отрисовки порта
+  draw(ctx, scale, isDarkTheme) {
+    if (this.worldX === undefined || this.worldY === undefined) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.worldX, this.worldY, this.radius, 0, 2 * Math.PI);
+    // Красный залитый кружок
+    ctx.fillStyle = '#ff0000';
+    ctx.fill();
+    // Черная обводка
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1 / scale;
+    ctx.stroke();
+    ctx.restore();
   }
 
   toJSON() {

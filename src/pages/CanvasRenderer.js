@@ -305,7 +305,6 @@ export class CanvasRenderer {
 
     const collectPorts = (elements) => {
       for (const element of elements) {
-        // Собираем порты только для видимых элементов
         if (this.isElementVisible(element) && element.ports?.length) {
           allPorts.push(...element.ports);
         }
@@ -329,28 +328,8 @@ export class CanvasRenderer {
         continue;
       }
 
-      const isHighlighted = this.highlightedPort && this.highlightedPort.id === port.id;
-      const radius = this.getPortRadius(port, isHighlighted);
-      const color = this.getPortColor(port, isHighlighted);
-
-      ctx.save();
-      if (isHighlighted) {
-        ctx.shadowColor = '#ff00ff';
-      }
-      ctx.beginPath();
-      ctx.arc(port.worldX, port.worldY, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = this.portSettings.borderWidth / this.scale.value;
-      ctx.stroke();
-      if (port.isConnected?.()) {
-        ctx.beginPath();
-        ctx.arc(port.worldX, port.worldY, radius * 0.4, 0, 2 * Math.PI);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-      }
-      ctx.restore();
+      // Просто рисуем порт через его собственный метод
+      port.draw(ctx, this.scale.value, this.options.isDarkTheme.value);
     }
   }
 
