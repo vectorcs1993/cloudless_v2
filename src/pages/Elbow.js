@@ -54,11 +54,46 @@ export class Elbow extends DuctBase {
     return `${baseText}\nR: ${this._r} мм`;
   }
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.createPath(ctx);
-    if (showColors) {
-      this.setFillStyle(ctx, isSelected, false);
+    const rotation = this.rotation || 0;
+    const centerX = this.x;
+    const centerY = this.y;
+    const topLeft = this.getTopLeft();
+    const size_px = this.getSizePx();
+    const radius_px = this.mmToPx(this._r);
+    const bendCenterX = topLeft.x;
+    const bendCenterY = topLeft.y + this.getHeight();
+    const centerRadius_px = radius_px + size_px / 2;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation * Math.PI / 180);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.beginPath();
+
+    // Рисуем дугу (центральная линия)
+    ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
+
+    // Подводящая горизонтальная линия
+    ctx.moveTo(bendCenterX, bendCenterY - centerRadius_px);
+    ctx.lineTo(topLeft.x, bendCenterY - centerRadius_px);
+
+    // Отводящая вертикальная линия
+    ctx.moveTo(bendCenterX + centerRadius_px, bendCenterY);
+    ctx.lineTo(bendCenterX + centerRadius_px, topLeft.y + this.getHeight());
+
+    if (isSelected) {
+      ctx.strokeStyle = '#e5ff00';
+    } else if (isHighlighted) {
+      ctx.strokeStyle = '#00c8ff';
+    } else {
+      ctx.strokeStyle = this.color;
     }
-    this.setStrokeStyle(ctx, scale, isSelected, isHighlighted, false);
+    ctx.lineWidth = 2 * this._hitTolerance;
+    ctx.stroke();
+
+    ctx.restore();
+
     if (showElementAxes) {
       this.drawCenterLines(ctx, scale, isDarkTheme);
     }
@@ -211,67 +246,18 @@ export class Elbow extends DuctBase {
       local.y <= bendCenterY;
 
     // Проверяем расстояние до дуги
-    const distFromBendCenter = Math.sqrt(
-      Math.pow(local.x - bendCenterX, 2) +
-      Math.pow(local.y - bendCenterY, 2)
-    );
+    const dx = local.x - bendCenterX;
+    const dy = local.y - bendCenterY;
+    const distFromBendCenter = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     const isOnArc =
       Math.abs(distFromBendCenter - centerRadius_px) <= this._hitTolerance &&
-      local.x >= bendCenterX &&
-      local.y >= bendCenterY - centerRadius_px;
+      angle >= -90 && angle <= 0;
 
     return isOnHorizontalLine || isOnVerticalLine || isOnArc;
   }
 
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    const rotation = this.rotation || 0;
-    const centerX = this.x;
-    const centerY = this.y;
-    const topLeft = this.getTopLeft();
-    const size_px = this.getSizePx();
-    const radius_px = this.mmToPx(this._r);
-    const bendCenterX = topLeft.x;
-    const bendCenterY = topLeft.y + this.getHeight();
-    const centerRadius_px = radius_px + size_px / 2;
 
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.beginPath();
-
-    // Рисуем дугу (центральная линия)
-    ctx.arc(bendCenterX, bendCenterY, centerRadius_px, Math.PI * 1.5, Math.PI * 2);
-
-    ctx.lineWidth = 2 * this._hitTolerance;
-    if (isSelected) {
-      ctx.strokeStyle = '#e5ff00';
-    } else if (isHighlighted) {
-      ctx.strokeStyle = '#00c8ff';
-    } else {
-      ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
-    }
-    ctx.stroke();
-
-    // Рисуем прямую подводящую линию
-    ctx.beginPath();
-    ctx.moveTo(bendCenterX, bendCenterY - centerRadius_px);
-    ctx.lineTo(topLeft.x, bendCenterY - centerRadius_px);
-    ctx.stroke();
-
-    // Рисуем прямую отводящую линию
-    ctx.beginPath();
-    ctx.moveTo(bendCenterX + centerRadius_px, bendCenterY);
-    ctx.lineTo(bendCenterX + centerRadius_px, topLeft.y + this.getHeight());
-    ctx.stroke();
-
-    ctx.restore();
-
-    if (showElementAxes) {
-      this.drawCenterLines(ctx, scale, isDarkTheme);
-    }
-  }
   toJSON() {
     const base = super.toJSON();
     return {

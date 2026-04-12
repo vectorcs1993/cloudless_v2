@@ -369,6 +369,7 @@ export class DuctBase extends BaseElement {
     super(id, type, x, y, name);
     this._a = size;
     this._sectionType = sectionType;
+    this._color = '#4a90e2';
   }
 
   get a() { return this._a; }
@@ -388,6 +389,13 @@ export class DuctBase extends BaseElement {
     this.updateCalloutText();
   }
 
+  get color() { return this._color; }
+
+  set color(value) {
+    if (this._color === value) return;
+    this._color = value;
+  }
+
   // Размер в пикселях для отрисовки
   getSizePx() {
     return this.mmToPx(this._a);
@@ -399,6 +407,12 @@ export class DuctBase extends BaseElement {
   getParameters() {
     return [
       ...super.getParameters(),
+      {
+        name: 'color',
+        label: 'Цвет',
+        type: 'color',
+        value: this.color
+      },
       {
         name: 'sectionType', label: 'Тип сечения', type: 'select', options: [
           { value: 'rectangular', label: 'Прямоугольное' },

@@ -50,7 +50,7 @@ export class Fan extends DuctDirect {
     } else if (isHighlighted) {
       ctx.strokeStyle = '#00c8ff';
     } else {
-      ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
+      ctx.strokeStyle = this.color;
     }
 
     // Линия подвода от треугольника до левого порта

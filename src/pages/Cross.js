@@ -351,7 +351,7 @@ export class Cross extends DuctBase {
     } else if (isHighlighted) {
       ctx.strokeStyle = '#00c8ff';
     } else {
-      ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
+      ctx.strokeStyle = this.color;
     }
     ctx.stroke();
 
