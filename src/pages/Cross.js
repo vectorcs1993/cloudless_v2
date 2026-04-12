@@ -9,32 +9,26 @@ export class Cross extends DuctBase {
     this._l2 = 250;
   }
 
-  getSizePx() { return 0; }
-
   get a() { return this._a; }
   set a(value) {
-    if (this._a === value) return;
     this._a = Math.max(20, Math.min(1000, value));
     this.updateCalloutText();
   }
 
   get b() { return this._b; }
   set b(newB) {
-    if (this._b === newB) return;
     this._b = Math.max(20, Math.min(1000, newB));
     this.updateCalloutText();
   }
 
   get l1() { return this._l1; }
   set l1(newLength) {
-    if (this._l1 === newLength) return;
     this._l1 = Math.max(50, Math.min(5000, newLength));
     this.updatePorts();
   }
 
   get l2() { return this._l2; }
   set l2(newLength) {
-    if (this._l2 === newLength) return;
     this._l2 = Math.max(50, Math.min(5000, newLength));
     this.updatePorts();
   }
@@ -97,6 +91,7 @@ export class Cross extends DuctBase {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
+  // ТОЧНО КАК В DuctDirect
   hitTest(worldX, worldY, ctx) {
     this.createPath(ctx);
     ctx.lineWidth = this.lineWidth;
@@ -149,5 +144,7 @@ export class Cross extends DuctBase {
     ctx.restore();
   }
 
-  toJSON() { return { ...super.toJSON(), b: this._b, l1: this._l1, l2: this._l2 }; }
+  toJSON() {
+    return { ...super.toJSON(), b: this._b, l1: this._l1, l2: this._l2 };
+  }
 }

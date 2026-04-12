@@ -51,23 +51,37 @@ export class CanvasRenderer {
     const centerX = element.x;
     const centerY = element.y;
 
-    // Половина размера элемента
     const halfW = width / 2;
     const halfH = height / 2;
 
-    // Проверка пересечения bounding box элемента с видимой областью
     return !(centerX + halfW < this.visibleBounds.minX ||
       centerX - halfW > this.visibleBounds.maxX ||
       centerY + halfH < this.visibleBounds.minY ||
       centerY - halfH > this.visibleBounds.maxY);
   }
 
-  // Проверка, видна ли выноска
   isCalloutVisible(callout, element) {
     return !(callout.x < this.visibleBounds.minX - 100 ||
       callout.x > this.visibleBounds.maxX + 100 ||
       callout.y < this.visibleBounds.minY - 50 ||
       callout.y > this.visibleBounds.maxY + 50);
+  }
+
+  // ОБНОВЛЕНИЕ ВИДИМОЙ ОБЛАСТИ
+  updateVisibleBounds() {
+    if (!this.canvas) return;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const topLeft = this.screenToWorld(0, 0);
+    const bottomRight = this.screenToWorld(rect.width, rect.height);
+
+    this.visibleBounds = {
+      minX: Math.min(topLeft.x, bottomRight.x) - 200,
+      minY: Math.min(topLeft.y, bottomRight.y) - 200,
+      maxX: Math.max(topLeft.x, bottomRight.x) + 200,
+      maxY: Math.max(topLeft.y, bottomRight.y) + 200
+    };
   }
 
   draw() {
@@ -81,6 +95,9 @@ export class CanvasRenderer {
 
     this.canvas.width = rect.width;
     this.canvas.height = rect.height;
+
+    // Обновляем видимую область перед отрисовкой
+    this.updateVisibleBounds();
 
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.save();
@@ -129,7 +146,7 @@ export class CanvasRenderer {
       ctx.save();
       ctx.globalAlpha = 0.6;
       try {
-        this.ghostElement.draw(ctx, this.scale.value, false, this.options.isDarkTheme.value,
+        this.ghostElement.draw(ctx, this.scale.value, false, false, this.options.isDarkTheme.value,
           this.options.showPorts.value, this.options.showColors.value,
           this.options.showElementAxes.value);
       } catch (err) {
@@ -185,11 +202,11 @@ export class CanvasRenderer {
   }
 
   setSelectedElements(elements) {
-    this.selectedElements = Array.isArray(elements) ? elements : [elements];
+    this.selectedElements = Array.isArray(elements) ? elements : (elements ? [elements] : []);
   }
 
   setHighlightedElements(elements) {
-    this.highlightedElements = Array.isArray(elements) ? elements : [elements];
+    this.highlightedElements = Array.isArray(elements) ? elements : (elements ? [elements] : []);
   }
 
   clearHighlightedElements() {
@@ -312,7 +329,6 @@ export class CanvasRenderer {
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
 
-      // Проверяем, виден ли порт на экране
       if (port.worldX < this.visibleBounds.minX - 50 ||
         port.worldX > this.visibleBounds.maxX + 50 ||
         port.worldY < this.visibleBounds.minY - 50 ||
@@ -320,7 +336,6 @@ export class CanvasRenderer {
         continue;
       }
 
-      // Просто рисуем порт через его собственный метод
       port.draw(ctx, this.scale.value, this.options.isDarkTheme.value);
     }
   }

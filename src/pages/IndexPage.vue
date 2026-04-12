@@ -169,7 +169,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                        }}</q-item-label></q-item-section>
+                    }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>

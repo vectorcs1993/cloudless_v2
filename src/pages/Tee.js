@@ -11,39 +11,32 @@ export class Tee extends DuctBase {
     this._anglel2 = 90;
   }
 
-  getSizePx() { return 0; }
-
   get a() { return this._a; }
   set a(value) {
-    if (this._a === value) return;
     this._a = Math.max(20, Math.min(1000, value));
     this.updateCalloutText();
   }
 
   get b() { return this._b; }
   set b(newB) {
-    if (this._b === newB) return;
     this._b = Math.max(20, Math.min(1000, newB));
     this.updateCalloutText();
   }
 
   get l1() { return this._l1; }
   set l1(newLength) {
-    if (this._l1 === newLength) return;
     this._l1 = Math.max(50, Math.min(5000, newLength));
     this.updatePorts();
   }
 
   get l2() { return this._l2; }
   set l2(newLength) {
-    if (this._l2 === newLength) return;
     this._l2 = Math.max(50, Math.min(3000, newLength));
     this.updatePorts();
   }
 
   get l3() { return this._l3; }
   set l3(newOffset) {
-    if (this._l3 === newOffset) return;
     const maxOffset = this._l1 / 2;
     this._l3 = Math.max(-maxOffset, Math.min(maxOffset, newOffset));
     this.updatePorts();
@@ -51,7 +44,6 @@ export class Tee extends DuctBase {
 
   get angle() { return this._anglel2; }
   set angle(newAngle) {
-    if (this._anglel2 === newAngle) return;
     this._anglel2 = Math.max(30, Math.min(150, newAngle));
     this.updatePorts();
   }
@@ -59,7 +51,8 @@ export class Tee extends DuctBase {
   getWidth() { return this.mmToPx(this._l1); }
   getHeight() {
     const angleRad = this._anglel2 * Math.PI / 180;
-    return Math.max(0, Math.sin(angleRad) * this.mmToPx(this._l2));
+    const l2Px = this.mmToPx(this._l2);
+    return Math.abs(Math.sin(angleRad) * l2Px);
   }
 
   getTopLeft() {
@@ -91,8 +84,8 @@ export class Tee extends DuctBase {
     const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
     const width = this.getWidth();
-    const offset = this.mmToPx(this._l3);
-    const l2 = this.mmToPx(this._l2);
+    const offsetPx = this.mmToPx(this._l3);
+    const l2Px = this.mmToPx(this._l2);
     const angleRad = this._anglel2 * Math.PI / 180;
     const centerX = this.x;
     const centerY = this.y;
@@ -105,8 +98,8 @@ export class Tee extends DuctBase {
     ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width, centerY);
-    ctx.moveTo(centerX + offset, centerY);
-    ctx.lineTo(centerX + offset + Math.cos(angleRad) * l2, centerY - Math.sin(angleRad) * l2);
+    ctx.moveTo(centerX + offsetPx, centerY);
+    ctx.lineTo(centerX + offsetPx + Math.cos(angleRad) * l2Px, centerY - Math.sin(angleRad) * l2Px);
 
     ctx.restore();
   }
@@ -121,6 +114,7 @@ export class Tee extends DuctBase {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
+  // ТОЧНО КАК В DuctDirect
   hitTest(worldX, worldY, ctx) {
     this.createPath(ctx);
     ctx.lineWidth = this.lineWidth;
@@ -134,15 +128,18 @@ export class Tee extends DuctBase {
     const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
     const width = this.getWidth();
-    const offset = this.mmToPx(this._l3);
-    const l2 = this.mmToPx(this._l2);
+    const offsetPx = this.mmToPx(this._l3);
+    const l2Px = this.mmToPx(this._l2);
     const angleRad = this._anglel2 * Math.PI / 180;
     const centerX = this.x;
     const centerY = this.y;
 
     const leftPos = this.rotatePoint(topLeft.x, centerY, centerX, centerY, rotation);
     const rightPos = this.rotatePoint(topLeft.x + width, centerY, centerX, centerY, rotation);
-    const branchEnd = { x: centerX + offset + Math.cos(angleRad) * l2, y: centerY - Math.sin(angleRad) * l2 };
+    const branchEnd = {
+      x: centerX + offsetPx + Math.cos(angleRad) * l2Px,
+      y: centerY - Math.sin(angleRad) * l2Px
+    };
     const branchPos = this.rotatePoint(branchEnd.x, branchEnd.y, centerX, centerY, rotation);
 
     ports.push(new Port(this.ports?.find(p => p.direction === 'left')?.id || `port_${this.id}_left`, this.id, 'left', 'left', 0, 0, leftPos.x, leftPos.y));
@@ -156,9 +153,10 @@ export class Tee extends DuctBase {
     const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
     const width = this.getWidth();
-    const offset = this.mmToPx(this._l3);
-    const l2 = this.mmToPx(this._l2);
+    const offsetPx = this.mmToPx(this._l3);
+    const l2Px = this.mmToPx(this._l2);
     const angleRad = this._anglel2 * Math.PI / 180;
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(rotation * Math.PI / 180);
@@ -166,8 +164,8 @@ export class Tee extends DuctBase {
     ctx.beginPath();
     ctx.moveTo(topLeft.x, this.y);
     ctx.lineTo(topLeft.x + width, this.y);
-    ctx.moveTo(this.x + offset, this.y);
-    ctx.lineTo(this.x + offset + Math.cos(angleRad) * l2, this.y - Math.sin(angleRad) * l2);
+    ctx.moveTo(this.x + offsetPx, this.y);
+    ctx.lineTo(this.x + offsetPx + Math.cos(angleRad) * l2Px, this.y - Math.sin(angleRad) * l2Px);
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
@@ -176,5 +174,7 @@ export class Tee extends DuctBase {
     ctx.restore();
   }
 
-  toJSON() { return { ...super.toJSON(), b: this._b, l1: this._l1, l2: this._l2, l3: this._l3, anglel2: this._anglel2 }; }
+  toJSON() {
+    return { ...super.toJSON(), b: this._b, l1: this._l1, l2: this._l2, l3: this._l3, anglel2: this._anglel2 };
+  }
 }

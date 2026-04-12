@@ -56,7 +56,6 @@ export class InteractionManager {
 
     if (!this.options.snapToPorts.value) {
       this.moveElements(elements, deltaWorldX, deltaWorldY);
-      // Обновляем порты после перемещения
       for (const element of elements) {
         if (element.updatePorts) element.updatePorts();
       }
@@ -119,17 +118,29 @@ export class InteractionManager {
       this.renderer.setHighlightedPort(null);
     }
 
-    // Обновляем порты после перемещения
     for (const element of elements) {
       if (element.updatePorts) element.updatePorts();
     }
   }
 
-  startDrag(e) {
+  startDrag(e, clickedElement) {
     this.isDragging = true;
-    this.draggingElements = [...this.renderer.selectedElements];
 
-    this.draggingElements = this.draggingElements.filter(el => this.isElementInteractive(el));
+    // Получаем выделенные элементы из renderer
+    const selectedFromRenderer = [...this.renderer.selectedElements];
+
+    // Если кликнули на элемент, который уже выделен - перетаскиваем все выделенные
+    if (clickedElement && selectedFromRenderer.some(el => el.id === clickedElement.id)) {
+      this.draggingElements = selectedFromRenderer.filter(el => this.isElementInteractive(el));
+    }
+    // Если кликнули на элемент, который не выделен - перетаскиваем только его
+    else if (clickedElement) {
+      this.draggingElements = [clickedElement].filter(el => this.isElementInteractive(el));
+    }
+    // Иначе перетаскиваем пустой массив
+    else {
+      this.draggingElements = [];
+    }
 
     if (this.draggingElements.length === 0) {
       this.isDragging = false;
@@ -151,7 +162,6 @@ export class InteractionManager {
     this.currentSnappedPorts = [];
 
     const movingPorts = this.getAllPortsFromElements(this.draggingElements);
-
     const movingElementIds = new Set();
     for (const element of this.draggingElements) {
       movingElementIds.add(element.id);
@@ -306,58 +316,63 @@ export class InteractionManager {
     }
   }
 
+  updateSelection(newSelection, skipCallback = false) {
+    this.renderer.setSelectedElements(newSelection);
+    if (this.selectionManager) {
+      this.selectionManager.setSelectedElements(newSelection);
+    }
+    if (!skipCallback && this.onElementMoveCallback) {
+      this.onElementMoveCallback(newSelection);
+    }
+    this.renderer.draw();
+  }
+
   onMouseDown(e) {
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (e.button === 0) {
       const isCtrlPressed = e.ctrlKey || e.metaKey;
 
+      // Сначала проверяем выноску
       const calloutHit = this.findCalloutAt(worldPos.x, worldPos.y);
       if (calloutHit) {
         this.startDragCallout(calloutHit, e);
         return;
       }
 
+      // Проверяем элемент
       const clickedElement = this.findElementAt(worldPos.x, worldPos.y);
 
       if (clickedElement) {
-        // Проверяем: можно ли взаимодействовать с элементом (не заблокирован)
         if (!this.isElementInteractive(clickedElement)) {
           console.log('Элемент на заблокированном слое, выделение запрещено');
           return;
         }
 
         if (isCtrlPressed) {
-          const index = this.renderer.selectedElements.findIndex(el => el.id === clickedElement.id);
+          // Ctrl+клик: добавляем/убираем из выделения
+          const currentSelection = [...this.renderer.selectedElements];
+          const index = currentSelection.findIndex(el => el.id === clickedElement.id);
+
           if (index === -1) {
-            this.renderer.selectedElements.push(clickedElement);
+            currentSelection.push(clickedElement);
           } else {
-            this.renderer.selectedElements.splice(index, 1);
+            currentSelection.splice(index, 1);
           }
-          this.renderer.draw();
-          if (this.onElementMoveCallback) {
-            this.onElementMoveCallback(this.renderer.selectedElements);
-          }
+          this.updateSelection(currentSelection);
         } else {
           // Обычный клик: выделяем только этот элемент
           if (this.renderer.selectedElements.length !== 1 || this.renderer.selectedElements[0].id !== clickedElement.id) {
-            this.renderer.selectedElements = [clickedElement];
-            this.renderer.draw();
-            if (this.onElementMoveCallback) {
-              this.onElementMoveCallback(this.renderer.selectedElements);
-            }
+            this.updateSelection([clickedElement]);
           }
         }
-        this.startDrag(e);
+
+        // Начинаем перетаскивание
+        this.startDrag(e, clickedElement);
       } else {
         // Клик на пустое место - очищаем выделение
         if (!isCtrlPressed) {
-          this.renderer.selectedElements = [];
-          this.renderer.draw();
-          // ВАЖНО: вызываем callback, чтобы обновить selectedElements в App.vue
-          if (this.onElementMoveCallback) {
-            this.onElementMoveCallback([]);
-          }
+          this.updateSelection([]);
         }
 
         // Начинаем выделение прямоугольником
@@ -368,7 +383,9 @@ export class InteractionManager {
           y: e.clientY - rect.top
         };
         this.selectionStart = screenPos;
-        this.selectionManager.startSelectionRect(screenPos.x, screenPos.y);
+        if (this.selectionManager) {
+          this.selectionManager.startSelectionRect(screenPos.x, screenPos.y);
+        }
         this.renderer.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.draw();
       }
@@ -413,6 +430,7 @@ export class InteractionManager {
       const currentWorldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const deltaWorldX = currentWorldPos.x - startWorldPos.x;
       const deltaWorldY = currentWorldPos.y - startWorldPos.y;
+
       this.applyPortSnappingForMultiple(
         this.draggingElements,
         deltaWorldX,
@@ -435,14 +453,18 @@ export class InteractionManager {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
       };
-      this.selectionManager.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
+      if (this.selectionManager) {
+        this.selectionManager.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
+      }
       this.renderer.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.draw();
       return;
     }
 
+    // Обновляем курсор и подсветку
     let cursorStyle = 'default';
     let elementUnderCursor = null;
+
     if (this.options.showPorts.value) {
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       this.renderer.setHighlightedPort(portUnderCursor);
@@ -472,17 +494,17 @@ export class InteractionManager {
   onMouseUp(e) {
     // Завершаем выделение прямоугольником
     if (this.isSelecting) {
-      const selected = this.selectionManager.endSelectionRect(
-        this.options.panX.value,
-        this.options.panY.value,
-        this.options.scale.value,
-        this.layerManager
-      );
-      this.renderer.setSelectedElements(selected);
-      this.renderer.endSelectionRect();
-      if (this.onElementMoveCallback) {
-        this.onElementMoveCallback(selected);
+      let selected = [];
+      if (this.selectionManager) {
+        selected = this.selectionManager.endSelectionRect(
+          this.options.panX.value,
+          this.options.panY.value,
+          this.options.scale.value,
+          this.layerManager
+        );
       }
+      this.updateSelection(selected);
+      this.renderer.endSelectionRect();
       this.isSelecting = false;
       this.selectionStart = null;
       this.renderer.draw();
@@ -497,12 +519,10 @@ export class InteractionManager {
       this.currentSnappedPorts = null;
       if (this.canvas) this.canvas.style.cursor = '';
 
-      // Обновляем порты
       for (const element of movedElements) {
         if (element.updatePorts) element.updatePorts();
       }
 
-      // ОДНО обновление связей (без setTimeout)
       if (this.autoUpdateConnections && this.options.snapToPorts.value) {
         this.connectionManager.updateAllPortsAndConnections(40, this.layerManager);
       }
@@ -514,9 +534,8 @@ export class InteractionManager {
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
-      this.draggingCalloutParentGroup = null;
-
       if (this.canvas) this.canvas.style.cursor = '';
+
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       if (portUnderCursor && this.options.showPorts.value) {
@@ -540,9 +559,7 @@ export class InteractionManager {
     // Очищаем подсветку порта
     setTimeout(() => {
       if (!this.isDragging && !this.draggingCallout && !this.isSelecting && this.renderer) {
-        if (this.renderer.setHighlightedPort) {
-          this.renderer.setHighlightedPort(null);
-        }
+        this.renderer.setHighlightedPort(null);
         this.renderer.draw();
       }
     }, 100);

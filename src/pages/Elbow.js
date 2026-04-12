@@ -10,10 +10,21 @@ export class Elbow extends DuctDirect {
   }
 
   getSizePx() { return 0; }
+
   get r() { return this._r; }
-  set r(newR) { this._r = newR; this._b = newR; this.updatePorts(); this.updateCalloutText(); }
+  set r(newR) {
+    this._r = newR;
+    this._b = newR;
+    this.updatePorts();
+    this.updateCalloutText();
+  }
+
   get direction() { return this._direction; }
-  set direction(newDir) { this._direction = newDir; this.updatePorts(); this.updateCalloutText(); }
+  set direction(newDir) {
+    this._direction = newDir;
+    this.updatePorts();
+    this.updateCalloutText();
+  }
 
   getPathPoints() {
     const dir = this._direction;
@@ -39,7 +50,6 @@ export class Elbow extends DuctDirect {
   }
 
   getHeight() {
-    const dir = this._direction;
     const size = this.mmToPx(this._r);
     return size * 2;
   }
@@ -51,7 +61,7 @@ export class Elbow extends DuctDirect {
   }
 
   getCalloutText() {
-    let text = `${this.name}\nРазмер: ${this._r} мм`;
+    let text = `${this.name}\nРадиус: ${this._r} мм`;
     if (this._sectionType === 'rectangular') {
       text += `\n${this._a}x${this._c} мм\nDэкв: ${this.getEquivalentDiameter().toFixed(0)} мм`;
     } else {
@@ -66,10 +76,12 @@ export class Elbow extends DuctDirect {
     return [...paramsWithoutB,
     {
       name: 'direction', label: 'Направление', type: 'select', options: [
-        { value: 'bottom', label: '↓' }, { value: 'bottom-left', label: '↙' }, { value: 'bottom-right', label: '↘' }
+        { value: 'bottom', label: '↓' },
+        { value: 'bottom-left', label: '↙' },
+        { value: 'bottom-right', label: '↘' }
       ], value: this._direction
     },
-    { name: 'r', label: 'Размер', type: 'number', step: 10, min: 30, value: this._r, unit: 'мм' }
+    { name: 'r', label: 'Радиус', type: 'number', step: 10, min: 30, value: this._r, unit: 'мм' }
     ];
   }
 
@@ -100,6 +112,7 @@ export class Elbow extends DuctDirect {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
+  // ТОЧНО КАК В DuctDirect
   hitTest(worldX, worldY, ctx) {
     this.createPath(ctx);
     ctx.lineWidth = this.lineWidth;
@@ -114,8 +127,15 @@ export class Elbow extends DuctDirect {
     const { inlet, outlet } = this.getPathPoints();
     const inletPos = this.rotatePoint(inlet.x, inlet.y, this.x, this.y, rotation);
     const outletPos = this.rotatePoint(outlet.x, outlet.y, this.x, this.y, rotation);
-    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`, this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y));
-    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`, this.id, 'outlet', 'bottom', 0, 0, outletPos.x, outletPos.y));
+
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
+      this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y
+    ));
+    ports.push(new Port(
+      this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
+      this.id, 'outlet', 'bottom', 0, 0, outletPos.x, outletPos.y
+    ));
     return ports;
   }
 
@@ -138,5 +158,7 @@ export class Elbow extends DuctDirect {
     ctx.restore();
   }
 
-  toJSON() { return { ...super.toJSON(), r: this._r, direction: this._direction }; }
+  toJSON() {
+    return { ...super.toJSON(), r: this._r, direction: this._direction };
+  }
 }

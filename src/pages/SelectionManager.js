@@ -1,16 +1,14 @@
 export class SelectionManager {
   constructor(elements, renderer, layerManager = null) {
-    this.elements = elements;
+    this.elements = elements; // reactive ref to elements
     this.renderer = renderer;
-    this.layerManager = layerManager; // Добавляем layerManager
+    this.layerManager = layerManager;
     this.selectedElements = [];
     this.selectionRect = null;
-    this.tempCanvas = null;
-    this.tempCtx = null;
   }
 
   setSelectedElements(elements) {
-    this.selectedElements = Array.isArray(elements) ? elements : [elements];
+    this.selectedElements = Array.isArray(elements) ? elements : (elements ? [elements] : []);
     if (this.renderer) {
       this.renderer.setSelectedElements(this.selectedElements);
     }
@@ -44,34 +42,17 @@ export class SelectionManager {
     }
   }
 
-  // Проверка, можно ли выделить элемент (не заблокирован)
   isElementSelectable(element) {
     if (!this.layerManager) return true;
     return !this.layerManager.isLayerLocked(element);
   }
 
-  // Простая проверка пересечения через bounding box
-  isElementIntersectsRect(element, worldRect, scale) {
-    // Получаем bounding box элемента
-    const bounds = this.getElementBounds(element);
-
-    // Проверка на пересечение прямоугольников
-    const intersects = !(bounds.maxX < worldRect.minX ||
-      bounds.minX > worldRect.maxX ||
-      bounds.maxY < worldRect.minY ||
-      bounds.minY > worldRect.maxY);
-
-    return intersects;
-  }
-
-  // Получение ограничивающего прямоугольника элемента
   getElementBounds(element) {
     const width = element.getWidth();
     const height = element.getHeight();
     const topLeft = element.getTopLeft();
-
-    // Учитываем поворот для bounding box
     const rotation = element.rotation || 0;
+
     if (rotation !== 0) {
       const corners = [
         { x: topLeft.x, y: topLeft.y },
@@ -111,7 +92,16 @@ export class SelectionManager {
     };
   }
 
-  endSelectionRect(panX, panY, scale) {
+  isElementIntersectsRect(element, worldRect) {
+    const bounds = this.getElementBounds(element);
+
+    return !(bounds.maxX < worldRect.minX ||
+      bounds.minX > worldRect.maxX ||
+      bounds.maxY < worldRect.minY ||
+      bounds.minY > worldRect.maxY);
+  }
+
+  endSelectionRect(panX, panY, scale, layerManager = null) {
     if (!this.selectionRect) return [];
 
     const width = Math.abs(this.selectionRect.endX - this.selectionRect.startX);
@@ -142,21 +132,30 @@ export class SelectionManager {
     };
 
     const selected = [];
+    // ПОЛУЧАЕМ ЭЛЕМЕНТЫ ПРАВИЛЬНО
+    const allElements = this.elements.value || [];
 
-    for (const element of this.elements.value) {
+    console.log('Selection rect:', rect, 'World rect:', worldRect);
+    console.log('Total elements:', allElements.length);
+
+    for (const element of allElements) {
       try {
-        // ПРОВЕРЯЕМ: можно ли выделить элемент (не заблокирован)
-        if (!this.isElementSelectable(element)) {
-          continue; // Пропускаем заблокированные элементы
+        // Проверяем, можно ли выделить элемент
+        const currentLayerManager = layerManager || this.layerManager;
+        if (currentLayerManager && currentLayerManager.isLayerLocked(element)) {
+          continue;
         }
 
-        if (this.isElementIntersectsRect(element, worldRect, scale)) {
+        if (this.isElementIntersectsRect(element, worldRect)) {
+          console.log('Element selected:', element.id, element.name);
           selected.push(element);
         }
       } catch (error) {
         console.warn('Error checking element intersection:', error);
       }
     }
+
+    console.log('Selected count:', selected.length);
 
     this.selectedElements = selected;
     if (this.renderer) {
@@ -169,9 +168,6 @@ export class SelectionManager {
   }
 
   cleanup() {
-    if (this.tempCanvas) {
-      this.tempCanvas = null;
-      this.tempCtx = null;
-    }
+    // nothing to clean
   }
 }

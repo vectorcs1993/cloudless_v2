@@ -12,10 +12,18 @@ export class Fan extends BaseElement {
   }
 
   get a() { return this._a; }
-  set a(value) { this._a = Math.max(50, Math.min(500, value)); this.updateCalloutText(); }
+  set a(value) {
+    this._a = Math.max(50, Math.min(500, value));
+    this.updatePorts();
+    this.updateCalloutText();
+  }
 
   get b() { return this._b; }
-  set b(value) { this._b = Math.max(50, Math.min(500, value)); this.updateCalloutText(); }
+  set b(value) {
+    this._b = Math.max(50, Math.min(500, value));
+    this.updatePorts();
+    this.updateCalloutText();
+  }
 
   get flow() { return this._flow; }
   set flow(value) { this._flow = Math.max(0, value); this.updateCalloutText(); }
@@ -70,6 +78,7 @@ export class Fan extends BaseElement {
   }
 
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
+    // Рисуем линию
     this.createPath(ctx);
     if (isSelected) ctx.strokeStyle = '#e5ff00';
     else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
@@ -95,18 +104,25 @@ export class Fan extends BaseElement {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
+  // ТОЧНО КАК В DuctDirect для линии, плюс проверка круга
   hitTest(worldX, worldY, ctx) {
+    // Проверяем линию
+    this.createPath(ctx);
+    ctx.lineWidth = this.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (ctx.isPointInStroke(worldX, worldY)) return true;
+
+    // Проверяем круг
     const rotation = this.rotation || 0;
     const radius = this.getHeight() / 2;
 
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(rotation * Math.PI / 180);
-
     const dx = worldX - this.x;
     const dy = worldY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-
     ctx.restore();
 
     return dist <= radius;
@@ -122,8 +138,8 @@ export class Fan extends BaseElement {
     const inletPos = this.rotatePoint(topLeft.x, centerY, this.x, this.y, rotation);
     const outletPos = this.rotatePoint(topLeft.x + width, centerY, this.x, this.y, rotation);
 
-    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || Date.now(), this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y));
-    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || Date.now(), this.id, 'outlet', 'right', width, 0, outletPos.x, outletPos.y));
+    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`, this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y));
+    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`, this.id, 'outlet', 'right', width, 0, outletPos.x, outletPos.y));
 
     return ports;
   }
@@ -147,5 +163,7 @@ export class Fan extends BaseElement {
     ctx.restore();
   }
 
-  toJSON() { return { ...super.toJSON(), a: this._a, b: this._b, flow: this._flow, pressure: this._pressure, sectionType: this._sectionType }; }
+  toJSON() {
+    return { ...super.toJSON(), a: this._a, b: this._b, flow: this._flow, pressure: this._pressure, sectionType: this._sectionType };
+  }
 }
