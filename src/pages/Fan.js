@@ -29,9 +29,15 @@ export class Fan extends DuctDirect {
     const centerX = this.x;
     const centerY = this.y;
     const width_px = this.getWidth();
+    const height_px = this.getHeight();
     const radius = Math.min(width_px * 0.3, this.mmToPx(60));
     const topLeft = this.getTopLeft();
-    const connectorLength = 5; // Длина линии соединения с портом
+    const triangleLeftX = centerX - radius / 2;
+    const triangleTipX = centerX + radius;
+    const leftPortX = topLeft.x;
+    const rightPortX = topLeft.x + width_px;
+    const topY = centerY - radius;
+    const bottomY = centerY + radius;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -41,23 +47,21 @@ export class Fan extends DuctDirect {
     ctx.lineWidth = 2 * this._hitTolerance;
     ctx.strokeStyle = isSelected ? '#e5ff00' : (isDarkTheme ? '#888' : '#333');
 
-    // Линия подвода (5px слева)
+    // Линия подвода от треугольника до левого порта
     ctx.beginPath();
-    ctx.moveTo(topLeft.x, centerY);
-    ctx.lineTo(topLeft.x + connectorLength, centerY);
+    ctx.moveTo(triangleLeftX, centerY);
+    ctx.lineTo(leftPortX, centerY);
     ctx.stroke();
 
-    // Линия отвода (5px справа)
+    // Линия отвода от треугольника до правого порта
     ctx.beginPath();
-    ctx.moveTo(topLeft.x + width_px - connectorLength, centerY);
-    ctx.lineTo(topLeft.x + width_px, centerY);
+    ctx.moveTo(triangleTipX, centerY);
+    ctx.lineTo(rightPortX, centerY);
     ctx.stroke();
 
     // Треугольник (вентилятор) — центрированный правый треугольник
-    const tipX = centerX + radius;
-    const baseX = centerX - radius / 2;
-    const topY = centerY - radius;
-    const bottomY = centerY + radius;
+    const baseX = triangleLeftX;
+    const tipX = triangleTipX;
 
     ctx.beginPath();
     ctx.moveTo(baseX, topY);
@@ -74,8 +78,12 @@ export class Fan extends DuctDirect {
   }
 
   getWidth() {
-    // Фиксированная ширина вентилятора, параметр B не влияет на отрисовку
-    return this.mmToPx(this._a);
+    // Фиксированная ширина вентилятора, параметры A/B не влияют на отрисовку
+    return this.mmToPx(125);
+  }
+
+  getHeight() {
+    return this.mmToPx(75);
   }
 
   toJSON() {
@@ -98,25 +106,28 @@ export class Fan extends DuctDirect {
     const centerX = this.x;
     const centerY = this.y;
     const radius = Math.min(width_px * 0.3, this.mmToPx(60));
-    const connectorLength = 5;
+    const triangleLeftX = centerX - radius / 2;
+    const triangleTipX = centerX + radius;
+    const leftPortX = topLeft.x;
+    const rightPortX = topLeft.x + width_px;
+    const topY = centerY - radius;
+    const bottomY = centerY + radius;
 
-    // Проверяем левую линию подвода (5px)
+    // Проверяем левую линию подвода от треугольника до порта
     const isOnLeftConnector =
-      local.x >= topLeft.x &&
-      local.x <= topLeft.x + connectorLength &&
+      local.x >= leftPortX &&
+      local.x <= triangleLeftX &&
       Math.abs(local.y - centerY) <= this._hitTolerance;
 
-    // Проверяем правую линию отвода (5px)
+    // Проверяем правую линию отвода от треугольника до порта
     const isOnRightConnector =
-      local.x >= topLeft.x + width_px - connectorLength &&
-      local.x <= topLeft.x + width_px &&
+      local.x >= triangleTipX &&
+      local.x <= rightPortX &&
       Math.abs(local.y - centerY) <= this._hitTolerance;
 
     // Проверяем треугольник (вентилятор) - центрированный правый треугольник
-    const tipX = centerX + radius;
-    const baseX = centerX - radius / 2;
-    const topY = centerY - radius;
-    const bottomY = centerY + radius;
+    const tipX = triangleTipX;
+    const baseX = triangleLeftX;
 
     const dist1 = this.pointToLineDistance(local, baseX, topY, tipX, centerY);
     const isOnLine1 = dist1 <= this._hitTolerance;
