@@ -145,11 +145,25 @@ export class BaseElement {
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
   hitTest(worldX, worldY, ctx) {
+    ctx.save();
+
+    // Применяем поворот как при отрисовке
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation || 0) * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
+    // Создаём путь
     this.createPath(ctx);
-    ctx.lineWidth = this.lineWidth;
+
+    // Толщина для hit test
+    ctx.lineWidth = this.lineWidth + 8;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    return ctx.isPointInStroke(worldX, worldY);
+
+    const hit = ctx.isPointInStroke(worldX, worldY);
+
+    ctx.restore();
+    return hit;
   }
   setStrokeStyle(ctx, scale, isSelected, isHighlighted, isDarkTheme) {
     ctx.lineWidth = this.lineWidth;
@@ -210,13 +224,6 @@ export class BaseElement {
     };
   }
 
-  getRotationCenter() {
-    return {
-      x: this.x,
-      y: this.y
-    };
-  }
-
   rotatePoint(x, y, centerX, centerY, angleDeg) {
     const angleRad = angleDeg * Math.PI / 180;
     const dx = x - centerX;
@@ -225,52 +232,6 @@ export class BaseElement {
       x: dx * Math.cos(angleRad) - dy * Math.sin(angleRad) + centerX,
       y: dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY
     };
-  }
-
-  transformToLocalCoords(worldX, worldY) {
-    const centerX = this.x;
-    const centerY = this.y;
-    const rotation = this.rotation || 0;
-
-    // Сначала смещаем относительно центра
-    const dx = worldX - centerX;
-    const dy = worldY - centerY;
-
-    if (rotation === 0) {
-      return { x: dx, y: dy };
-    }
-
-    // Затем поворачиваем обратно
-    const angle = -rotation * Math.PI / 180;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    return {
-      x: dx * cos - dy * sin,
-      y: dx * sin + dy * cos
-    };
-  }
-
-  drawForHitTest(ctx) {
-    this.createPath(ctx);
-    ctx.lineWidth = this.lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  }
-
-  updatePortsWorldCoordinates() {
-    if (!this.ports || this.ports.length === 0) return;
-
-    const currentPorts = this.getPorts();
-    this.ports.forEach((port, index) => {
-      const updatedPort = currentPorts[index];
-      if (updatedPort) {
-        port.worldX = updatedPort.worldX;
-        port.worldY = updatedPort.worldY;
-        port.localX = updatedPort.localX;
-        port.localY = updatedPort.localY;
-      }
-    });
   }
 
   updatePorts() {
@@ -287,15 +248,6 @@ export class BaseElement {
     this.ports = newPorts;
   }
 
-  getPortsAfterMove(deltaX, deltaY) {
-    if (!this.ports) return [];
-    return this.ports.map(port => ({
-      ...port,
-      worldX: port.worldX + deltaX,
-      worldY: port.worldY + deltaY,
-    }));
-  }
-
   addCallout(x, y) {
     const calloutId = Date.now() + Math.random();
     const callout = new Callout(calloutId, this.id, this.getCalloutText(), x, y);
@@ -303,12 +255,6 @@ export class BaseElement {
     return callout;
   }
 
-  removeCallout(calloutId) {
-    const index = this.callouts.findIndex(c => c.id === calloutId);
-    if (index !== -1) {
-      this.callouts.splice(index, 1);
-    }
-  }
 
   updateCalloutText() {
     if (this.showCallout && this.callouts.length > 0) {

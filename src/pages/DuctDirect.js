@@ -8,8 +8,6 @@ export class DuctDirect extends DuctBase {
     this._c = c;
   }
 
-  getSizePx() { return 0; }
-
   get b() { return this._b; }
   set b(value) {
     if (this._b === value) return;
@@ -25,11 +23,6 @@ export class DuctDirect extends DuctBase {
     this.updateCalloutText();
   }
 
-  getEquivalentDiameter() {
-    if (this._sectionType === 'round') return this._a;
-    return (2 * this._a * this._c) / (this._a + this._c);
-  }
-
   getWidth() { return this.mmToPx(this._b); }
   getHeight() { return this.mmToPx(this._a); }
 
@@ -40,7 +33,7 @@ export class DuctDirect extends DuctBase {
   }
 
   getCalloutText() {
-    let text = `${super.getCalloutText()}\nB: ${this._b} мм`;
+    let text = `${super.getCalloutText()}\nL: ${this._b} мм`;
     if (this._sectionType === 'rectangular') {
       text += `\n${this._a}x${this._c} мм\nDэкв: ${this.getEquivalentDiameter().toFixed(0)} мм`;
     } else {
@@ -50,45 +43,34 @@ export class DuctDirect extends DuctBase {
   }
 
   getParameters() {
-    const params = [...super.getParameters(), { name: 'b', label: 'B', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }];
+    const params = [...super.getParameters(),
+    { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
+    ];
     if (this._sectionType === 'rectangular') {
-      params.push({ name: 'c', label: 'C', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });
+      params.push({ name: 'c', label: 'Высота', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });
     }
     return params;
   }
 
-  getPorts() {
-    const ports = [];
-    const rotation = this.rotation || 0;
-    const topLeft = this.getTopLeft();
-    const inletPos = this.rotatePoint(topLeft.x, this.y, this.x, this.y, rotation);
-    const outletPos = this.rotatePoint(topLeft.x + this.getWidth(), this.y, this.x, this.y, rotation);
-    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || Date.now(), this.id, 'inlet', 'left', 0, this.getHeight() / 2, inletPos.x, inletPos.y));
-    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || Date.now(), this.id, 'outlet', 'right', this.getWidth(), this.getHeight() / 2, outletPos.x, outletPos.y));
-    return ports;
-  }
-
-  // В DuctDirect.js, убедитесь что createPath правильно создает путь:
-
+  // ЕДИНЫЙ createPath для всех прямых элементов (DuctDirect и Transition)
   createPath(ctx) {
-    const rotation = this.rotation || 0;
     const topLeft = this.getTopLeft();
     const endX = topLeft.x + this.getWidth();
     const centerY = this.y;
 
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
-
-    ctx.beginPath();  // ВАЖНО: beginPath должен быть здесь!
+    ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(endX, centerY);
-
-    ctx.restore();
   }
 
+  // ЕДИНЫЙ draw для всех прямых элементов
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
+    ctx.save();
+
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation || 0) * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
     this.createPath(ctx);
 
     if (isSelected) ctx.strokeStyle = '#e5ff00';
@@ -98,69 +80,52 @@ export class DuctDirect extends DuctBase {
     ctx.lineWidth = this.lineWidth;
     ctx.stroke();
 
+    ctx.restore();
+
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
-  // В DuctDirect.js, замените метод hitTest на этот:
-
-  hitTest(worldX, worldY, ctx) {
-    // Сохраняем состояние контекста
-    ctx.save();
-
-    // Применяем трансформации как при рисовании
+  getPorts() {
+    const ports = [];
     const rotation = this.rotation || 0;
-    ctx.translate(this.x, this.y);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
+    const topLeft = this.getTopLeft();
+    const centerY = this.y;
 
-    // Создаем путь
-    this.createPath(ctx);
+    const inletPos = this.rotatePoint(topLeft.x, centerY, this.x, this.y, rotation);
+    const outletPos = this.rotatePoint(topLeft.x + this.getWidth(), centerY, this.x, this.y, rotation);
 
-    // Увеличиваем толщину линии для hit test (важно!)
-    const hitLineWidth = Math.max(this.lineWidth + 8, 15);
-    ctx.lineWidth = hitLineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ports.push(new Port(this.ports?.find(p => p.direction === 'inlet')?.id || `port_${this.id}_inlet`,
+      this.id, 'inlet', 'left', 0, 0, inletPos.x, inletPos.y));
+    ports.push(new Port(this.ports?.find(p => p.direction === 'outlet')?.id || `port_${this.id}_outlet`,
+      this.id, 'outlet', 'right', this.getWidth(), 0, outletPos.x, outletPos.y));
 
-    // Проверяем попадание в линию
-    let hit = ctx.isPointInStroke(worldX, worldY);
-
-    // Если не попали, проверяем точки вокруг (для надежности)
-    if (!hit) {
-      const offsets = [-3, -2, -1, 0, 1, 2, 3];
-      for (const dx of offsets) {
-        for (const dy of offsets) {
-          if (ctx.isPointInStroke(worldX + dx, worldY + dy)) {
-            hit = true;
-            break;
-          }
-        }
-        if (hit) break;
-      }
-    }
-
-    ctx.restore();
-    return hit;
+    return ports;
   }
 
   drawCenterLines(ctx, scale, isDarkTheme) {
-    const rotation = this.rotation || 0;
+    ctx.save();
+
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation || 0) * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
     const topLeft = this.getTopLeft();
     const width = this.getWidth();
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
+
     ctx.beginPath();
     ctx.moveTo(topLeft.x, this.y);
     ctx.lineTo(topLeft.x + width, this.y);
+
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
     ctx.stroke();
     ctx.setLineDash([]);
+
     ctx.restore();
   }
 
-  toJSON() { return { ...super.toJSON(), b: this._b, c: this._c }; }
+  toJSON() {
+    return { ...super.toJSON(), b: this._b, c: this._c };
+  }
 }

@@ -86,67 +86,33 @@ export class Elbow extends DuctDirect {
   }
 
   createPath(ctx) {
-    const rotation = this.rotation || 0;
     const { inlet, corner, outlet } = this.getPathPoints();
-
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(rotation * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
 
     ctx.beginPath();
     ctx.moveTo(inlet.x, inlet.y);
     ctx.lineTo(corner.x, corner.y);
     ctx.lineTo(outlet.x, outlet.y);
-
-    ctx.restore();
   }
 
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    this.createPath(ctx);
-    if (isSelected) ctx.strokeStyle = '#e5ff00';
-    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
-    else ctx.strokeStyle = this.color;
-    ctx.lineWidth = this.lineWidth;
-    ctx.stroke();
-    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
-  }
-
-  // В Elbow.js, замените метод hitTest:
-
-  hitTest(worldX, worldY, ctx) {
     ctx.save();
 
-    const rotation = this.rotation || 0;
     ctx.translate(this.x, this.y);
-    ctx.rotate(rotation * Math.PI / 180);
+    ctx.rotate((this.rotation || 0) * Math.PI / 180);
     ctx.translate(-this.x, -this.y);
 
     this.createPath(ctx);
-    const hitLineWidth = Math.max(this.lineWidth + 8, 15);
-    ctx.lineWidth = hitLineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
 
-    let hit = ctx.isPointInStroke(worldX, worldY);
+    if (isSelected) ctx.strokeStyle = '#e5ff00';
+    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
+    else ctx.strokeStyle = this.color;
 
-    if (!hit) {
-      const offsets = [-3, -2, -1, 0, 1, 2, 3];
-      for (const dx of offsets) {
-        for (const dy of offsets) {
-          ctx.beginPath();
-          this.createPath(ctx);
-          if (ctx.isPointInStroke(worldX + dx, worldY + dy)) {
-            hit = true;
-            break;
-          }
-        }
-        if (hit) break;
-      }
-    }
+    ctx.lineWidth = this.lineWidth;
+    ctx.stroke();
 
     ctx.restore();
-    return hit;
+
+    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
   getPorts() {
