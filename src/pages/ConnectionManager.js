@@ -5,23 +5,17 @@ export class ConnectionManager {
     this.connections = new Map(); // portId -> { connectedPortId, elementId }
   }
 
-  // Получение всех портов со всех элементов (включая группы)
+  // Получение всех портов со всех элементов
   getAllPorts() {
     const allPorts = [];
     const allElements = this.elements.value || [];
 
-    const collectPorts = (elements) => {
-      for (const element of elements) {
-        if (element.ports && element.ports.length > 0) {
-          allPorts.push(...element.ports);
-        }
-        if (element.type === 'group' && element.elements) {
-          collectPorts(element.elements);
-        }
+    for (const element of allElements) {
+      if (element.ports && element.ports.length > 0) {
+        allPorts.push(...element.ports);
       }
-    };
+    }
 
-    collectPorts(allElements);
     return allPorts;
   }
 
@@ -34,40 +28,30 @@ export class ConnectionManager {
   // Получение элемента по ID
   getElementById(elementId) {
     const allElements = this.elements.value || [];
-    const findElement = (elements) => {
-      for (const element of elements) {
-        if (element.id === elementId) return element;
-        if (element.type === 'group' && element.elements) {
-          const found = findElement(element.elements);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-    return findElement(allElements);
+    return allElements.find(element => element.id === elementId);
   }
 
   // Проверка, можно ли соединять порты (учитывая блокировку слоёв)
-canConnectPorts(port1, port2) {
-  if (!port1 || !port2) return false;
+  canConnectPorts(port1, port2) {
+    if (!port1 || !port2) return false;
 
-  // Нельзя соединять порт с самим собой
-  if (port1.id === port2.id) return false;
+    // Нельзя соединять порт с самим собой
+    if (port1.id === port2.id) return false;
 
-  // Нельзя соединять порты одного элемента
-  if (port1.elementId === port2.elementId) return false;
+    // Нельзя соединять порты одного элемента
+    if (port1.elementId === port2.elementId) return false;
 
-  // Проверяем блокировку слоёв
-  if (this.layerManager) {
-    const element1 = this.getElementById(port1.elementId);
-    const element2 = this.getElementById(port2.elementId);
-    if (element1 && this.layerManager.isLayerLocked(element1)) return false;
-    if (element2 && this.layerManager.isLayerLocked(element2)) return false;
+    // Проверяем блокировку слоёв
+    if (this.layerManager) {
+      const element1 = this.getElementById(port1.elementId);
+      const element2 = this.getElementById(port2.elementId);
+      if (element1 && this.layerManager.isLayerLocked(element1)) return false;
+      if (element2 && this.layerManager.isLayerLocked(element2)) return false;
+    }
+
+    // РАЗРЕШАЕМ ЛЮБЫЕ СОЕДИНЕНИЯ
+    return true;
   }
-
-  // РАЗРЕШАЕМ ЛЮБЫЕ СОЕДИНЕНИЯ
-  return true;
-}
 
   // Соединение двух портов
   connectPorts(port1, port2) {
@@ -235,8 +219,8 @@ canConnectPorts(port1, port2) {
 
           // Если соединение невалидно или порты на заблокированных слоях
           if (!connectedPort || !this.canConnectPorts(port, connectedPort) ||
-              (layerManager && this.isPortOnLockedLayer(port, layerManager)) ||
-              (layerManager && connectedPort && this.isPortOnLockedLayer(connectedPort, layerManager))) {
+            (layerManager && this.isPortOnLockedLayer(port, layerManager)) ||
+            (layerManager && connectedPort && this.isPortOnLockedLayer(connectedPort, layerManager))) {
             // Разрываем соединение
             if (connectedPort) {
               this.disconnectPorts(port, connectedPort);

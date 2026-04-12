@@ -1,11 +1,11 @@
 export class InteractionManager {
   constructor(canvas, elements, renderer, connectionManager, selectionManager, options, layerManager = null) {
     this.canvas = canvas;
-    this.elements = elements; // теперь это computed interactiveElements
+    this.elements = elements;
     this.renderer = renderer;
     this.connectionManager = connectionManager;
     this.selectionManager = selectionManager;
-    this.layerManager = layerManager; // добавляем layerManager
+    this.layerManager = layerManager;
     this.options = options;
     this.onElementMoveCallback = null;
 
@@ -33,39 +33,18 @@ export class InteractionManager {
     this.onElementMoveCallback = callback;
   }
 
-  // Проверка, можно ли взаимодействовать с элементом
-  // В InteractionManager.js
   isElementInteractive(element) {
     if (!this.layerManager) return true;
-
-    // Если элемент - группа, проверяем её слой
-    if (element.type === 'group') {
-      return !this.layerManager.isLayerLocked(element);
-    }
-
     return !this.layerManager.isLayerLocked(element);
   }
-  // Добавьте этот метод в класс InteractionManager для рекурсивного сбора всех портов из элементов (включая группы)
 
   getAllPortsFromElements(elements) {
     const ports = [];
-
-    const collectPorts = (element) => {
-      if (element.type === 'group' && element.elements) {
-        // Рекурсивно собираем порты из элементов группы
-        for (const child of element.elements) {
-          collectPorts(child);
-        }
-      } else if (element.ports) {
-        // Добавляем порты обычного элемента
+    for (const element of elements) {
+      if (element.ports) {
         ports.push(...element.ports);
       }
-    };
-
-    for (const element of elements) {
-      collectPorts(element);
     }
-
     return ports;
   }
 
@@ -79,21 +58,11 @@ export class InteractionManager {
       return;
     }
 
-    // Собираем все порты из перемещаемых элементов (включая группы)
     const movingPorts = this.getAllPortsFromElements(elements);
 
-    // Собираем ID всех перемещаемых элементов (включая вложенные в группы)
     const movingElementIds = new Set();
-    const collectElementIds = (element) => {
-      movingElementIds.add(element.id);
-      if (element.type === 'group' && element.elements) {
-        for (const child of element.elements) {
-          collectElementIds(child);
-        }
-      }
-    };
     for (const element of elements) {
-      collectElementIds(element);
+      movingElementIds.add(element.id);
     }
 
     if (movingPorts.length === 0) {
@@ -101,34 +70,26 @@ export class InteractionManager {
       return;
     }
 
-    // Ищем ближайший порт для прилипания
     let bestMatch = null;
     let bestDistance = Infinity;
 
-    // Получаем все порты из connectionManager
     const allPorts = this.connectionManager.getAllPorts();
 
     for (const movingPort of movingPorts) {
       for (const targetPort of allPorts) {
-        // Пропускаем порты из тех же элементов (СВОИ ПОРТЫ!)
         if (movingElementIds.has(targetPort.elementId)) continue;
-
-        // Пропускаем, если порт принадлежит тому же элементу, что и перемещаемый порт
         if (movingPort.elementId === targetPort.elementId) continue;
 
-        // Проверяем, не заблокирован ли слой целевого элемента
         if (this.layerManager) {
           const targetElement = this.findElementById(targetPort.elementId);
           if (targetElement && this.layerManager.isLayerLocked(targetElement)) continue;
         }
 
-        // Предполагаемое новое положение порта после перемещения
         const predictedX = movingPort.worldX + deltaWorldX;
         const predictedY = movingPort.worldY + deltaWorldY;
-
         const distance = Math.hypot(predictedX - targetPort.worldX, predictedY - targetPort.worldY);
 
-        if (distance < bestDistance && distance < 40) { // Максимальное расстояние прилипания 40px
+        if (distance < bestDistance && distance < 40) {
           bestDistance = distance;
           bestMatch = {
             movingPort,
@@ -144,7 +105,6 @@ export class InteractionManager {
       this.moveElements(elements, bestMatch.offsetX, bestMatch.offsetY);
       this.renderer.setHighlightedPort(bestMatch.targetPort);
 
-      // Автоматически соединяем порты
       if (this.autoUpdateConnections) {
         this.connectPorts(bestMatch.movingPort, bestMatch.targetPort);
       }
@@ -158,7 +118,6 @@ export class InteractionManager {
     this.isDragging = true;
     this.draggingElements = [...this.renderer.selectedElements];
 
-    // Фильтруем элементы на заблокированных слоях
     this.draggingElements = this.draggingElements.filter(el => this.isElementInteractive(el));
 
     if (this.draggingElements.length === 0) {
@@ -180,27 +139,16 @@ export class InteractionManager {
     this.dragStartMouseScreen = { x: e.clientX, y: e.clientY };
     this.currentSnappedPorts = [];
 
-    // Собираем все порты из перемещаемых элементов (включая группы)
     const movingPorts = this.getAllPortsFromElements(this.draggingElements);
 
-    // Собираем ID всех перемещаемых элементов
     const movingElementIds = new Set();
-    const collectIds = (element) => {
-      movingElementIds.add(element.id);
-      if (element.type === 'group' && element.elements) {
-        for (const child of element.elements) {
-          collectIds(child);
-        }
-      }
-    };
     for (const element of this.draggingElements) {
-      collectIds(element);
+      movingElementIds.add(element.id);
     }
 
     for (const movingPort of movingPorts) {
       if (movingPort.isConnected()) {
         const targetElement = this.findElementById(movingPort.connectedElementId);
-        // Проверяем, что целевой элемент НЕ входит в перемещаемые
         if (targetElement && !movingElementIds.has(targetElement.id) && this.isElementInteractive(targetElement)) {
           const targetPort = targetElement.ports?.find(p => p.id === movingPort.connectedPortId);
           if (targetPort) {
@@ -214,34 +162,21 @@ export class InteractionManager {
     this.renderer.draw();
   }
 
-  // Исправленный метод moveElement для поддержки групп
   moveElement(element, deltaX, deltaY) {
     if (!this.isElementInteractive(element)) return;
 
-    if (element.type === 'group') {
-      // Для группы используем её метод move
-      element.move(deltaX, deltaY);
-      // Обновляем порты всех элементов в группе
-      if (element.elements) {
-        for (const child of element.elements) {
-          if (child.updatePorts) child.updatePorts();
-          if (child.updateCalloutText) child.updateCalloutText();
-        }
-      }
-    } else {
-      element.x += deltaX;
-      element.y += deltaY;
-      element.updatePorts();
-      if (element.callouts) {
-        element.callouts.forEach(callout => {
-          callout.x += deltaX;
-          callout.y += deltaY;
-        });
-      }
-      element.updateCalloutText();
+    element.x += deltaX;
+    element.y += deltaY;
+    element.updatePorts();
+    if (element.callouts) {
+      element.callouts.forEach(callout => {
+        callout.x += deltaX;
+        callout.y += deltaY;
+      });
     }
+    element.updateCalloutText();
   }
-  // Получение интерактивных элементов
+
   getInteractiveElements() {
     if (this.layerManager) {
       return this.layerManager.getInteractiveElements();
@@ -253,71 +188,36 @@ export class InteractionManager {
     const ctx = this.canvas.getContext('2d');
     const interactiveElements = this.getInteractiveElements();
 
-    const searchInElement = (element) => {
+    for (let i = interactiveElements.length - 1; i >= 0; i--) {
+      const element = interactiveElements[i];
       if (element.hitTest(x, y, ctx)) {
         return element;
       }
-
-      // Если элемент - группа, проверяем её элементы
-      if (element.type === 'group' && element.elements) {
-        for (let i = element.elements.length - 1; i >= 0; i--) {
-          const result = searchInElement(element.elements[i]);
-          if (result) return result;
-        }
-      }
-
-      return null;
-    };
-
-    for (let i = interactiveElements.length - 1; i >= 0; i--) {
-      const result = searchInElement(interactiveElements[i]);
-      if (result) return result;
     }
-
     return null;
   }
 
   findCalloutAt(x, y) {
-    // Рекурсивная функция для поиска выноски во всех элементах, включая группы
     const interactiveElements = this.getInteractiveElements();
 
-    const searchInElement = (element) => {
-      // Проверяем выноски текущего элемента
+    for (const element of interactiveElements) {
       for (const callout of element.callouts) {
         const hitResult = callout.hitTest(x, y, this.options.scale.value, element);
         if (hitResult.hit) {
           return { callout, element, isHandle: hitResult.isHandle };
         }
       }
-
-      // Если элемент - группа, рекурсивно ищем в её элементах
-      if (element.type === 'group' && element.elements) {
-        for (const child of element.elements) {
-          const result = searchInElement(child);
-          if (result) return result;
-        }
-      }
-
-      return null;
-    };
-
-    // Ищем во всех интерактивных элементах
-    for (const element of interactiveElements) {
-      const result = searchInElement(element);
-      if (result) return result;
     }
-
     return null;
   }
 
   findPortAtPosition(worldX, worldY, maxDistance = 15) {
     const allPorts = this.connectionManager.getAllPorts();
     for (const port of allPorts) {
-      // Проверяем, находится ли порт на заблокированном слое
       if (this.layerManager) {
         const portElement = this.findElementById(port.elementId);
         if (portElement && this.layerManager.isLayerLocked(portElement)) {
-          continue; // Пропускаем порты на заблокированных слоях
+          continue;
         }
       }
       const distance = Math.hypot(port.worldX - worldX, port.worldY - worldY);
@@ -350,34 +250,6 @@ export class InteractionManager {
     this.canvas.style.cursor = 'grabbing';
     this.renderer.draw();
   }
-
-  // Добавьте метод для поиска родительской группы:
-  findParentGroup(element) {
-    const allElements = this.layerManager ? this.layerManager.getAllElements() : this.elements.value;
-    for (const el of allElements) {
-      if (el.type === 'group' && el.elements && el.elements.includes(element)) {
-        return el;
-      }
-      // Рекурсивный поиск во вложенных группах
-      if (el.type === 'group' && el.elements) {
-        const found = this.findParentGroupInChildren(el, element);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
-  findParentGroupInChildren(group, targetElement) {
-    for (const el of group.elements) {
-      if (el === targetElement) return group;
-      if (el.type === 'group' && el.elements) {
-        const found = this.findParentGroupInChildren(el, targetElement);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
 
   startPan(e) {
     this.isPanning = true;
@@ -469,7 +341,6 @@ export class InteractionManager {
             this.onElementMoveCallback(this.renderer.selectedElements);
           }
         }
-        // Начинаем выделение прямоугольником
         this.isSelecting = true;
         const rect = this.canvas.getBoundingClientRect();
         const screenPos = {
@@ -477,7 +348,6 @@ export class InteractionManager {
           y: e.clientY - rect.top
         };
         this.selectionStart = screenPos;
-        // Запускаем прямоугольник выделения в selectionManager
         this.selectionManager.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.startSelectionRect(screenPos.x, screenPos.y);
         this.renderer.draw();
@@ -499,8 +369,6 @@ export class InteractionManager {
 
   onMouseMove(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
     const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
 
     if (this.draggingCallout) {
@@ -509,11 +377,9 @@ export class InteractionManager {
       const deltaX = currentWorldPos.x - startWorldPos.x;
       const deltaY = currentWorldPos.y - startWorldPos.y;
 
-      // Перемещаем выноску
       this.draggingCallout.callout.x = this.dragStartCalloutPos.x + deltaX;
       this.draggingCallout.callout.y = this.dragStartCalloutPos.y + deltaY;
 
-      // Обновляем текст выноски (на случай если он изменился)
       if (this.draggingCalloutElement) {
         this.draggingCalloutElement.updateCalloutText();
       }
@@ -549,7 +415,6 @@ export class InteractionManager {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top
       };
-      // Обновляем прямоугольник в selectionManager и renderer
       this.selectionManager.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.updateSelectionRect(currentScreenPos.x, currentScreenPos.y);
       this.renderer.draw();
@@ -585,28 +450,23 @@ export class InteractionManager {
   }
 
   onMouseUp(e) {
-    // Завершаем выделение прямоугольником
     if (this.isSelecting) {
-      // Получаем выбранные элементы из selectionManager
       const selected = this.selectionManager.endSelectionRect(
         this.options.panX.value,
         this.options.panY.value,
         this.options.scale.value,
-        this.layerManager // передаем layerManager для фильтрации
+        this.layerManager
       );
-      // Обновляем renderer и callback
       this.renderer.setSelectedElements(selected);
       this.renderer.endSelectionRect();
       if (this.onElementMoveCallback) {
         this.onElementMoveCallback(selected);
       }
-      // Сбрасываем состояние выделения
       this.isSelecting = false;
       this.selectionStart = null;
       this.renderer.draw();
     }
 
-    // Завершаем перетаскивание элементов
     if (this.isDragging && this.draggingElements.length > 0) {
       const movedElements = [...this.draggingElements];
       this.isDragging = false;
@@ -617,7 +477,6 @@ export class InteractionManager {
 
       if (this.autoUpdateConnections && this.options.snapToPorts.value && movedElements.length > 0) {
         setTimeout(() => {
-          console.log('Автоматическое обновление связей после перемещения элементов');
           const restored = this.connectionManager.updateAllPortsAndConnections(5, this.layerManager);
           if (restored > 0) {
             console.log(`Автоматически восстановлено ${restored} связей`);
@@ -629,17 +488,11 @@ export class InteractionManager {
       }
     }
 
-    // Завершаем перетаскивание выноски
     if (this.draggingCallout) {
       this.draggingCallout = null;
       this.draggingCalloutElement = null;
-      this.draggingCalloutParentGroup = null;
-
       if (this.canvas) this.canvas.style.cursor = '';
       const worldPos = this.renderer.screenToWorld(e.clientX, e.clientY);
-      const rect = this.canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
       const portUnderCursor = this.findPortAtPosition(worldPos.x, worldPos.y);
       if (portUnderCursor && this.options.showPorts.value) {
         this.renderer.setHighlightedPort(portUnderCursor);
@@ -652,14 +505,12 @@ export class InteractionManager {
       this.renderer.draw();
     }
 
-    // Завершаем панорамирование
     if (this.isPanning) {
       this.isPanning = false;
       if (this.canvas) this.canvas.style.cursor = '';
       this.renderer.draw();
     }
 
-    // Очищаем подсветку порта через некоторое время
     setTimeout(() => {
       if (!this.isDragging && !this.draggingCallout && !this.isSelecting && this.renderer) {
         if (this.renderer.setHighlightedPort) {

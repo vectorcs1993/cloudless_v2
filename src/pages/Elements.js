@@ -1,7 +1,5 @@
-import { Port } from './Port.js';
 import { Callout } from './Callout.js';
 import { globalScale } from './GlobalScale.js';
-
 
 export const dragItems = Object.freeze([
   {
@@ -89,7 +87,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true; // показывать выноску, по умолчанию - да
-    this._lineWidth = 6; // Толщина линии, px
+    this._lineWidth = 10; // Толщина линии, px
     this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
   }
   get showCallout() {
@@ -114,7 +112,7 @@ export class BaseElement {
   }
 
   set lineWidth(value) {
-    const newValue = Math.max(1, Math.min(6, Number(value) || 1));
+    const newValue = Math.max(1, Math.min(18, Number(value) || 1));
     if (this._lineWidth === newValue) return;
     this._lineWidth = newValue;
     this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
@@ -151,7 +149,6 @@ export class BaseElement {
       'tee': 'Тройник',
       'elbow': 'Отвод',
       'cross': 'Крестовина',
-      'group': 'Группа элементов'
     };
   }
 
@@ -195,7 +192,7 @@ export class BaseElement {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
       { name: 'color', label: 'Цвет', type: 'color', value: this.color },
-      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 2, min: 2, max: 6, value: this.lineWidth, unit: 'px' },
+      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 2, min: 2, max: 18, value: this.lineWidth, unit: 'px' },
     ];
   }
 

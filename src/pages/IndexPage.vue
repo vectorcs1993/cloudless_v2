@@ -82,7 +82,6 @@
                 <div class="text-subtitle1">Диспетчер проекта</div>
                 <div>
                   <q-btn icon="add" label="Слой" flat dense size="sm" @click="addNewLayer" />
-                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected" :disable="selectedElements.length < 2" />
                 </div>
               </q-card-section>
               <q-separator />
@@ -180,8 +179,7 @@
                         <q-item-section>
                           <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]" />
                           <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :disable="isGroupSelected" :options="param.options" option-label="label" option-value="value" dense outlined emit-value
-                            map-options />
+                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options />
                           <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
                             :min="param.min" dense outlined />
                         </q-item-section>
@@ -269,13 +267,6 @@
                 </q-tab-panel>
               </q-tab-panels>
             </div>
-            <q-card-section v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
-              <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
-              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
-                class="full-width q-mb-sm" />
-              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
-                class="full-width" />
-            </q-card-section>
             <q-card-section>
               <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
             </q-card-section>
@@ -287,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, readonly, shallowRef, triggerRef } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, readonly } from 'vue';
 import { Notify } from 'quasar'
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { ZIndexManager } from './ZIndexManager.js';
@@ -297,7 +288,6 @@ import { StorageManager } from './StorageManager.js';
 import { SelectionManager } from './SelectionManager.js';
 import { LayerManager } from './LayerManager.js';
 import { BaseElement, dragItems } from './Elements.js';
-import { Group } from './Group.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Transition } from './Transition.js';
 import { Elbow } from './Elbow.js';
@@ -327,14 +317,14 @@ const autoUpdateConnections = ref(true);
 const tabEditor = ref('library');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
-const selectedElements = ref([]);  // Изменено: было shallowRef, стало ref
+const selectedElements = ref([]);
 const mouseWorldPos = ref(null);
-const clipboardElements = ref([]);  // Изменено: было shallowRef, стало ref
+const clipboardElements = ref([]);
 const selectedTreeNode = ref(null);
 const expandedTreeNodes = ref([]);
 
 // Структура данных - слои
-const layers = ref([  // Изменено: было shallowRef, стало ref
+const layers = ref([
   { id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }
 ]);
 const activeLayerId = ref('layer_default');
@@ -361,7 +351,6 @@ let renderFrameRequest = null;
 
 // Вычисляемые
 const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
-const isGroupSelected = computed(() => selectedElement.value instanceof Group);
 
 const allElements = computed(() => {
   if (!layers.value) return [];
@@ -395,27 +384,9 @@ const layerOptions = computed(() => layers.value.map(layer => ({
   value: layer.id
 })));
 
-
 // Построение дерева проекта
 const projectTree = computed(() => {
   const buildElementNode = (item, layerInfo) => {
-    if (item instanceof Group) {
-      return {
-        id: item.id,
-        label: item.name || `Группа ${item.id}`,
-        icon: 'folder',
-        color: 'orange',
-        info: `${item.elements?.length || 0} эл.`,
-        children: item.elements?.map(el => buildElementNode(el, layerInfo)) || [],
-        element: item,
-        layerId: layerInfo?.id,
-        layerName: layerInfo?.name,
-        layerLocked: layerInfo?.locked,
-        layerVisible: layerInfo?.visible,
-        isLayer: false,
-        isGroup: true
-      };
-    }
     return {
       id: item.id,
       label: `${BaseElement.getAvailableTypes()[item.type] || item.type}: ${item.name || item.id}`,
@@ -428,36 +399,23 @@ const projectTree = computed(() => {
       layerLocked: layerInfo?.locked,
       layerVisible: layerInfo?.visible,
       isLayer: false,
-      isGroup: false
     };
   };
 
   const result = [];
   for (const layer of layers.value) {
-    const topLevelElements = layer.elements.filter(el => {
-      let isInGroup = false;
-      for (const otherEl of layer.elements) {
-        if (otherEl instanceof Group && otherEl.elements?.includes(el)) {
-          isInGroup = true;
-          break;
-        }
-      }
-      return !isInGroup;
-    });
-
     result.push({
       id: `layer_${layer.id}`,
       label: layer.name,
       icon: layer.locked ? 'lock' : (layer.visible ? 'layers' : 'layers_clear'),
       color: layer.locked ? 'negative' : (layer.visible ? 'primary' : 'grey'),
       info: `${layer.elements.length} эл.`,
-      children: topLevelElements.map(el => buildElementNode(el, layer)),
+      children: layer.elements.map(el => buildElementNode(el, layer)),
       layerId: layer.id,
       layerName: layer.name,
       layerLocked: layer.locked,
       layerVisible: layer.visible,
       isLayer: true,
-      isGroup: false,
       element: null
     });
   }
@@ -517,7 +475,7 @@ const onParameterChange = (value, paramName) => {
 const addNewLayer = () => {
   const newLayer = layerManager.addLayer();
   activeLayerId.value = newLayer.id;
-  layers.value = [...layers.value]; // Триггерим обновление
+  layers.value = [...layers.value];
   showNotify({ type: 'positive', message: `Создан слой: ${newLayer.name}`, timeout: 2000 });
   scheduleRender();
 };
@@ -544,29 +502,6 @@ const removeLayerWithConfirm = (layerId) => {
   scheduleRender();
 };
 
-const toggleLayerVisibility = (layerId) => {
-  layerManager.toggleLayerVisibility(layerId);
-  layers.value = [...layers.value];
-  const layer = layers.value.find(l => l.id === layerId);
-  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.visible ? 'показан' : 'скрыт'}`, timeout: 1000 });
-  scheduleRender();
-};
-
-const toggleLayerLock = (layerId) => {
-  layerManager.toggleLayerLock(layerId);
-  layers.value = [...layers.value];
-  const layer = layers.value.find(l => l.id === layerId);
-  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.locked ? 'заблокирован' : 'разблокирован'}`, timeout: 1000 });
-  scheduleRender();
-};
-
-const setActiveLayer = (layerId) => {
-  clearSelection();
-  activeLayerId.value = layerId;
-  const layer = layers.value.find(l => l.id === layerId);
-  showNotify({ type: 'info', message: `Активный слой: ${layer.name}`, timeout: 1000 });
-};
-
 const renameLayer = (layerId) => {
   const layer = layers.value.find(l => l.id === layerId);
   if (!layer) return;
@@ -578,13 +513,11 @@ const renameLayer = (layerId) => {
   }
 };
 
-const onElementLayerChange = (newLayerId) => {
-  if (!selectedElement.value) return;
-  if (layerManager.moveElementToLayer(selectedElement.value.id, newLayerId)) {
-    layers.value = [...layers.value];
-    showNotify({ type: 'positive', message: 'Элемент перемещён на другой слой', timeout: 1000 });
-    scheduleRender();
-  }
+const setActiveLayer = (layerId) => {
+  clearSelection();
+  activeLayerId.value = layerId;
+  const layer = layers.value.find(l => l.id === layerId);
+  showNotify({ type: 'info', message: `Активный слой: ${layer.name}`, timeout: 1000 });
 };
 
 // ========== ОБРАБОТЧИКИ ДЕРЕВА ==========
@@ -652,23 +585,16 @@ const onTreeNodeContextMenu = (event, node) => {
 
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
 
-// Исправленный метод copySelected - разрешаем копирование групп
 const copySelected = () => {
   if (!selectedElements.value.length) return;
-
-  // Убираем ограничение на копирование групп
-  // Теперь можно копировать группы и их содержимое
-
   clipboardElements.value = selectedElements.value.map(el => {
     const json = el.toJSON();
-    // Очищаем выноски у копии, чтобы не было дублирования
     json.callouts = [];
     return json;
   });
-
   showNotify({
     type: 'positive',
-    message: `Скопировано ${clipboardElements.value.length} элементов (включая группы)`,
+    message: `Скопировано ${clipboardElements.value.length} элементов`,
     timeout: 2000
   });
 };
@@ -688,43 +614,17 @@ const pasteElements = () => {
 
   const newElements = [];
   const oldIdToNewId = new Map();
-
-  // Смещение для вставки (50px вниз и вправо)
   const offsetX = 50;
   const offsetY = 50;
 
-  // Функция для рекурсивного обновления позиций элементов в группе
-  const updateElementPositions = (element, deltaX, deltaY) => {
-    if (element.x !== undefined) element.x += deltaX;
-    if (element.y !== undefined) element.y += deltaY;
-
-    if (element.type === 'group' && element.elements) {
-      element.elements.forEach(child => updateElementPositions(child, deltaX, deltaY));
-    }
-  };
-
-  // Функция для рекурсивного обновления портов
-  const updatePortsRecursive = (element) => {
-    if (element.updatePorts) {
-      element.updatePorts();
-    }
-    if (element.type === 'group' && element.elements) {
-      element.elements.forEach(child => updatePortsRecursive(child));
-    }
-  };
-
-  // Создаем глубокие копии JSON и обновляем ID
   for (const json of clipboardElements.value) {
-    // Глубокая копия JSON
     const newJson = JSON.parse(JSON.stringify(json));
 
-    // Генерируем новые ID
     const oldId = newJson.id;
     const newId = ++nextElementId;
     oldIdToNewId.set(oldId, newId);
     newJson.id = newId;
 
-    // Обновляем ID портов
     if (newJson.ports) {
       newJson.ports.forEach(port => {
         port.id = ++nextPortId;
@@ -734,45 +634,21 @@ const pasteElements = () => {
       });
     }
 
-    // Обновляем ID вложенных элементов в группе
-    if (newJson.type === 'group' && newJson.elements) {
-      const updateChildIds = (children) => {
-        for (const child of children) {
-          const childOldId = child.id;
-          const childNewId = ++nextElementId;
-          oldIdToNewId.set(childOldId, childNewId);
-          child.id = childNewId;
-
-          if (child.ports) {
-            child.ports.forEach(port => {
-              port.id = ++nextPortId;
-              port.elementId = childNewId;
-              port.connectedElementId = null;
-              port.connectedPortId = null;
-            });
-          }
-
-          if (child.type === 'group' && child.elements) {
-            updateChildIds(child.elements);
-          }
-        }
-      };
-      updateChildIds(newJson.elements);
-    }
-
-    // Смещаем позицию
     newJson.x = (newJson.x || 0) + offsetX;
     newJson.y = (newJson.y || 0) + offsetY;
-    newJson.callouts = []; // Очищаем выноски
+    newJson.callouts = []; // Очищаем старые выноски
 
     const el = ElementFactory.createFromJSON(newJson);
     if (el) {
       el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
 
-      // Для групп обновляем позиции всех вложенных элементов
-      if (el.type === 'group' && el.elements) {
-        updateElementPositions(el, offsetX, offsetY);
-        el.updateBounds();
+      // СОЗДАЕМ НОВУЮ ВЫНОСКУ ДЛЯ ЭЛЕМЕНТА
+      if (el.showCallout !== false) {
+        // Добавляем выноску над элементом
+        const topLeft = el.getTopLeft();
+        const calloutY = topLeft.y - 50;
+        el.addCallout(el.x, calloutY);
+        el.updateCalloutText();
       }
 
       newElements.push(el);
@@ -807,21 +683,15 @@ const pasteElements = () => {
 
   // Обновляем порты у всех созданных элементов
   for (const el of newElements) {
-    updatePortsRecursive(el);
+    if (el.updatePorts) el.updatePorts();
   }
 
-  // Добавляем элементы в слой
   activeLayer.elements.push(...newElements);
   layers.value = [...layers.value];
-
-  // ВАЖНО: выделяем новые элементы и обновляем renderer
   updateSelection(newElements);
-
-  // Принудительно обновляем выделение в renderer
   if (renderer) {
     renderer.setSelectedElements(newElements);
   }
-
   scheduleRender();
 
   showNotify({
@@ -830,7 +700,6 @@ const pasteElements = () => {
     timeout: 2000
   });
 };
-
 const handleKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }
   else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); pasteElements(); }
@@ -1018,26 +887,13 @@ const onDrop = (e) => {
 const rotateElement = (angleDeg) => {
   if (!selectedElement.value) return;
   const el = selectedElement.value;
-  if (el instanceof Group) {
-    const centerX = el.x, centerY = el.y;
-    const angleRad = angleDeg * Math.PI / 180;
-    for (const child of el.elements) {
-      const dx = child.x - centerX, dy = child.y - centerY;
-      child.x = centerX + dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
-      child.y = centerY + dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-      child.rotation = (child.rotation + angleDeg) % 360;
-      child.updatePorts?.();
-    }
-    el.updateBounds();
-    el.updateCalloutText();
-  } else {
-    el.rotation = (el.rotation + angleDeg + 360) % 360;
-    el.updatePorts?.();
-    el.updateCalloutText?.();
-  }
+  el.rotation = (el.rotation + angleDeg + 360) % 360;
+  el.updatePorts?.();
+  el.updateCalloutText?.();
   connectionManager?.updateAllPortsAndConnections(40);
   scheduleRender();
 };
+
 const rotateLeft45 = () => rotateElement(-45);
 const rotateRight45 = () => rotateElement(45);
 const rotateLeft90 = () => rotateElement(-90);
@@ -1059,50 +915,6 @@ const deleteSelected = () => {
   }
   layers.value = [...layers.value];
   updateSelection([]);
-  scheduleRender();
-};
-
-const groupSelected = () => {
-  if (selectedElements.value.length < 2) return;
-  if (selectedElements.value.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя группировать группы!', timeout: 3000 });
-    return;
-  }
-  const layersSet = new Set();
-  for (const el of selectedElements.value) {
-    const layer = layerManager.getElementLayer(el);
-    if (layer) layersSet.add(layer.id);
-  }
-  if (layersSet.size > 1) {
-    showNotify({ type: 'warning', message: 'Нельзя группировать элементы из разных слоёв!', timeout: 3000 });
-    return;
-  }
-  const targetLayer = layerManager.getElementLayer(selectedElements.value[0]);
-  if (!targetLayer) return;
-
-  const group = new Group(++nextElementId, [...selectedElements.value]);
-  group.updatePorts?.();
-  const toRemove = new Set(selectedElements.value.map(el => el.id));
-  targetLayer.elements = [...targetLayer.elements.filter(el => !toRemove.has(el.id)), group];
-  layers.value = [...layers.value];
-  updateSelection([group]);
-  scheduleRender();
-};
-
-const ungroupSelected = () => {
-  if (!isGroupSelected.value) return;
-  const group = selectedElement.value;
-  if (group.elements?.some(el => el instanceof Group)) {
-    showNotify({ type: 'warning', message: 'Нельзя разгруппировать группу с вложенными группами!', timeout: 3000 });
-    return;
-  }
-  const layer = layerManager.getElementLayer(group);
-  if (!layer) return;
-  const groupElements = group.getElements();
-  const index = layer.elements.findIndex(el => el.id === group.id);
-  if (index !== -1) layer.elements.splice(index, 1, ...groupElements);
-  layers.value = [...layers.value];
-  updateSelection(groupElements);
   scheduleRender();
 };
 
@@ -1199,13 +1011,12 @@ onMounted(() => {
   });
 });
 
-// ========== WATCHERS (как в старой версии) ==========
+// ========== WATCHERS ==========
 
 watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
 
 watch(mmPerPx, (val) => {
   globalScale.setMmPerPx(val);
-  ElementFactory.updateAllGroupsBounds(allElements.value);
   for (const el of allElements.value) {
     el.updatePorts?.();
     el.updateCalloutText?.();
@@ -1213,7 +1024,6 @@ watch(mmPerPx, (val) => {
   debouncedDraw();
 });
 
-// Главный watcher на allElements (как в старой версии elements)
 watch(allElements, () => {
   debouncedDraw();
 }, { deep: true });

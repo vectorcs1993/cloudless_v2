@@ -1,10 +1,9 @@
-import { Group } from './Group.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
 import { Fan } from './Fan.js';
-import { Transition } from './Transition.js';  // Добавьте импорт
+import { Transition } from './Transition.js';
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
 
@@ -19,6 +18,7 @@ export class ElementFactory {
     const a2 = params.a2 || 50;
     const c2 = params.c2 || 50;
     const showCallout = params.showCallout;
+
     switch (type) {
       case 'duct':
         const duct = new DuctDirect(id, x_px, y_px, sectionType, a, b, c);
@@ -28,6 +28,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) duct.lineWidth = params.lineWidth;
         duct.showCallout = showCallout;
         return duct;
+
       case 'transition':
         const transition = new Transition(id, x_px, y_px, sectionType, sectionType2, a, a2, b, c, c2);
         if (params.rotation !== undefined) transition.rotation = params.rotation;
@@ -36,6 +37,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) transition.lineWidth = params.lineWidth;
         transition.showCallout = showCallout;
         return transition;
+
       case 'tee':
         const tee = new Tee(id, x_px, y_px, sectionType, a);
         if (params.l1 !== undefined) tee.l1 = params.l1;
@@ -48,6 +50,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) tee.lineWidth = params.lineWidth;
         tee.showCallout = showCallout;
         return tee;
+
       case 'cross':
         const cross = new Cross(id, x_px, y_px, sectionType, a);
         if (params.l1 !== undefined) cross.l1 = params.l1;
@@ -58,6 +61,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) cross.lineWidth = params.lineWidth;
         cross.showCallout = showCallout;
         return cross;
+
       case 'elbow':
         const elbow = new Elbow(id, x_px, y_px, sectionType, a);
         if (params.r !== undefined) elbow.r = params.r;
@@ -67,6 +71,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) elbow.lineWidth = params.lineWidth;
         elbow.showCallout = showCallout;
         return elbow;
+
       case 'fan':
         const fan = new Fan(id, x_px, y_px, sectionType, a, b);
         if (params.flow !== undefined) fan.flow = params.flow;
@@ -77,29 +82,7 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) fan.lineWidth = params.lineWidth;
         fan.showCallout = showCallout;
         return fan;
-      case 'group':
-        // Сначала создаем группу без элементов
-        const group = new Group(id, []);
-        group.name = params.name || group.name;
-        group.color = params.color || group.color;
-        group.rotation = params.rotation || 0;
-        group.x = params.x || 0;
-        group.y = params.y || 0;
-        group.width = params.width || 0;
-        group.height = params.height || 0;
 
-        // Восстанавливаем выноски группы
-        if (params.callouts) {
-          group.callouts = params.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
-        }
-        // Восстанавливаем элементы группы (рекурсивно)
-        if (params.elements && params.elements.length > 0) {
-          group.elements = params.elements.map(elJson => this.createFromJSON(elJson));
-        }
-
-        if (params.lineWidth !== undefined) group.lineWidth = params.lineWidth;
-        group.showCallout = showCallout;
-        return group;
       default:
         throw new Error(`Unknown element type: ${type}`);
     }
@@ -129,7 +112,6 @@ export class ElementFactory {
         flow: jsonData.flow,
         pressure: jsonData.pressure,
         rotation: jsonData.rotation,
-        elements: jsonData.elements,
         name: jsonData.name,
         color: jsonData.color,
         lineWidth: jsonData.lineWidth,
@@ -139,8 +121,8 @@ export class ElementFactory {
       }
     );
 
-    // Восстанавливаем порты (для не-групп)
-    if (element.type !== 'group' && jsonData.ports) {
+    // Восстанавливаем порты
+    if (jsonData.ports) {
       element.ports = jsonData.ports.map(p => new Port(
         p.id, p.elementId, p.direction, p.side, p.localX, p.localY, p.worldX, p.worldY
       ));
@@ -153,21 +135,17 @@ export class ElementFactory {
         }
       });
 
-      // ВАЖНО: обновляем мировые координаты портов
+      // Обновляем мировые координаты портов
       if (typeof element.updatePorts === 'function') {
         element.updatePorts();
       }
     }
 
-    // Восстанавливаем выноски (для не-групп, у групп уже восстановлены)
-    if (element.type !== 'group' && jsonData.callouts && jsonData.callouts.length > 0) {
+    // Восстанавливаем выноски
+    if (jsonData.callouts && jsonData.callouts.length > 0) {
       element.callouts = jsonData.callouts.map(c => new Callout(c.id, c.elementId, c.text, c.x, c.y));
-    } else if (element.type !== 'group') {
+    } else {
       element.callouts = [];
-    }
-
-    if (element.type === 'group' && jsonData.showCallout !== undefined) {
-      element.showCallout = jsonData.showCallout;
     }
 
     // Обновляем выноски после загрузки
@@ -176,46 +154,5 @@ export class ElementFactory {
     }
 
     return element;
-  }
-
-  // Добавьте новый метод для обновления всех групп после загрузки
-  static updateAllGroupsBounds(elements) {
-    if (!elements || !Array.isArray(elements)) return;
-
-    const updateGroupRecursive = (element) => {
-      if (!element) return;
-
-      if (element.type === 'group') {
-        // Рекурсивно обновляем все вложенные группы
-        if (element.elements && Array.isArray(element.elements)) {
-          element.elements.forEach(updateGroupRecursive);
-        } else {
-          // Если elements нет или это не массив, инициализируем пустым массивом
-          element.elements = [];
-        }
-
-        // Затем обновляем границы текущей группы
-        if (typeof element.updateBounds === 'function') {
-          element.updateBounds();
-        }
-
-        // Обновляем выноску
-        if (typeof element.updateCalloutText === 'function') {
-          element.updateCalloutText();
-        }
-
-        // Создаем выноску если её нет
-        if ((!element.callouts || element.callouts.length === 0) && element.width > 0 && element.height > 0) {
-          if (typeof element.getTopLeft === 'function') {
-            const topLeft = element.getTopLeft();
-            if (typeof element.addCallout === 'function') {
-              element.addCallout(element.x, topLeft.y - 50);
-            }
-          }
-        }
-      }
-    };
-
-    elements.forEach(updateGroupRecursive);
   }
 }

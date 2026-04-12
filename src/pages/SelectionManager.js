@@ -56,18 +56,6 @@ export class SelectionManager {
 
   // Точная проверка пересечения элемента с областью выделения
   isElementIntersectsRect(element, worldRect, scale) {
-    // Для групп используем рекурсивную проверку
-    if (element.type === 'group') {
-      if (!element.elements || element.elements.length === 0) return false;
-
-      for (const childElement of element.elements) {
-        if (this.isElementIntersectsRect(childElement, worldRect, scale)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
     const ctx = this.getTempContext();
     if (!ctx) return false;
 
@@ -104,7 +92,6 @@ export class SelectionManager {
       // ========== УЛУЧШЕННАЯ ЛОГИКА ПРОВЕРКИ ==========
 
       // 1. Проверяем, пересекается ли ограничивающий прямоугольник элемента с областью выделения
-      // Это быстрая предварительная проверка
       const elementBounds = this.getElementBounds(element);
       const rectBounds = worldRect;
 
@@ -115,7 +102,7 @@ export class SelectionManager {
 
       if (!boundsIntersect) {
         ctx.restore();
-        return false; // Быстрый выход, если даже bounding boxes не пересекаются
+        return false;
       }
 
       // 2. Проверяем, находится ли хотя бы одна вершина элемента внутри области выделения
@@ -131,7 +118,6 @@ export class SelectionManager {
       }
 
       // 3. Проверяем, находится ли область выделения полностью внутри элемента
-      // Для этого проверяем, все ли углы области выделения внутри элемента
       const selectionCorners = [
         { x: worldRect.minX, y: worldRect.minY },
         { x: worldRect.maxX, y: worldRect.minY },
@@ -149,11 +135,10 @@ export class SelectionManager {
 
       if (allCornersInside) {
         ctx.restore();
-        return true; // Вся область выделения внутри элемента
+        return true;
       }
 
       // 4. Проверяем пересечение границ элемента с областью выделения
-      // Получаем все точки, где граница элемента пересекает область выделения
       const intersections = this.findIntersections(element, worldRect, ctx);
       if (intersections.length > 0) {
         ctx.restore();
@@ -161,8 +146,7 @@ export class SelectionManager {
       }
 
       // 5. Дополнительная проверка: берем несколько случайных точек внутри области выделения
-      // и проверяем их на принадлежность элементу
-      const numSamples = 20; // Количество случайных точек
+      const numSamples = 20;
       for (let i = 0; i < numSamples; i++) {
         const sampleX = worldRect.minX + Math.random() * (worldRect.maxX - worldRect.minX);
         const sampleY = worldRect.minY + Math.random() * (worldRect.maxY - worldRect.minY);

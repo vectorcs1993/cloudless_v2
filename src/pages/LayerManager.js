@@ -41,12 +41,6 @@ export class LayerManager {
       if (layer.elements.includes(element)) {
         return layer.locked;
       }
-      // Проверяем, не находится ли элемент внутри группы
-      for (const el of layer.elements) {
-        if (el.type === 'group' && el.elements && el.elements.includes(element)) {
-          return layer.locked;
-        }
-      }
     }
     return false;
   }

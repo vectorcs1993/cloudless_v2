@@ -179,10 +179,9 @@ export class CanvasRenderer {
     return radius;
   }
 
-
   getPortColor(isHighlighted = false) {
     if (isHighlighted) return '#ff00ff';
-    return '#888888'; // Все порты серые, без дифференциации
+    return '#888888';
   }
 
   setSelectedElements(elements) {
@@ -303,19 +302,12 @@ export class CanvasRenderer {
   drawPorts(ctx) {
     const allPorts = [];
 
-    const collectPorts = (elements) => {
-      for (const element of elements) {
-        if (this.isElementVisible(element) && element.ports?.length) {
-          allPorts.push(...element.ports);
-        }
-        if (element.type === 'group' && element.elements) {
-          collectPorts(element.elements);
-        }
-      }
-    };
-
     const visibleElements = this.getVisibleElements();
-    collectPorts(visibleElements);
+    for (const element of visibleElements) {
+      if (this.isElementVisible(element) && element.ports?.length) {
+        allPorts.push(...element.ports);
+      }
+    }
 
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
@@ -339,7 +331,6 @@ export class CanvasRenderer {
       if (!this.isElementVisible(element)) continue;
 
       if (element.callouts?.length && element.showCallout) {
-
         if (element.updateCalloutText) {
           element.updateCalloutText();
         }
@@ -372,20 +363,13 @@ export class CanvasRenderer {
       let connectedCount = 0;
       let totalPorts = 0;
 
-      const countPorts = (elements) => {
-        for (const element of elements) {
-          if (this.isElementVisible(element) && element.ports?.length) {
-            totalPorts += element.ports.length;
-            connectedCount += element.ports.filter(p => p.isConnected?.()).length;
-          }
-          if (element.type === 'group' && element.elements) {
-            countPorts(element.elements);
-          }
-        }
-      };
-
       const visibleElements = this.getVisibleElements();
-      countPorts(visibleElements);
+      for (const element of visibleElements) {
+        if (this.isElementVisible(element) && element.ports?.length) {
+          totalPorts += element.ports.length;
+          connectedCount += element.ports.filter(p => p.isConnected?.()).length;
+        }
+      }
       ctx.fillText(`Портов: ${connectedCount}/${totalPorts} подключено`, 10, 90);
     }
 

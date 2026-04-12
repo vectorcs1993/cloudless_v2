@@ -11,7 +11,7 @@ export class Port {
     this.worldY = worldY;
     this.connectedElementId = null;
     this.connectedPortId = null;
-    this.radius = 3;
+    this.radius = 5;
   }
 
   isConnected() {
