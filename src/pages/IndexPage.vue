@@ -157,7 +157,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                    }}</q-item-label></q-item-section>
+                        }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
@@ -175,7 +175,7 @@
                     <q-list dense>
                       <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                         <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                        }}:</q-item-label></q-item-section>
+                            }}:</q-item-label></q-item-section>
                         <q-item-section>
                           <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]" />
                           <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
@@ -260,9 +260,16 @@
                       <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
                         size="16px" />
                       <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
-                      <span v-if="port.isConnected?.()" class="q-ml-auto">→ ID {{ port.connectedElementId }}</span>
+
+                      <div v-if="port.isConnected?.()" class="q-ml-auto">
+                        <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
+                          @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
+                      </div>
                       <span v-else class="q-ml-auto text-negative">не подключен</span>
                     </div>
+                  </div>
+                  <div v-else class="text-center q-pa-md text-grey">
+                    Нет портов у выбранного элемента
                   </div>
                 </q-tab-panel>
               </q-tab-panels>
@@ -389,7 +396,7 @@ const projectTree = computed(() => {
   const buildElementNode = (item, layerInfo) => {
     return {
       id: item.id,
-      label: `${BaseElement.getAvailableTypes()[item.type] || item.type}: ${item.name || item.id}`,
+      label: `${item.name || item.id}`,
       icon: 'rectangle',
       color: item.color || '#888',
       info: '',
@@ -741,6 +748,40 @@ const forceUpdateConnections = () => {
     scheduleRender();
   }
 };
+
+// Переход к подключенному элементу
+const gotoConnectedElement = (elementId) => {
+  // Ищем элемент по ID
+  const targetElement = allElements.value.find(el => el.id === elementId);
+
+  if (!targetElement) {
+    showNotify({
+      type: 'warning',
+      message: `Элемент с ID ${elementId} не найден`,
+      timeout: 2000
+    });
+    return;
+  }
+
+  // Выделяем элемент
+  updateSelection([targetElement]);
+
+  // Центрируем камеру на элементе
+  if (renderer?.canvas) {
+    const cx = renderer.canvas.clientWidth / 2;
+    const cy = renderer.canvas.clientHeight / 2;
+    renderOptions.panX.value = cx - targetElement.x * renderOptions.scale.value;
+    renderOptions.panY.value = cy - targetElement.y * renderOptions.scale.value;
+    scheduleRender();
+  }
+
+  showNotify({
+    type: 'positive',
+    message: `Переход к элементу: ${targetElement.name || targetElement.type} (ID: ${elementId})`,
+    timeout: 1500
+  });
+};
+
 const loadFromLocalStorage = () => {
   const savedData = localStorage.getItem('hvac_editor_data');
   if (!savedData) {
