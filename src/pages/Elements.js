@@ -84,7 +84,7 @@ export class BaseElement {
     this.x = x;          // в пикселях - координаты ЦЕНТРА!
     this.y = y;          // в пикселях - координаты ЦЕНТРА!
     this.name = name;
-    this.color = this.getColors()[0].value;
+    this.color = '#C9C9C9';
     this.rotation = 0;
     this.ports = [];
     this.callouts = [];
@@ -191,26 +191,10 @@ export class BaseElement {
     return '';
   }
 
-  getColors() {
-    return [
-      { value: '#C9C9C9', label: 'Серый' },
-      { value: '#ff0000', label: 'Красный' },
-      { value: '#00ff00', label: 'Зеленый' },
-      { value: '#0000ff', label: 'Синий' },
-      { value: '#ffff00', label: 'Желтый' },
-      { value: '#9c27b0', label: 'Фиолетовый' },
-      { value: '#2196f3', label: 'Голубой' },
-      { value: '#ff6600', label: 'Оранжевый' },
-      { value: '#ff3399', label: 'Розовый' },
-      { value: '#663399', label: 'Пурпурный' },
-      { value: '#0099ff', label: 'Лазурный' }
-    ];
-  }
-
   getParameters() {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
-      { name: 'color', label: 'Цвет', type: 'select', options: this.getColors(), value: this.color },
+      { name: 'color', label: 'Цвет', type: 'color', value: this.color },
       { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 1, min: 1, max: 5, value: this.lineWidth, unit: 'px' },
     ];
   }
@@ -385,7 +369,6 @@ export class DuctBase extends BaseElement {
     super(id, type, x, y, name);
     this._a = size;
     this._sectionType = sectionType;
-    this._color = '#4a90e2';
   }
 
   get a() { return this._a; }
@@ -405,13 +388,6 @@ export class DuctBase extends BaseElement {
     this.updateCalloutText();
   }
 
-  get color() { return this._color; }
-
-  set color(value) {
-    if (this._color === value) return;
-    this._color = value;
-  }
-
   // Размер в пикселях для отрисовки
   getSizePx() {
     return this.mmToPx(this._a);
@@ -423,12 +399,6 @@ export class DuctBase extends BaseElement {
   getParameters() {
     return [
       ...super.getParameters(),
-      {
-        name: 'color',
-        label: 'Цвет',
-        type: 'color',
-        value: this.color
-      },
       {
         name: 'sectionType', label: 'Тип сечения', type: 'select', options: [
           { value: 'rectangular', label: 'Прямоугольное' },

@@ -16,8 +16,8 @@
               <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" animated>
                 <q-tab-panel name="library">
                   <div class="drag-items">
-                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true"
-                      @dragstart="onDragStart($event, item)" @dragend="onDragEnd">
+                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true" @dragstart="onDragStart($event, item)"
+                      @dragend="onDragEnd">
                       <div class="drag-item-preview" v-html="item.svg"></div>
                       <span class="drag-item-label">{{ item.label }}</span>
                     </div>
@@ -27,15 +27,15 @@
                   <div class="settings-grid">
                     <label>Масштаб размеров (мм/px):</label>
                     <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10"
-                        dense outlined class="inline-input" debounce="500" />
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
+                        class="inline-input" debounce="500" />
                       <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
                     </div>
 
                     <label>Масштаб сетки:</label>
                     <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500"
-                        dense outlined class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
+                        class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
                       <span class="hint-text">px</span>
                     </div>
 
@@ -82,57 +82,55 @@
                 <div class="text-subtitle1">Диспетчер проекта</div>
                 <div>
                   <q-btn icon="add" label="Слой" flat dense size="sm" @click="addNewLayer" />
-                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected"
-                    :disable="selectedElements.length < 2" />
+                  <q-btn icon="folder" label="Группа" flat dense size="sm" @click="groupSelected" :disable="selectedElements.length < 2" />
                 </div>
               </q-card-section>
               <q-separator />
               <q-card-actions class="q-pa-sm">
                 <q-btn @click="updateAllPortsAndConnections" icon="sync" dense flat size="sm" />
-                <q-btn @click="copySelected"  icon="content_copy" v-if="selectedElements.length > 0"
-                  dense flat size="sm"/>
-                <q-btn @click="pasteElements"  icon="content_paste" v-if="clipboardElements.length > 0"
-                 dense flat size="sm" />
+                <q-btn @click="copySelected" icon="content_copy" v-if="selectedElements.length > 0" dense flat size="sm" />
+                <q-btn @click="pasteElements" icon="content_paste" v-if="clipboardElements.length > 0" dense flat size="sm" />
                 <q-btn @click="expandAllTree" icon="unfold_more" dense flat size="sm" />
                 <q-btn @click="collapseAllTree" icon="unfold_less" dense flat size="sm" />
               </q-card-actions>
               <q-card-section class="q-pt-none">
-                <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes"
-                  @update:expanded="onExpandedChange" node-key="id" label-key="label" children-key="children"
-                  no-connectors @update:selected="onTreeSelect" :selected.sync="selectedTreeNode" default-expand-all>
-<template v-slot:default-header="prop">
-  <div :class="['tree-node', {
-    'tree-node-selected': prop.node.id === selectedTreeNode,
-    'tree-node-layer': prop.node.isLayer,
-    'tree-node-layer-locked': prop.node.isLayer && prop.node.layerLocked,
-    'tree-node-layer-hidden': prop.node.isLayer && !prop.node.layerVisible
-  }]" @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
+                <q-tree :dark="isDarkTheme" :nodes="projectTree" :expanded="expandedTreeNodes" @update:expanded="onExpandedChange" node-key="id"
+                  label-key="label" children-key="children" no-connectors @update:selected="onTreeSelect" :selected.sync="selectedTreeNode"
+                  default-expand-all>
+                  <template v-slot:default-header="prop">
+                    <div :class="['tree-node', {
+                      'tree-node-selected': prop.node.id === selectedTreeNode,
+                      'tree-node-layer': prop.node.isLayer,
+                      'tree-node-layer-locked': prop.node.isLayer && prop.node.layerLocked,
+                      'tree-node-layer-hidden': prop.node.isLayer && !prop.node.layerVisible
+                    }]" @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
 
-    <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
-    <span class="tree-node-label">{{ prop.node.label }}</span>
+                      <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
+                      <span class="tree-node-label">{{ prop.node.label }}</span>
 
-    <!-- Индикаторы для слоя -->
-    <template v-if="prop.node.isLayer">
-      <q-icon v-if="prop.node.layerLocked" name="lock" size="14px" color="negative" class="q-ml-xs" :title="'Слой заблокирован'" />
-      <q-icon v-if="!prop.node.layerVisible" name="visibility_off" size="14px" color="grey" class="q-ml-xs" :title="'Слой скрыт'" />
-      <q-icon v-if="activeLayerId === prop.node.layerId" name="check_circle" size="14px" color="positive" class="q-ml-xs" :title="'Активный слой'" />
+                      <!-- Индикаторы для слоя -->
+                      <template v-if="prop.node.isLayer">
+                        <q-icon v-if="prop.node.layerLocked" name="lock" size="14px" color="negative" class="q-ml-xs" :title="'Слой заблокирован'" />
+                        <q-icon v-if="!prop.node.layerVisible" name="visibility_off" size="14px" color="grey" class="q-ml-xs" :title="'Слой скрыт'" />
+                        <q-icon v-if="activeLayerId === prop.node.layerId" name="check_circle" size="14px" color="positive" class="q-ml-xs"
+                          :title="'Активный слой'" />
 
-      <!-- КНОПКИ ДЕЙСТВИЙ ДЛЯ СЛОЯ -->
-      <q-icon name="edit" size="16px" color="info" class="q-ml-xs cursor-pointer"
-        @click.stop="renameLayer(prop.node.layerId)" :title="'Переименовать'" />
-      <q-icon name="delete" size="16px" color="negative" class="q-ml-xs cursor-pointer"
-        @click.stop="removeLayerWithConfirm(prop.node.layerId)" :title="'Удалить слой'" />
-    </template>
+                        <!-- КНОПКИ ДЕЙСТВИЙ ДЛЯ СЛОЯ -->
+                        <q-icon name="edit" size="16px" color="info" class="q-ml-xs cursor-pointer" @click.stop="renameLayer(prop.node.layerId)"
+                          :title="'Переименовать'" />
+                        <q-icon name="delete" size="16px" color="negative" class="q-ml-xs cursor-pointer"
+                          @click.stop="removeLayerWithConfirm(prop.node.layerId)" :title="'Удалить слой'" />
+                      </template>
 
-    <!-- Индикаторы для элемента -->
-    <template v-else>
-      <q-icon v-if="prop.node.layerLocked" name="lock" size="12px" color="negative" class="q-ml-xs"
-        :title="`Слой ${prop.node.layerName} заблокирован`" />
-    </template>
+                      <!-- Индикаторы для элемента -->
+                      <template v-else>
+                        <q-icon v-if="prop.node.layerLocked" name="lock" size="12px" color="negative" class="q-ml-xs"
+                          :title="`Слой ${prop.node.layerName} заблокирован`" />
+                      </template>
 
-    <span class="tree-node-info">{{ prop.node.info }}</span>
-  </div>
-</template>
+                      <span class="tree-node-info">{{ prop.node.info }}</span>
+                    </div>
+                  </template>
                 </q-tree>
               </q-card-section>
             </q-card>
@@ -142,12 +140,10 @@
 
       <template v-slot:after>
         <div class="canvas-container">
-          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
-            @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver"
-            @drop="onDrop" tabindex="0">
+          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
+            @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
           </canvas>
-          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat
-            bordered>
+          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat bordered>
             <q-card-section class="row items-center justify-between">
               <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
               <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
@@ -162,7 +158,7 @@
                   <q-item>
                     <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                     <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                    }}</q-item-label></q-item-section>
+                        }}</q-item-label></q-item-section>
                   </q-item>
                 </q-list>
               </q-card-section>
@@ -180,16 +176,14 @@
                     <q-list dense>
                       <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                         <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                        }}:</q-item-label></q-item-section>
+                            }}:</q-item-label></q-item-section>
                         <q-item-section>
-                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme"
-                            v-model="selectedElement[param.name]" />
-                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'"
-                            v-model="selectedElement[param.name]" :disable="isGroupSelected" :options="param.options"
-                            option-label="label" option-value="value" dense outlined emit-value map-options />
-                          <q-input :dark="isDarkTheme" v-else :type="param.type"
-                            v-model.number="selectedElement[param.name]" :step="param.step" :min="param.min" dense
-                            outlined />
+                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]" />
+                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                            :disable="isGroupSelected" :options="param.options" option-label="label" option-value="value" dense outlined emit-value
+                            map-options />
+                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                            :min="param.min" dense outlined />
                         </q-item-section>
                         <q-item-section side class="param-unit-col">
                           <span v-if="param.unit">{{ param.unit }}</span><span v-else>—</span>
@@ -205,23 +199,23 @@
                       <q-item>
                         <q-item-section class="param-label-col"><q-item-label>X (px):</q-item-label></q-item-section>
                         <q-item-section>
-                 <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense
-  outlined @update:model-value="val => onParameterChange(val, 'x')" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'x')" />
                         </q-item-section>
                       </q-item>
                       <q-item>
                         <q-item-section class="param-label-col"><q-item-label>Y (px):</q-item-label></q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense
-                            outlined @update:model-value="val => onParameterChange(val, 'y')"/>
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'y')" />
                         </q-item-section>
                       </q-item>
                       <q-item>
                         <q-item-section class="param-label-col"><q-item-label>Поворот
                             (°):</q-item-label></q-item-section>
                         <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1"
-                            dense outlined @update:model-value="val => onParameterChange(val, 'rotation')" />
+                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1" dense outlined
+                            @update:model-value="val => onParameterChange(val, 'rotation')" />
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -263,8 +257,8 @@
                 <q-tab-panel name="links">
                   <div v-if="selectedElement?.ports?.length" class="connections-info">
                     <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                      <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'"
-                        :color="port.isConnected?.() ? 'positive' : 'negative'" size="16px" />
+                      <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
+                        size="16px" />
                       <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
                       <span v-if="port.isConnected?.()" class="q-ml-auto">→ ID {{ port.connectedElementId }}</span>
                       <span v-else class="q-ml-auto text-negative">не подключен</span>
@@ -275,10 +269,10 @@
             </div>
             <q-card-section v-if="selectedElements.length > 1 || isGroupSelected" class="group-controls q-mt-md">
               <div class="text-subtitle2 q-mb-sm">Групповые операции</div>
-              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2"
-                @click="groupSelected" class="full-width q-mb-sm" />
-              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected"
-                @click="ungroupSelected" class="full-width" />
+              <q-btn label="Сгруппировать" icon="folder" color="primary" :disable="selectedElements.length < 2" @click="groupSelected"
+                class="full-width q-mb-sm" />
+              <q-btn label="Разгруппировать" icon="folder_open" color="warning" :disable="!isGroupSelected" @click="ungroupSelected"
+                class="full-width" />
             </q-card-section>
             <q-card-section>
               <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
@@ -612,7 +606,7 @@ const onTreeSelect = (nodeId) => {
 
   if (foundNode.isLayer) {
     selectedTreeNode.value = nodeId;
-     setActiveLayer(foundNode.layerId);
+    setActiveLayer(foundNode.layerId);
     showNotify({ type: 'info', message: `Выбран слой: ${foundNode.label} (${foundNode.info})`, timeout: 1500 });
     return;
   }
