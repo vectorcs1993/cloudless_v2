@@ -146,7 +146,7 @@ export class CanvasRenderer {
       this.drawCallouts(ctx);
     }
 
-    this.drawInfo(ctx, drawnCount, visibleElements.length);
+    this.drawInfo(ctx);
 
     // Рисуем призрак
     if (this.ghostElement) {
@@ -362,26 +362,6 @@ export class CanvasRenderer {
     ctx.fillStyle = isDark ? '#fff' : '#000';
     ctx.font = '14px Arial';
     ctx.fillText('Масштаб: ' + this.scale.value.toFixed(2) + 'x', 10, 30);
-    ctx.fillText('Панорама: x: ' + this.panX.value.toFixed(2) + ' y: ' + this.panY.value.toFixed(2), 10, 50);
-    ctx.fillText(`Элементов: ${drawnCount} / ${totalCount} (видимых)`, 10, 70);
-
-    if (this.options.showPorts.value) {
-      let connectedCount = 0;
-      let totalPorts = 0;
-
-      const visibleElements = this.getVisibleElements();
-      for (const element of visibleElements) {
-        if (this.isElementVisible(element) && element.ports?.length) {
-          totalPorts += element.ports.length;
-          connectedCount += element.ports.filter(p => p.isConnected?.()).length;
-        }
-      }
-      ctx.fillText(`Портов: ${connectedCount}/${totalPorts} подключено`, 10, 90);
-    }
-
-    if (this.layers?.value) {
-      ctx.fillText(`Слоёв: ${this.layers.value.length}`, 10, 110);
-    }
 
     ctx.restore();
   }

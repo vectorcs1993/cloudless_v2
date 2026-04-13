@@ -351,6 +351,8 @@ import { Tee } from './Tee.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
 
+document.title = 'Редактор воздуховодов онлайн';
+
 const showNotify = (options) => Notify.create(options);
 
 // Состояние
