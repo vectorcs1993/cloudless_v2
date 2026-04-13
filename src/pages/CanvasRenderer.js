@@ -189,25 +189,6 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  getPortRadius(port, isHighlighted = false) {
-    const mmPerPx = this.options.mmPerPx?.value || 2;
-    const portSizeMm = 15;
-    let radiusPx = (portSizeMm / mmPerPx) / 2;
-    let radius = radiusPx / this.scale.value;
-    const minScreenRadius = 3;
-    const maxScreenRadius = 12;
-    radius = Math.min(maxScreenRadius, Math.max(minScreenRadius, radius));
-    if (isHighlighted) {
-      radius *= this.portSettings.highlightScale;
-    }
-    return radius;
-  }
-
-  getPortColor(isHighlighted = false) {
-    if (isHighlighted) return '#ff00ff';
-    return '#888888';
-  }
-
   setSelectedElements(elements) {
     this.selectedElements = Array.isArray(elements) ? elements : (elements ? [elements] : []);
   }
@@ -325,8 +306,8 @@ export class CanvasRenderer {
 
   drawPorts(ctx) {
     const allPorts = [];
-
     const visibleElements = this.getVisibleElements();
+
     for (const element of visibleElements) {
       if (this.isElementVisible(element) && element.ports?.length) {
         allPorts.push(...element.ports);
@@ -343,7 +324,10 @@ export class CanvasRenderer {
         continue;
       }
 
-      port.draw(ctx, this.scale.value, this.options.isDarkTheme.value);
+      // ИСПОЛЬЗУЕМ МЕТОДЫ ПОРТА
+      const isHighlighted = this.highlightedPort === port;
+      port.draw(ctx, this.scale.value, this.options.mmPerPx?.value || 2,
+        this.options.isDarkTheme.value, isHighlighted);
     }
   }
 

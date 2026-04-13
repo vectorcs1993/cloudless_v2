@@ -40,17 +40,36 @@ export class Port {
     this.worldY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
   }
 
-  // Простой метод отрисовки порта
-  draw(ctx, scale, isDarkTheme) {
+  getRadius(scale, mmPerPx, isHighlighted = false, highlightScale = 1.5) {
+    const portSizeMm = 36;
+    let radiusPx = (portSizeMm / mmPerPx) / 2;
+    let radius = radiusPx / scale;
+    const minScreenRadius = 3;
+    const maxScreenRadius = 36;
+    radius = Math.min(maxScreenRadius, Math.max(minScreenRadius, radius));
+    if (isHighlighted) {
+      radius *= highlightScale;
+    }
+    return radius;
+  }
+
+  getColor(isHighlighted = false) {
+    if (isHighlighted) return '#ff00ff';
+    return '#888888';
+  }
+
+  // ОБНОВЛЕННЫЙ МЕТОД ОТРИСОВКИ
+  draw(ctx, scale, mmPerPx, isDarkTheme, isHighlighted = false) {
     if (this.worldX === undefined || this.worldY === undefined) return;
+
+    const radius = this.getRadius(scale, mmPerPx, isHighlighted);
+    const color = this.getColor(isHighlighted);
 
     ctx.save();
     ctx.beginPath();
-    ctx.arc(this.worldX, this.worldY, this.radius, 0, 2 * Math.PI);
-    // Красный залитый кружок
-    ctx.fillStyle = '#ff0000';
+    ctx.arc(this.worldX, this.worldY, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
     ctx.fill();
-    // Черная обводка
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1 / scale;
     ctx.stroke();
