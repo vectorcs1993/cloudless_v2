@@ -110,7 +110,7 @@ export class ConnectionManager {
     return true;
   }
 
-  findClosestPort(port, maxDistance = 40) {
+  findClosestPort(port, maxDistance = 10) {
     const allPorts = this.getAllPorts();
     let closestPort = null;
     let minDistance = maxDistance;
@@ -130,7 +130,7 @@ export class ConnectionManager {
     return closestPort;
   }
 
-  updateAllPortsAndConnections(maxDistance = 40, layerManager = null) {
+  updateAllPortsAndConnections(maxDistance = 10, layerManager = null) {
     if (this.isUpdating) {
       console.log('Пропущен рекурсивный вызов updateAllPortsAndConnections');
       return { broken: 0, connected: 0 };

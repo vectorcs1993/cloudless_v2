@@ -82,65 +82,121 @@ export class InteractionManager {
     }
   }
 
-  moveWithSnap(elements, dx, dy, startPositions) {
-    for (const p of startPositions) {
-      p.el.x = p.x;
-      p.el.y = p.y;
-      p.el.updatePorts?.();
+moveWithSnap(elements, dx, dy, startPositions) {
+  // Сначала сбрасываем все элементы в начальные позиции
+  for (const p of startPositions) {
+    p.el.x = p.x;
+    p.el.y = p.y;
+    p.el.updatePorts?.();
+    // Восстанавливаем выноски в начальные позиции
+    if (p.el.callouts && p.startCalloutPositions) {
+      for (let i = 0; i < p.el.callouts.length; i++) {
+        p.el.callouts[i].x = p.startCalloutPositions[i].x;
+        p.el.callouts[i].y = p.startCalloutPositions[i].y;
+      }
     }
+    p.el.updateCalloutText?.();
+  }
 
-    if (!this.options.snapToPorts?.value) {
-      this.moveElements(elements, dx, dy);
-      return;
-    }
-
-    const movingPorts = [];
+  if (!this.options.snapToPorts?.value) {
+    // Применяем сдвиг ко всему
     for (const el of elements) {
-      if (el.ports) movingPorts.push(...el.ports);
-    }
-    if (movingPorts.length === 0) {
-      this.moveElements(elements, dx, dy);
-      return;
-    }
-
-    const movingIds = new Set(elements.map(el => el.id));
-    let best = null;
-    let bestDist = Infinity;
-
-    for (const mp of movingPorts) {
-      const allPorts = this.connectionManager.getAllPorts();
-      for (const tp of allPorts) {
-        if (movingIds.has(tp.elementId)) continue;
-        const targetEl = this.findElementById(tp.elementId);
-        if (targetEl && !this.isInteractive(targetEl)) continue;
-        const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
-        const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
-        if (dist < bestDist && dist < 40) {
-          bestDist = dist;
-          best = { movingPort: mp, targetPort: tp, ox: tp.worldX - mp.worldX, oy: tp.worldY - mp.worldY };
+      el.x += dx;
+      el.y += dy;
+      el.updatePorts?.();
+      if (el.callouts) {
+        for (const c of el.callouts) {
+          c.x += dx;
+          c.y += dy;
         }
       }
+      el.updateCalloutText?.();
     }
+    return;
+  }
 
-    if (best) {
-      this.moveElements(elements, best.ox, best.oy);
-      this.renderer.setHighlightedPort(best.targetPort);
-      if (this.autoUpdateConnections) {
-        if (best.movingPort.isConnected?.()) {
-          const old = this.connectionManager.getPortById(best.movingPort.connectedPortId);
-          if (old) this.connectionManager.disconnectPorts(best.movingPort, old);
+  const movingPorts = [];
+  for (const el of elements) {
+    if (el.ports) movingPorts.push(...el.ports);
+  }
+  if (movingPorts.length === 0) {
+    for (const el of elements) {
+      el.x += dx;
+      el.y += dy;
+      el.updatePorts?.();
+      if (el.callouts) {
+        for (const c of el.callouts) {
+          c.x += dx;
+          c.y += dy;
         }
-        if (best.targetPort.isConnected?.()) {
-          const old = this.connectionManager.getPortById(best.targetPort.connectedPortId);
-          if (old) this.connectionManager.disconnectPorts(best.targetPort, old);
-        }
-        this.connectionManager.connectPorts(best.movingPort, best.targetPort);
       }
-    } else {
-      this.moveElements(elements, dx, dy);
-      this.renderer.setHighlightedPort(null);
+      el.updateCalloutText?.();
+    }
+    return;
+  }
+
+  const movingIds = new Set(elements.map(el => el.id));
+  let best = null;
+  let bestDist = Infinity;
+
+  for (const mp of movingPorts) {
+    const allPorts = this.connectionManager.getAllPorts();
+    for (const tp of allPorts) {
+      if (movingIds.has(tp.elementId)) continue;
+      const targetEl = this.findElementById(tp.elementId);
+      if (targetEl && !this.isInteractive(targetEl)) continue;
+      const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
+      const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
+      if (dist < bestDist && dist < this.options.snapDistance.value) {
+        bestDist = dist;
+        best = { movingPort: mp, targetPort: tp, ox: tp.worldX - mp.worldX, oy: tp.worldY - mp.worldY };
+      }
     }
   }
+
+  if (best) {
+    // Применяем точный сдвиг
+    for (const el of elements) {
+      el.x += best.ox;
+      el.y += best.oy;
+      el.updatePorts?.();
+      if (el.callouts) {
+        for (const c of el.callouts) {
+          c.x += best.ox;
+          c.y += best.oy;
+        }
+      }
+      el.updateCalloutText?.();
+    }
+    this.renderer.setHighlightedPort(best.targetPort);
+    if (this.autoUpdateConnections) {
+      if (best.movingPort.isConnected?.()) {
+        const old = this.connectionManager.getPortById(best.movingPort.connectedPortId);
+        if (old) this.connectionManager.disconnectPorts(best.movingPort, old);
+      }
+      if (best.targetPort.isConnected?.()) {
+        const old = this.connectionManager.getPortById(best.targetPort.connectedPortId);
+        if (old) this.connectionManager.disconnectPorts(best.targetPort, old);
+      }
+      this.connectionManager.connectPorts(best.movingPort, best.targetPort);
+    }
+  } else {
+    // Применяем обычный сдвиг
+    for (const el of elements) {
+      el.x += dx;
+      el.y += dy;
+      el.updatePorts?.();
+      if (el.callouts) {
+        for (const c of el.callouts) {
+          c.x += dx;
+          c.y += dy;
+        }
+      }
+      el.updateCalloutText?.();
+    }
+    this.renderer.setHighlightedPort(null);
+  }
+}
 
   onMouseDown(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
@@ -174,7 +230,7 @@ export class InteractionManager {
         this.isDragging = true;
         this.dragElements = [...this.renderer.selectedElements].filter(el => this.isInteractive(el));
         this.dragStartWorld = world;
-        this.dragStartPositions = this.dragElements.map(el => ({ el, x: el.x, y: el.y }));
+        this.dragStartPositions = this.dragElements.map(el => ({ el, x: el.x, y: el.y,  startCalloutPositions: el.callouts ? el.callouts.map(c => ({ x: c.x, y: c.y })) : []  }));
         this.canvas.style.cursor = 'grabbing';
       } else {
         if (!e.ctrlKey && !e.metaKey) {
@@ -259,7 +315,7 @@ export class InteractionManager {
     }
 
     if (this.isDragging && this.dragElements.length && this.autoUpdateConnections) {
-      this.connectionManager?.updateAllPortsAndConnections(40, this.layerManager);
+      this.connectionManager?.updateAllPortsAndConnections(this.options.snapDistance.value, this.layerManager);
     }
 
     this.isDragging = false;
