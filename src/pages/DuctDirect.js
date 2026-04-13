@@ -35,7 +35,7 @@ export class DuctDirect extends DuctBase {
   getCalloutText() {
     let text = `${super.getCalloutText()}\nL: ${this._b} мм`;
     if (this._sectionType === 'rectangular') {
-      text += `\n${this._a}x${this._c} мм\nDэкв: ${this.getEquivalentDiameter().toFixed(0)} мм`;
+      text += `\n${this._a}x${this._c} мм`;
     } else {
       text += `\n⌀${this._a} мм`;
     }
@@ -44,7 +44,7 @@ export class DuctDirect extends DuctBase {
 
   getParameters() {
     const params = [...super.getParameters(),
-      { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
+    { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
     ];
     if (this._sectionType === 'rectangular') {
       params.push({ name: 'c', label: 'Высота', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });

@@ -63,7 +63,7 @@ export class Elbow extends DuctDirect {
   getCalloutText() {
     let text = `${this.name}\nРадиус: ${this._r} мм`;
     if (this._sectionType === 'rectangular') {
-      text += `\n${this._a}x${this._c} мм\nDэкв: ${this.getEquivalentDiameter().toFixed(0)} мм`;
+      text += `\n${this._a}x${this._c} мм`;
     } else {
       text += `\n⌀${this._a} мм`;
     }

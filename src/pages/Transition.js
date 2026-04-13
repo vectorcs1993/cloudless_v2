@@ -29,12 +29,6 @@ export class Transition extends DuctDirect {
     this.updateCalloutText();
   }
 
-  getEquivalentDiameter() {
-    const d1 = this._sectionType === 'round' ? this._a : (2 * this._a * this._c) / (this._a + this._c);
-    const d2 = this._sectionType2 === 'round' ? this._a2 : (2 * this._a2 * this._c2) / (this._a2 + this._c2);
-    return (d1 + d2) / 2;
-  }
-
   getCalloutText() {
     const getSizeStr = (type, size, size2) => {
       if (type === 'round') return `⌀${size}`;
@@ -42,8 +36,7 @@ export class Transition extends DuctDirect {
     };
     const inletStr = getSizeStr(this._sectionType, this._a, this._c);
     const outletStr = getSizeStr(this._sectionType2, this._a2, this._c2);
-    const avgArea = (Math.PI * Math.pow(this.getEquivalentDiameter() / 2, 2)) / 1000000;
-    return `${this.name}\n${inletStr} → ${outletStr} мм\nL: ${this._b} мм\nSср: ${avgArea.toFixed(2)} м²`;
+    return `${this.name}\n${inletStr} → ${outletStr} мм\nL: ${this._b} мм`;
   }
 
   getParameters() {

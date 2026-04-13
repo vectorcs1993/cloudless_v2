@@ -166,7 +166,6 @@ export class BaseElement {
       this.callouts[0].text = this.getCalloutText();
     }
   }
-
   drawCenterLines(ctx, scale, isDarkTheme) {
     const width = this.getWidth();
     const height = this.getHeight();
