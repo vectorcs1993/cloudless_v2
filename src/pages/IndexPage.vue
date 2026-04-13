@@ -290,7 +290,7 @@
                             выноску:</q-item-label></q-item-section>
                         <q-item-section>
                           <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout"
-                            :disable="isElementLocked(selectedElement)" />
+                            :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'showCallout')" />
                         </q-item-section>
                       </q-item>
                     </q-list>
@@ -534,7 +534,6 @@ const onParameterChange = (value, paramName) => {
   selectedElement.value.updatePorts?.();
   selectedElement.value.updateCalloutText?.();
 
-  // Прямой вызов без setTimeout
   if (connectionManager && autoUpdateConnections.value) {
     connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
   }
@@ -631,7 +630,6 @@ const onTreeSelect = (nodeId) => {
 };
 
 const onExpandedChange = (val) => { expandedTreeNodes.value = val; };
-
 const expandAllTree = () => {
   const getAllIds = (nodes) => {
     let ids = [];
@@ -643,9 +641,7 @@ const expandAllTree = () => {
   };
   expandedTreeNodes.value = getAllIds(projectTree.value);
 };
-
 const collapseAllTree = () => { expandedTreeNodes.value = []; };
-
 const onTreeNodeContextMenu = (event, node) => {
   event.preventDefault();
   if (node.isLayer) {
@@ -655,37 +651,27 @@ const onTreeNodeContextMenu = (event, node) => {
   }
 };
 
-// Переключение блокировки слоя
 const toggleLayerLock = (layerId) => {
   layerManager.toggleLayerLock(layerId);
   layers.value = [...layers.value];
   const layer = layers.value.find(l => l.id === layerId);
-  showNotify({
-    type: 'info',
-    message: `Слой "${layer.name}" ${layer.locked ? 'заблокирован' : 'разблокирован'}`,
-    timeout: 1000
-  });
+  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.locked ? 'заблокирован' : 'разблокирован'}`, timeout: 1000 });
   scheduleRender();
 };
 
-// Переключение видимости слоя
 const toggleLayerVisibility = (layerId) => {
   layerManager.toggleLayerVisibility(layerId);
   layers.value = [...layers.value];
   const layer = layers.value.find(l => l.id === layerId);
-  showNotify({
-    type: 'info',
-    message: `Слой "${layer.name}" ${layer.visible ? 'показан' : 'скрыт'}`,
-    timeout: 1000
-  });
+  showNotify({ type: 'info', message: `Слой "${layer.name}" ${layer.visible ? 'показан' : 'скрыт'}`, timeout: 1000 });
   scheduleRender();
 };
 
-// Проверка, заблокирован ли элемент (находится на заблокированном слое)
 const isElementLocked = (element) => {
   if (!element || !layerManager) return false;
   return layerManager.isLayerLocked(element);
 };
+
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
 
 const copySelected = () => {
@@ -695,11 +681,7 @@ const copySelected = () => {
     json.callouts = [];
     return json;
   });
-  showNotify({
-    type: 'positive',
-    message: `Скопировано ${clipboardElements.value.length} элементов`,
-    timeout: 2000
-  });
+  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, timeout: 2000 });
 };
 
 const pasteElements = () => {
@@ -722,7 +704,6 @@ const pasteElements = () => {
 
   for (const json of clipboardElements.value) {
     const newJson = JSON.parse(JSON.stringify(json));
-
     const oldId = newJson.id;
     const newId = ++nextElementId;
     oldIdToNewId.set(oldId, newId);
@@ -739,21 +720,17 @@ const pasteElements = () => {
 
     newJson.x = (newJson.x || 0) + offsetX;
     newJson.y = (newJson.y || 0) + offsetY;
-    newJson.callouts = []; // Очищаем старые выноски
+    newJson.callouts = [];
 
     const el = ElementFactory.createFromJSON(newJson);
     if (el) {
       el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
-
-      // СОЗДАЕМ НОВУЮ ВЫНОСКУ ДЛЯ ЭЛЕМЕНТА
       if (el.showCallout !== false) {
-        // Добавляем выноску над элементом
         const topLeft = el.getTopLeft();
         const calloutY = topLeft.y - 50;
         el.addCallout(el.x, calloutY);
         el.updateCalloutText();
       }
-
       newElements.push(el);
     }
   }
@@ -762,12 +739,10 @@ const pasteElements = () => {
   for (let i = 0; i < newElements.length; i++) {
     const newEl = newElements[i];
     const oldJson = clipboardElements.value[i];
-
     if (newEl.ports && oldJson.ports) {
       for (let pIdx = 0; pIdx < newEl.ports.length; pIdx++) {
         const newPort = newEl.ports[pIdx];
         const oldPort = oldJson.ports[pIdx];
-
         if (oldPort.connectedElementId && oldPort.connectedPortId) {
           const newTargetId = oldIdToNewId.get(oldPort.connectedElementId);
           if (newTargetId) {
@@ -784,7 +759,6 @@ const pasteElements = () => {
     }
   }
 
-  // Обновляем порты у всех созданных элементов
   for (const el of newElements) {
     if (el.updatePorts) el.updatePorts();
   }
@@ -792,17 +766,11 @@ const pasteElements = () => {
   activeLayer.elements.push(...newElements);
   layers.value = [...layers.value];
   updateSelection(newElements);
-  if (renderer) {
-    renderer.setSelectedElements(newElements);
-  }
   scheduleRender();
 
-  showNotify({
-    type: 'positive',
-    message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`,
-    timeout: 2000
-  });
+  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`, timeout: 2000 });
 };
+
 const handleKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }
   else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); pasteElements(); }
@@ -838,14 +806,12 @@ const saveToLocalStorage = () => {
   localStorage.setItem('hvac_editor_data', JSON.stringify(data));
   showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
-// Функция принудительного обновления связей (без рекурсии)
+
 const forceUpdateConnections = () => {
   if (connectionManager && autoUpdateConnections.value) {
-    // Обновляем порты у всех элементов
     for (const el of allElements.value) {
       if (el.updatePorts) el.updatePorts();
     }
-    // Обновляем связи
     const result = connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
     if (result.broken > 0 || result.connected > 0) {
       console.log(`Связи обновлены: разорвано ${result.broken}, создано ${result.connected}`);
@@ -853,24 +819,13 @@ const forceUpdateConnections = () => {
   }
 };
 
-// Переход к подключенному элементу
 const gotoConnectedElement = (elementId) => {
-  // Ищем элемент по ID
   const targetElement = allElements.value.find(el => el.id === elementId);
-
   if (!targetElement) {
-    showNotify({
-      type: 'warning',
-      message: `Элемент с ID ${elementId} не найден`,
-      timeout: 2000
-    });
+    showNotify({ type: 'warning', message: `Элемент с ID ${elementId} не найден`, timeout: 2000 });
     return;
   }
-
-  // Выделяем элемент
   updateSelection([targetElement]);
-
-  // Центрируем камеру на элементе
   if (renderer?.canvas) {
     const cx = renderer.canvas.clientWidth / 2;
     const cy = renderer.canvas.clientHeight / 2;
@@ -878,12 +833,7 @@ const gotoConnectedElement = (elementId) => {
     renderOptions.panY.value = cy - targetElement.y * renderOptions.scale.value;
     scheduleRender();
   }
-
-  showNotify({
-    type: 'positive',
-    message: `Переход к элементу: ${targetElement.name || targetElement.type} (ID: ${elementId})`,
-    timeout: 1500
-  });
+  showNotify({ type: 'positive', message: `Переход к элементу: ${targetElement.name || targetElement.type}`, timeout: 1500 });
 };
 
 const loadFromLocalStorage = () => {
@@ -898,8 +848,6 @@ const loadFromLocalStorage = () => {
   }
   try {
     const data = JSON.parse(savedData);
-
-    // Восстанавливаем слои и элементы
     if (data.layers?.length) {
       layers.value = data.layers.map(layer => ({
         ...layer,
@@ -927,16 +875,14 @@ const loadFromLocalStorage = () => {
     nextElementId = data.nextElementId || 100;
     nextPortId = data.nextPortId || 1000;
 
-    // Обновляем порты и выноски
     for (const el of allElements.value) {
       el.updatePorts?.();
       el.updateCalloutText?.();
     }
 
-    // ВАЖНО: Восстанавливаем связи между портами
     setTimeout(() => {
       const restored = connectionManager?.updateAllPortsAndConnections?.(snapDistance.value, layerManager);
-      console.log(`Восстановлено: ${restored.connected}, разорвано: ${restored.broken}`);
+      console.log(`Восстановлено: ${restored?.connected}, разорвано: ${restored?.broken}`);
       scheduleRender();
     }, 100);
 
@@ -962,7 +908,7 @@ const resetToDefault = () => {
 };
 
 const updateAllPortsAndConnections = () => {
-  const restored = connectionManager?.updateAllPortsAndConnections?.(snapDistance.value) || 0;
+  const restored = connectionManager?.updateAllPortsAndConnections?.(snapDistance.value) || { broken: 0, connected: 0 };
   scheduleRender();
   showNotify({ type: 'positive', message: `Восстановлено: ${restored.connected}, разорвано: ${restored.broken}`, timeout: 2000 });
 };
@@ -1042,6 +988,15 @@ const onDrop = (e) => {
     const el = creators[dragType]();
     el.updatePorts?.();
     el.updateCalloutText?.();
+
+    // ДОБАВЛЯЕМ ВЫНОСКУ ДЛЯ НОВОГО ЭЛЕМЕНТА
+    if (el.showCallout !== false) {
+      const topLeft = el.getTopLeft();
+      const calloutY = topLeft.y - 50;
+      el.addCallout(el.x, calloutY);
+      el.updateCalloutText();
+    }
+
     activeLayer.elements.push(el);
     layers.value = [...layers.value];
     updateSelection([el]);
@@ -1064,11 +1019,9 @@ const rotateElement = (angleDeg) => {
   el.updatePorts?.();
   el.updateCalloutText?.();
 
-  // Прямой вызов без setTimeout
   if (connectionManager && autoUpdateConnections.value) {
     connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
   }
-
   scheduleRender();
 };
 
@@ -1088,18 +1041,15 @@ const deleteSelected = () => {
   if (!selectedElements.value.length) return;
   const toDelete = new Set(selectedElements.value.map(el => el.id));
 
-  // Сначала разрываем все связи удаляемых элементов
   for (const el of selectedElements.value) {
     connectionManager?.disconnectElement(el);
   }
 
-  // Удаляем элементы из слоев
   for (const layer of layers.value) {
     layer.elements = layer.elements.filter(el => !toDelete.has(el.id));
   }
   layers.value = [...layers.value];
 
-  // Обновляем связи
   forceUpdateConnections();
   updateSelection([]);
   scheduleRender();
@@ -1169,20 +1119,15 @@ onMounted(() => {
   zIndexManager = new ZIndexManager(layers);
   connectionManager = new ConnectionManager(allElements, layerManager);
   renderer = new CanvasRenderer(mainCanvas.value, layers, renderOptions);
-
-  // ВАЖНО: передаем allElements (computed ref) в SelectionManager
   selectionManager = new SelectionManager(allElements, renderer, layerManager);
-
   interactionManager = new InteractionManager(
     mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager
   );
 
   zIndexManager.setRenderer(renderer);
-
   interactionManager.setOnElementMoveCallback?.((moving) => {
     if (!isUpdatingSelection) updateSelection(moving, true);
   });
-
   interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
@@ -1204,7 +1149,6 @@ onMounted(() => {
 });
 
 // ========== WATCHERS ==========
-
 watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => debouncedDraw());
 
 watch(mmPerPx, (val) => {
@@ -1215,9 +1159,5 @@ watch(mmPerPx, (val) => {
   }
   debouncedDraw();
 });
-
-watch(allElements, () => {
-  debouncedDraw();
-}, { deep: true });
 
 </script>
