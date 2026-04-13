@@ -1,98 +1,21 @@
 import { Callout } from './Callout.js';
 import { globalScale } from './GlobalScale.js';
 
-export const dragItems = Object.freeze([
-  {
-    type: 'duct',
-    label: 'Воздуховод',
-    color: '#4a90e2',
-    width: 64,
-    height: 40,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="24" width="40" height="16" fill="#4a90e2" stroke="#2c3e50" stroke-width="2" rx="2"/>
-      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
-    </svg>`
-  },
-  {
-    type: 'elbow',
-    label: 'Отвод',
-    color: '#e74c3c',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <path d="M12 32 L32 32 L32 52" fill="none" stroke="#e74c3c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="12" cy="32" r="3" fill="#e74c3c"/>
-      <circle cx="32" cy="32" r="3" fill="#e74c3c"/>
-      <circle cx="32" cy="52" r="3" fill="#e74c3c"/>
-    </svg>`
-  },
-  {
-    type: 'transition',
-    label: 'Переход',
-    color: '#e67e22',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <polygon points="12,24 52,20 52,44 12,40" fill="#e67e22" stroke="#2c3e50" stroke-width="2"/>
-      <line x1="12" y1="32" x2="52" y2="32" stroke="#ffffff" stroke-width="1" stroke-dasharray="4 4"/>
-      <text x="32" y="54" font-size="8" text-anchor="middle" fill="#fff">${'⌀'}125→200</text>
-    </svg>`
-  },
-  {
-    type: 'tee',
-    label: 'Тройник',
-    color: '#27ae60',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="24" width="40" height="16" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
-      <rect x="28" y="12" width="8" height="40" fill="#27ae60" stroke="#2c3e50" stroke-width="2" rx="2"/>
-    </svg>`
-  },
-  {
-    type: 'cross',
-    label: 'Крестовина',
-    color: '#9b59b6',
-    width: 64,
-    height: 64,
-    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
-      <rect x="12" y="28" width="40" height="8" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
-      <rect x="28" y="12" width="8" height="40" fill="#9b59b6" stroke="#2c3e50" stroke-width="2"/>
-    </svg>`
-  },
-]);
 
-// ========== БАЗОВЫЙ КЛАСС ЭЛЕМЕНТА ==========
+// Базовый класс - убираем лишнее
 export class BaseElement {
   constructor(id, type, x, y, name) {
     this.id = id;
     this.type = type;
-    this.x = x;          // в пикселях - координаты ЦЕНТРА!
-    this.y = y;          // в пикселях - координаты ЦЕНТРА!
+    this.x = x;
+    this.y = y;
     this.name = name;
     this.color = '#C9C9C9';
     this.rotation = 0;
     this.ports = [];
     this.callouts = [];
-    this.showCallout = true; // показывать выноску, по умолчанию - да
+    this.showCallout = true;
     this._lineWidth = 10; // Толщина линии, px
-    this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
-  }
-  get showCallout() {
-    return this._showCallout;
-  }
-
-  set showCallout(value) {
-    if (this._showCallout === value) return;
-    this._showCallout = value;
-    if (!value) {
-      // Если выноску скрываем, очищаем её визуально, но не удаляем
-      this.updateCalloutText();
-    } else if (this.callouts.length === 0) {
-      // Если показываем и нет выноски, создаём её
-      this.addCallout(this.x, this.y - 150);
-    }
-    this.updateCalloutText();
   }
 
   get lineWidth() {
@@ -100,28 +23,21 @@ export class BaseElement {
   }
 
   set lineWidth(value) {
-    const newValue = Math.max(1, Math.min(18, Number(value) || 1));
-    if (this._lineWidth === newValue) return;
-    this._lineWidth = newValue;
-    this._hitTolerance = Math.max(1, Math.round(this._lineWidth / 2));
+    this._lineWidth = Math.max(1, Math.min(18, Number(value) || 1));
   }
 
-  // Получение текущего масштаба мм/px
   getMmPerPx() {
     return globalScale.getMmPerPx();
   }
 
-  // Конвертация мм в px
   mmToPx(mm) {
     return globalScale.mmToPx(mm);
   }
 
-  // Конвертация px в мм
   pxToMm(px) {
     return globalScale.pxToMm(px);
   }
 
-  // Получение левого верхнего угла (для отрисовки)
   getTopLeft() {
     return {
       x: this.x - this.getWidth() / 2,
@@ -139,66 +55,57 @@ export class BaseElement {
     };
   }
 
-  // Абстрактные методы (должны быть переопределены)
   getWidth() { throw new Error('Метод getWidth должен быть переопределен'); }
   getHeight() { throw new Error('Метод getHeight должен быть переопределен'); }
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme) { throw new Error('Метод draw должен быть переопределен'); }
-  hitTest(worldX, worldY, ctx) {
+  createPath(ctx) { throw new Error('Метод createPath должен быть переопределен'); }
+
+  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     ctx.save();
 
-    // Применяем поворот как при отрисовке
     ctx.translate(this.x, this.y);
     ctx.rotate((this.rotation || 0) * Math.PI / 180);
     ctx.translate(-this.x, -this.y);
 
-    // Создаём путь
     this.createPath(ctx);
 
-    // Толщина для hit test
-    ctx.lineWidth = this.lineWidth + 8;
+    if (isSelected) ctx.strokeStyle = '#e5ff00';
+    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
+    else ctx.strokeStyle = this.color;
+
+    ctx.lineWidth = this._lineWidth;
+    ctx.stroke();
+
+    ctx.restore();
+
+    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
+  }
+
+  hitTest(worldX, worldY, ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation || 0) * Math.PI / 180);
+    ctx.translate(-this.x, -this.y);
+
+    this.createPath(ctx);
+    ctx.lineWidth = this._lineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     const hit = ctx.isPointInStroke(worldX, worldY);
-
     ctx.restore();
     return hit;
-  }
-  setStrokeStyle(ctx, scale, isSelected, isHighlighted, isDarkTheme) {
-    ctx.lineWidth = this.lineWidth;
-    if (isSelected) {
-      ctx.strokeStyle = '#e5ff00';
-    } else if (isHighlighted) {
-      ctx.strokeStyle = '#00c8ff';
-    } else {
-      ctx.strokeStyle = '#666';
-    }
-    ctx.stroke();
-  }
-
-  setFillStyle(ctx, isSelected, isDarkTheme) {
-    ctx.fillStyle = this.color;
-    ctx.fill();
-  }
-
-  getTypeName() {
-    return BaseElement.getAvailableTypes()[this.type] || this.type;
   }
 
   getCalloutText() {
     return `${this.name}`;
   }
 
-  getElementText() {
-    return '';
-  }
-
   getParameters() {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
       { name: 'color', label: 'Цвет', type: 'color', value: this.color },
-      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 2, min: 2, max: 18, value: this.lineWidth, unit: 'px' },
+      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 1, min: 1, max: 18, value: this._lineWidth, unit: 'px' },
     ];
   }
 
@@ -217,7 +124,6 @@ export class BaseElement {
     const angleRad = (this.rotation || 0) * Math.PI / 180;
     const rotatedX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
     const rotatedY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-
     return {
       x: centerX + rotatedX,
       y: centerY + rotatedY
@@ -255,7 +161,6 @@ export class BaseElement {
     return callout;
   }
 
-
   updateCalloutText() {
     if (this.showCallout && this.callouts.length > 0) {
       this.callouts[0].text = this.getCalloutText();
@@ -278,13 +183,14 @@ export class BaseElement {
     ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(topLeft.x + width, centerY);
-    ctx.moveTo(centerX, topLeft.y);
-    ctx.lineTo(centerX, topLeft.y + height);
+    if (height > 0 && this.type !== 'duct' && this.type !== 'transition') {
+      ctx.moveTo(centerX, topLeft.y);
+      ctx.lineTo(centerX, topLeft.y + height);
+    }
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
     ctx.stroke();
-
     ctx.setLineDash([]);
     ctx.restore();
   }
@@ -298,7 +204,7 @@ export class BaseElement {
       name: this.name,
       color: this.color,
       rotation: this.rotation,
-      lineWidth: this.lineWidth,
+      lineWidth: this._lineWidth,
       ports: this.ports.map(p => p.toJSON()),
       callouts: this.callouts.map(c => c.toJSON()),
       showCallout: this.showCallout,

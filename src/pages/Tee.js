@@ -95,27 +95,6 @@ export class Tee extends DuctBase {
     ctx.lineTo(centerX + offsetPx + Math.cos(angleRad) * l2Px, centerY - Math.sin(angleRad) * l2Px);
   }
 
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    ctx.save();
-
-    ctx.translate(this.x, this.y);
-    ctx.rotate((this.rotation || 0) * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
-
-    this.createPath(ctx);
-
-    if (isSelected) ctx.strokeStyle = '#e5ff00';
-    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
-    else ctx.strokeStyle = this.color;
-
-    ctx.lineWidth = this.lineWidth;
-    ctx.stroke();
-
-    ctx.restore();
-
-    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
-  }
-
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;

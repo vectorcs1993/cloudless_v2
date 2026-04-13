@@ -44,7 +44,7 @@ export class DuctDirect extends DuctBase {
 
   getParameters() {
     const params = [...super.getParameters(),
-    { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
+      { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
     ];
     if (this._sectionType === 'rectangular') {
       params.push({ name: 'c', label: 'Высота', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });
@@ -52,7 +52,6 @@ export class DuctDirect extends DuctBase {
     return params;
   }
 
-  // ЕДИНЫЙ createPath для всех прямых элементов (DuctDirect и Transition)
   createPath(ctx) {
     const topLeft = this.getTopLeft();
     const endX = topLeft.x + this.getWidth();
@@ -61,28 +60,6 @@ export class DuctDirect extends DuctBase {
     ctx.beginPath();
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(endX, centerY);
-  }
-
-  // ЕДИНЫЙ draw для всех прямых элементов
-  draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
-    ctx.save();
-
-    ctx.translate(this.x, this.y);
-    ctx.rotate((this.rotation || 0) * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
-
-    this.createPath(ctx);
-
-    if (isSelected) ctx.strokeStyle = '#e5ff00';
-    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
-    else ctx.strokeStyle = this.color;
-
-    ctx.lineWidth = this.lineWidth;
-    ctx.stroke();
-
-    ctx.restore();
-
-    if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
   getPorts() {
@@ -100,29 +77,6 @@ export class DuctDirect extends DuctBase {
       this.id, 'outlet', 'right', this.getWidth(), 0, outletPos.x, outletPos.y));
 
     return ports;
-  }
-
-  drawCenterLines(ctx, scale, isDarkTheme) {
-    ctx.save();
-
-    ctx.translate(this.x, this.y);
-    ctx.rotate((this.rotation || 0) * Math.PI / 180);
-    ctx.translate(-this.x, -this.y);
-
-    const topLeft = this.getTopLeft();
-    const width = this.getWidth();
-
-    ctx.beginPath();
-    ctx.moveTo(topLeft.x, this.y);
-    ctx.lineTo(topLeft.x + width, this.y);
-
-    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
-    ctx.lineWidth = Math.max(0.5, 1 / scale);
-    ctx.setLineDash([4 / scale, 4 / scale]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.restore();
   }
 
   toJSON() {
