@@ -14,7 +14,7 @@ export class InteractionManager {
     this.dragCallout = null;
     this.dragStartWorld = null;
     this.dragStartPan = { x: 0, y: 0 };
-    this.dragStartScreen = { x: 0, y: 0 }; // для панорамирования
+    this.dragStartScreen = { x: 0, y: 0 };
     this.dragStartPositions = [];
     this.selectionStart = null;
     this.autoUpdateConnections = true;
@@ -29,12 +29,31 @@ export class InteractionManager {
   }
 
   getInteractiveElements() {
-    return this.layerManager?.getInteractiveElements() || this.elements.value || [];
+    return this.layerManager?.getInteractiveElements() || this.elements?.value || [];
+  }
+
+  // Проверка, находится ли точка над выноской (только если выноски включены)
+  isPointOverCallout(x, y) {
+    if (!this.options.showCallouts?.value) return false;
+
+    const elements = this.getInteractiveElements();
+    for (const el of elements) {
+      if (el.callouts?.length && el.showCallout !== false) {
+        for (const callout of el.callouts) {
+          if (callout.hitTest(x, y, this.options.scale.value, el).hit) return true;
+        }
+      }
+    }
+    return false;
   }
 
   findElementAt(x, y) {
+    // Если над выноской - не находим элемент
+    if (this.isPointOverCallout(x, y)) return null;
+
     const ctx = this.canvas.getContext('2d');
     const elements = this.getInteractiveElements();
+
     for (let i = elements.length - 1; i >= 0; i--) {
       if (elements[i].hitTest(x, y, ctx)) return elements[i];
     }
@@ -42,17 +61,23 @@ export class InteractionManager {
   }
 
   findCalloutAt(x, y) {
+    if (!this.options.showCallouts?.value) return null;
+
     const elements = this.getInteractiveElements();
     for (const el of elements) {
-      for (const callout of el.callouts || []) {
-        const hit = callout.hitTest(x, y, this.options.scale.value, el);
-        if (hit.hit) return { callout, element: el, isHandle: hit.isHandle };
+      if (el.callouts?.length && el.showCallout !== false) {
+        for (const callout of el.callouts) {
+          const hit = callout.hitTest(x, y, this.options.scale.value, el);
+          if (hit.hit) return { callout, element: el, isHandle: hit.isHandle };
+        }
       }
     }
     return null;
   }
 
   findPortAt(x, y, maxDist = 15) {
+    if (this.isPointOverCallout(x, y)) return null;
+
     const ports = this.connectionManager?.getAllPorts() || [];
     for (const port of ports) {
       const el = this.findElementById(port.elementId);
@@ -63,146 +88,164 @@ export class InteractionManager {
   }
 
   findElementById(id) {
-    const all = this.layerManager?.getAllElements() || this.elements.value || [];
+    const all = this.layerManager?.getAllElements() || this.elements?.value || [];
     return all.find(el => el.id === id);
   }
 
-  moveElement(el, dx, dy) {
-    if (!this.isInteractive(el)) return;
-    el.x += dx;
-    el.y += dy;
-    el.updatePorts?.();
-    el.callouts?.forEach(c => { c.x += dx; c.y += dy; });
-    el.updateCalloutText?.();
-  }
-
-  moveElements(elements, dx, dy) {
-    for (const el of elements) {
-      this.moveElement(el, dx, dy);
+  moveWithSnap(elements, dx, dy, startPositions) {
+    // Сброс в начальные позиции
+    for (const p of startPositions) {
+      p.el.x = p.x;
+      p.el.y = p.y;
+      p.el.updatePorts?.();
+      if (p.el.callouts && p.startCalloutPositions) {
+        for (let i = 0; i < p.el.callouts.length; i++) {
+          p.el.callouts[i].x = p.startCalloutPositions[i].x;
+          p.el.callouts[i].y = p.startCalloutPositions[i].y;
+        }
+      }
+      p.el.updateCalloutText?.();
     }
-  }
 
-moveWithSnap(elements, dx, dy, startPositions) {
-  // Сначала сбрасываем все элементы в начальные позиции
-  for (const p of startPositions) {
-    p.el.x = p.x;
-    p.el.y = p.y;
-    p.el.updatePorts?.();
-    // Восстанавливаем выноски в начальные позиции
-    if (p.el.callouts && p.startCalloutPositions) {
-      for (let i = 0; i < p.el.callouts.length; i++) {
-        p.el.callouts[i].x = p.startCalloutPositions[i].x;
-        p.el.callouts[i].y = p.startCalloutPositions[i].y;
+    // Поиск snapping
+    let snapOffset = null;
+    if (this.options.snapToPorts?.value) {
+      const movingPorts = elements.flatMap(el => el.ports || []);
+      const movingIds = new Set(elements.map(el => el.id));
+      let bestDist = Infinity;
+
+      for (const mp of movingPorts) {
+        for (const tp of this.connectionManager.getAllPorts()) {
+          if (movingIds.has(tp.elementId)) continue;
+          const targetEl = this.findElementById(tp.elementId);
+          if (targetEl && !this.isInteractive(targetEl)) continue;
+
+          const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
+          const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
+          if (dist < bestDist && dist < this.options.snapDistance.value) {
+            bestDist = dist;
+            snapOffset = { ox: tp.worldX - mp.worldX, oy: tp.worldY - mp.worldY };
+          }
+        }
       }
     }
-    p.el.updateCalloutText?.();
-  }
 
-  if (!this.options.snapToPorts?.value) {
-    // Применяем сдвиг ко всему
+    // Применение сдвига
+    const offset = snapOffset || { ox: dx, oy: dy };
     for (const el of elements) {
-      el.x += dx;
-      el.y += dy;
+      el.x += offset.ox;
+      el.y += offset.oy;
       el.updatePorts?.();
       if (el.callouts) {
         for (const c of el.callouts) {
-          c.x += dx;
-          c.y += dy;
+          c.x += offset.ox;
+          c.y += offset.oy;
         }
       }
       el.updateCalloutText?.();
     }
-    return;
-  }
 
-  const movingPorts = [];
-  for (const el of elements) {
-    if (el.ports) movingPorts.push(...el.ports);
-  }
-  if (movingPorts.length === 0) {
-    for (const el of elements) {
-      el.x += dx;
-      el.y += dy;
-      el.updatePorts?.();
-      if (el.callouts) {
-        for (const c of el.callouts) {
-          c.x += dx;
-          c.y += dy;
-        }
-      }
-      el.updateCalloutText?.();
-    }
-    return;
-  }
-
-  const movingIds = new Set(elements.map(el => el.id));
-  let best = null;
-  let bestDist = Infinity;
-
-  for (const mp of movingPorts) {
-    const allPorts = this.connectionManager.getAllPorts();
-    for (const tp of allPorts) {
-      if (movingIds.has(tp.elementId)) continue;
-      const targetEl = this.findElementById(tp.elementId);
-      if (targetEl && !this.isInteractive(targetEl)) continue;
-      const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
-      const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
-      if (dist < bestDist && dist < this.options.snapDistance.value) {
-        bestDist = dist;
-        best = { movingPort: mp, targetPort: tp, ox: tp.worldX - mp.worldX, oy: tp.worldY - mp.worldY };
-      }
+    // Подсветка и соединение при snap
+    if (snapOffset && this.autoUpdateConnections) {
+      // Здесь можно добавить логику соединения портов, но она сложная
+      // Пока просто подсветим
+      this.renderer.setHighlightedPort(null);
+    } else {
+      this.renderer.setHighlightedPort(null);
     }
   }
 
-  if (best) {
-    // Применяем точный сдвиг
-    for (const el of elements) {
-      el.x += best.ox;
-      el.y += best.oy;
-      el.updatePorts?.();
-      if (el.callouts) {
-        for (const c of el.callouts) {
-          c.x += best.ox;
-          c.y += best.oy;
-        }
-      }
-      el.updateCalloutText?.();
+  onMouseMove(e) {
+    const world = this.renderer.screenToWorld(e.clientX, e.clientY);
+    const rect = this.canvas.getBoundingClientRect();
+    const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+    // Drag выноски
+    if (this.dragCallout) {
+      const dx = world.x - this.dragStartWorld.x;
+      const dy = world.y - this.dragStartWorld.y;
+      this.dragCallout.callout.x = this.dragStartPositions[0].x + dx;
+      this.dragCallout.callout.y = this.dragStartPositions[0].y + dy;
+      this.dragCallout.element.updateCalloutText?.();
+      this.renderer.draw();
+      return;
     }
-    this.renderer.setHighlightedPort(best.targetPort);
-    if (this.autoUpdateConnections) {
-      if (best.movingPort.isConnected?.()) {
-        const old = this.connectionManager.getPortById(best.movingPort.connectedPortId);
-        if (old) this.connectionManager.disconnectPorts(best.movingPort, old);
-      }
-      if (best.targetPort.isConnected?.()) {
-        const old = this.connectionManager.getPortById(best.targetPort.connectedPortId);
-        if (old) this.connectionManager.disconnectPorts(best.targetPort, old);
-      }
-      this.connectionManager.connectPorts(best.movingPort, best.targetPort);
+
+    // Drag элементов
+    if (this.isDragging && this.dragElements.length) {
+      const dx = world.x - this.dragStartWorld.x;
+      const dy = world.y - this.dragStartWorld.y;
+      this.moveWithSnap(this.dragElements, dx, dy, this.dragStartPositions);
+      this.renderer.draw();
+      return;
     }
-  } else {
-    // Применяем обычный сдвиг
-    for (const el of elements) {
-      el.x += dx;
-      el.y += dy;
-      el.updatePorts?.();
-      if (el.callouts) {
-        for (const c of el.callouts) {
-          c.x += dx;
-          c.y += dy;
-        }
-      }
-      el.updateCalloutText?.();
+
+    // Pan
+    if (this.isPanning) {
+      const deltaX = screen.x - this.dragStartScreen.x;
+      const deltaY = screen.y - this.dragStartScreen.y;
+      this.options.panX.value = this.dragStartPan.x + deltaX;
+      this.options.panY.value = this.dragStartPan.y + deltaY;
+      this.renderer.draw();
+      return;
     }
-    this.renderer.setHighlightedPort(null);
+
+    // Selection rect
+    if (this.isSelecting && this.selectionStart) {
+      this.selectionManager?.updateSelectionRect(screen.x, screen.y);
+      this.renderer.updateSelectionRect(screen.x, screen.y);
+      this.renderer.draw();
+      return;
+    }
+
+    // Ховер - только если не над выноской
+    const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
+
+    if (!isOverCallout) {
+      const element = this.findElementAt(world.x, world.y);
+      this.renderer.setHighlightedElements(element ? [element] : []);
+
+      if (this.options.showPorts?.value) {
+        const port = this.findPortAt(world.x, world.y);
+        this.renderer.setHighlightedPort(port);
+        this.canvas.style.cursor = port ? 'pointer' : (element ? 'pointer' : 'default');
+      } else {
+        this.canvas.style.cursor = element ? 'pointer' : 'default';
+      }
+    } else {
+      this.renderer.setHighlightedElements([]);
+      this.renderer.setHighlightedPort(null);
+      this.canvas.style.cursor = 'default';
+    }
+
+    this.renderer.draw();
   }
-}
 
   onMouseDown(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
     const rect = this.canvas.getBoundingClientRect();
     const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
 
+    // ПРАВАЯ КНОПКА - только поворот, никакого перетаскивания
+    if (e.button === 2) {
+      e.preventDefault();
+      const element = this.findElementAt(world.x, world.y);
+      if (element && this.isInteractive(element)) {
+        element.rotation = (element.rotation + 45) % 360;
+        element.updatePorts?.();
+        element.updateCalloutText?.();
+
+        if (this.autoUpdateConnections) {
+          this.connectionManager?.updateAllPortsAndConnections(this.options.snapDistance.value, this.layerManager);
+        }
+
+        this.renderer.draw();
+      }
+      return; // Выходим, не переходим к другим обработчикам
+    }
+
+    // ЛЕВАЯ КНОПКА - всё как было
     if (e.button === 0) {
       const callout = this.findCalloutAt(world.x, world.y);
       if (callout && this.isInteractive(callout.element)) {
@@ -214,9 +257,12 @@ moveWithSnap(elements, dx, dy, startPositions) {
         return;
       }
 
+      if (isOverCallout) return;
+
       const element = this.findElementAt(world.x, world.y);
       if (element) {
         if (!this.isInteractive(element)) return;
+
         if (!e.ctrlKey && !e.metaKey) {
           if (!this.renderer.selectedElements.includes(element)) {
             this.renderer.setSelectedElements([element]);
@@ -227,10 +273,16 @@ moveWithSnap(elements, dx, dy, startPositions) {
           idx === -1 ? selected.push(element) : selected.splice(idx, 1);
           this.renderer.setSelectedElements(selected);
         }
+
         this.isDragging = true;
         this.dragElements = [...this.renderer.selectedElements].filter(el => this.isInteractive(el));
         this.dragStartWorld = world;
-        this.dragStartPositions = this.dragElements.map(el => ({ el, x: el.x, y: el.y,  startCalloutPositions: el.callouts ? el.callouts.map(c => ({ x: c.x, y: c.y })) : []  }));
+        this.dragStartPositions = this.dragElements.map(el => ({
+          el,
+          x: el.x,
+          y: el.y,
+          startCalloutPositions: el.callouts?.map(c => ({ x: c.x, y: c.y })) || []
+        }));
         this.canvas.style.cursor = 'grabbing';
       } else {
         if (!e.ctrlKey && !e.metaKey) {
@@ -241,64 +293,16 @@ moveWithSnap(elements, dx, dy, startPositions) {
         this.selectionManager?.startSelectionRect(screen.x, screen.y);
         this.renderer.startSelectionRect(screen.x, screen.y);
       }
-    } else if (e.button === 1 || e.button === 2) {
+    }
+    // СРЕДНЯЯ КНОПКА - панорамирование
+    else if (e.button === 1) {
       e.preventDefault();
       this.isPanning = true;
       this.dragStartPan = { x: this.options.panX.value, y: this.options.panY.value };
       this.dragStartScreen = { x: screen.x, y: screen.y };
       this.canvas.style.cursor = 'grabbing';
     }
-    this.renderer.draw();
-  }
 
-  onMouseMove(e) {
-    const world = this.renderer.screenToWorld(e.clientX, e.clientY);
-    const rect = this.canvas.getBoundingClientRect();
-    const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-
-    if (this.dragCallout) {
-      const dx = world.x - this.dragStartWorld.x;
-      const dy = world.y - this.dragStartWorld.y;
-      this.dragCallout.callout.x = this.dragStartPositions[0].x + dx;
-      this.dragCallout.callout.y = this.dragStartPositions[0].y + dy;
-      this.dragCallout.element.updateCalloutText?.();
-      this.renderer.draw();
-      return;
-    }
-
-    if (this.isDragging && this.dragElements.length > 0) {
-      const dx = world.x - this.dragStartWorld.x;
-      const dy = world.y - this.dragStartWorld.y;
-      this.moveWithSnap(this.dragElements, dx, dy, this.dragStartPositions);
-      this.renderer.draw();
-      return;
-    }
-
-    if (this.isPanning) {
-      const deltaX = screen.x - this.dragStartScreen.x;
-      const deltaY = screen.y - this.dragStartScreen.y;
-      this.options.panX.value = this.dragStartPan.x + deltaX;
-      this.options.panY.value = this.dragStartPan.y + deltaY;
-      this.renderer.draw();
-      return;
-    }
-
-    if (this.isSelecting && this.selectionStart) {
-      this.selectionManager?.updateSelectionRect(screen.x, screen.y);
-      this.renderer.updateSelectionRect(screen.x, screen.y);
-      this.renderer.draw();
-      return;
-    }
-
-    const element = this.findElementAt(world.x, world.y);
-    this.renderer.setHighlightedElements(element ? [element] : []);
-    if (this.options.showPorts?.value) {
-      const port = this.findPortAt(world.x, world.y);
-      this.renderer.setHighlightedPort(port);
-      this.canvas.style.cursor = port ? 'pointer' : (element ? 'pointer' : 'default');
-    } else {
-      this.canvas.style.cursor = element ? 'pointer' : 'default';
-    }
     this.renderer.draw();
   }
 

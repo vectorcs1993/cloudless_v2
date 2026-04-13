@@ -118,7 +118,11 @@ export class Callout {
     ctx.lineWidth = lineWidth;
     ctx.stroke();
 
-    // Рисуем фон и рамку
+    // Рисуем фон (заливка)
+    ctx.fillStyle = isDarkTheme ? '#2d2d2d' : '#f9f9f9';
+    ctx.fillRect(this.x, this.y, boxWidth, boxHeight);
+
+    // Рисуем рамку
     ctx.strokeStyle = isDarkTheme ? '#888' : '#333';
     ctx.lineWidth = lineWidth / 2;
     ctx.strokeRect(this.x, this.y, boxWidth, boxHeight);
