@@ -38,15 +38,6 @@
   }
 }
 
-.selected-info-card {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: max-content;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  z-index: 100;
-}
 
 .toolbar {
   height: 100%;
@@ -185,7 +176,7 @@
 }
 
 .dark-theme .tree-node-selected {
-    color: $primary;
+  color: $primary;
 }
 
 .tree-node-info {

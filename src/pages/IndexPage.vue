@@ -79,12 +79,11 @@
           <template v-slot:after>
             <q-card :dark="isDarkTheme" class="fit" flat>
               <q-card-section class="row items-center justify-between">
-                <div class="text-subtitle1">Диспетчер проекта</div>
+                <div>Диспетчер проекта</div>
                 <div>
                   <q-btn icon="add" label="Слой" flat dense size="sm" @click="addNewLayer" />
                 </div>
               </q-card-section>
-              <q-separator />
               <q-card-actions class="q-pa-sm">
                 <q-btn @click="updateAllPortsAndConnections" icon="sync" dense flat size="sm" />
                 <q-btn @click="copySelected" icon="content_copy" v-if="selectedElements.length > 0" dense flat size="sm" />
@@ -105,10 +104,16 @@
                     }]" @contextmenu.prevent="onTreeNodeContextMenu($event, prop.node)">
 
                       <q-icon :name="prop.node.icon" :color="prop.node.color" size="20px" class="q-mr-sm" />
+
                       <span class="tree-node-label">{{ prop.node.label }}</span>
 
                       <!-- Индикаторы для слоя -->
                       <template v-if="prop.node.isLayer">
+
+                        <!-- Индикатор активного слоя -->
+                        <q-icon v-if="activeLayerId === prop.node.layerId" name="check_circle" size="14px" color="positive" class="q-ml-xs"
+                          :title="'Активный слой'" />
+
                         <!-- Кнопка блокировки/разблокировки -->
                         <q-icon :name="prop.node.layerLocked ? 'lock' : 'lock_open'" size="14px"
                           :color="prop.node.layerLocked ? 'negative' : 'positive'" class="q-ml-xs cursor-pointer"
@@ -119,10 +124,6 @@
                         <q-icon :name="prop.node.layerVisible ? 'visibility' : 'visibility_off'" size="14px"
                           :color="prop.node.layerVisible ? 'primary' : 'grey'" class="q-ml-xs cursor-pointer"
                           @click.stop="toggleLayerVisibility(prop.node.layerId)" :title="prop.node.layerVisible ? 'Скрыть слой' : 'Показать слой'" />
-
-                        <!-- Индикатор активного слоя -->
-                        <q-icon v-if="activeLayerId === prop.node.layerId" name="check_circle" size="14px" color="positive" class="q-ml-xs"
-                          :title="'Активный слой'" />
 
                         <!-- Кнопка переименования -->
                         <q-icon name="edit" size="14px" color="info" class="q-ml-xs cursor-pointer" @click.stop="renameLayer(prop.node.layerId)"
@@ -148,174 +149,197 @@
           </template>
         </q-splitter>
       </template>
-
       <template v-slot:after>
-        <div class="canvas-container" v-show="!showProjectSettings">
-          <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp"
-            @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
-          </canvas>
-          <q-card class="selected-info-card" v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat bordered>
-            <q-card-section class="row items-center justify-between">
-              <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
-              <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
-            </q-card-section>
-            <div v-if="selectedElements.length === 1">
-              <q-card-section class="row items-center justify-between">
-                <q-list class="full-width" :dark="isDarkTheme" dense>
-                  <q-item>
-                    <q-item-section><q-item-label caption>ID</q-item-label></q-item-section>
-                    <q-item-section><q-item-label>{{ selectedElement?.id }}</q-item-label></q-item-section>
-                  </q-item>
-                  <q-item>
-                    <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
-                    <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                    }}</q-item-label></q-item-section>
-                  </q-item>
-                </q-list>
-              </q-card-section>
+        <q-splitter horizontal :dark="isDarkTheme" v-model="splitterModel3">
+          <template v-slot:before>
+            <q-splitter vertical :dark="isDarkTheme" v-model="splitterModel4">
+              <template v-slot:before>
+                <div class="canvas-container" v-show="!showProjectSettings">
+                  <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
+                    @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
+                  </canvas>
+                </div>
+                <div v-show="showProjectSettings" class="fit">
+                  111
+                </div>
+              </template>
+              <template v-slot:after>
+                <q-card v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat>
+                  <q-card-section class="row items-center justify-between">
+                    <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
+                    <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
+                  </q-card-section>
+                  <div v-if="selectedElements.length === 1">
+                    <q-card-section class="row items-center justify-between">
+                      <q-list class="full-width" :dark="isDarkTheme" dense>
+                        <q-item>
+                          <q-item-section><q-item-label caption>ID</q-item-label></q-item-section>
+                          <q-item-section><q-item-label>{{ selectedElement?.id }}</q-item-label></q-item-section>
+                        </q-item>
+                        <q-item>
+                          <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
+                          <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
+                              }}</q-item-label></q-item-section>
+                        </q-item>
+                      </q-list>
+                    </q-card-section>
 
-              <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
-                <q-tab name="parameters" label="Параметры" />
-                <q-tab name="positions" label="Позиция" />
-                <q-tab name="callout" label="Выноска" />
-                <q-tab name="links" label="Связи" />
-              </q-tabs>
+                    <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
+                      <q-tab name="parameters" label="Параметры" />
+                      <q-tab name="positions" label="Позиция" />
+                      <q-tab name="callout" label="Выноска" />
+                      <q-tab name="links" label="Связи" />
+                    </q-tabs>
 
-              <q-tab-panels v-model="tabElement" :dark="isDarkTheme" animated>
-                <q-tab-panel name="parameters">
-                  <div class="single-element-info">
-                    <q-list dense>
-                      <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
-                        <q-item-section class="param-label-col">
-                          <q-item-label>
-                            {{ param.label }}:
-                          </q-item-label>
-                        </q-item-section>
-                        <q-item-section>
-                          <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
-                            :disable="isElementLocked(selectedElement)"
-                            @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
-                          <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
-                            :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
-                            :disable="isElementLocked(selectedElement)"
-                            @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
-                          <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
-                            :min="param.min" dense outlined :disable="isElementLocked(selectedElement)"
-                            @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
-                        </q-item-section>
-                        <q-item-section side class="param-unit-col">
-                          <span v-if="param.unit">{{ param.unit }}</span><span v-else>—</span>
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                    <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
-                      <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое. Редактирование
-                      недоступно.
-                    </div>
+                    <q-tab-panels v-model="tabElement" :dark="isDarkTheme" animated>
+                      <q-tab-panel name="parameters">
+                        <div class="single-element-info">
+                          <q-list dense>
+                            <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
+                              <q-item-section class="param-label-col">
+                                <q-item-label>
+                                  {{ param.label }}:
+                                </q-item-label>
+                              </q-item-section>
+                              <q-item-section>
+                                <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
+                                  :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
+                                <q-select :dark="isDarkTheme" v-else-if="param.type === 'select'" v-model="selectedElement[param.name]"
+                                  :options="param.options" option-label="label" option-value="value" dense outlined emit-value map-options
+                                  :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
+                                <q-input :dark="isDarkTheme" v-else :type="param.type" v-model.number="selectedElement[param.name]" :step="param.step"
+                                  :min="param.min" dense outlined :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
+                              </q-item-section>
+                              <q-item-section side class="param-unit-col">
+                                <span v-if="param.unit">{{ param.unit }}</span><span v-else>—</span>
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                          <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
+                            <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое. Редактирование
+                            недоступно.
+                          </div>
+                        </div>
+                      </q-tab-panel>
+
+                      <q-tab-panel name="positions">
+                        <div class="single-element-info">
+                          <q-list dense>
+                            <q-item>
+                              <q-item-section class="param-label-col"><q-item-label>X (px):</q-item-label></q-item-section>
+                              <q-item-section>
+                                <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense outlined
+                                  :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'x')" />
+                              </q-item-section>
+                            </q-item>
+                            <q-item>
+                              <q-item-section class="param-label-col"><q-item-label>Y (px):</q-item-label></q-item-section>
+                              <q-item-section>
+                                <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense outlined
+                                  :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'y')" />
+                              </q-item-section>
+                            </q-item>
+                            <q-item>
+                              <q-item-section class="param-label-col"><q-item-label>Поворот
+                                  (°):</q-item-label></q-item-section>
+                              <q-item-section>
+                                <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1" dense outlined
+                                  :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'rotation')" />
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                          <div class="q-mt-md">
+                            <div class="text-subtitle2 q-mb-sm">Поворот</div>
+                            <q-btn-group spread :dark="isDarkTheme">
+                              <q-btn :dark="isDarkTheme" label="↺ 45°" @click="rotateLeft45" :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" label="↻ 45°" @click="rotateRight45" :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" label="↺ 90°" @click="rotateLeft90" :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" label="↻ 90°" @click="rotateRight90" :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" label="↺ 180°" @click="rotateLeft180" :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" label="↻ 180°" @click="rotateRight180" :disable="isElementLocked(selectedElement)" />
+                            </q-btn-group>
+                          </div>
+                          <div class="q-mt-md">
+                            <div class="text-subtitle2 q-mb-sm">Слои</div>
+                            <q-btn-group :dark="isDarkTheme">
+                              <q-btn :dark="isDarkTheme" icon="vertical_align_top" @click="moveToTop" label="Вверх"
+                                :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" icon="arrow_upward" @click="moveUp" label="Выше"
+                                :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" icon="arrow_downward" @click="moveDown" label="Ниже"
+                                :disable="isElementLocked(selectedElement)" />
+                              <q-btn :dark="isDarkTheme" icon="vertical_align_bottom" @click="moveToBottom" label="Вниз"
+                                :disable="isElementLocked(selectedElement)" />
+                            </q-btn-group>
+                          </div>
+                          <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
+                            <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое. Перемещение и
+                            поворот недоступны.
+                          </div>
+                        </div>
+                      </q-tab-panel>
+
+                      <q-tab-panel name="callout">
+                        <div class="single-element-info">
+                          <q-list dense>
+                            <q-item>
+                              <q-item-section class="param-label-col"><q-item-label>Показывать
+                                  выноску:</q-item-label></q-item-section>
+                              <q-item-section>
+                                <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout" :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, 'showCallout')" />
+                              </q-item-section>
+                            </q-item>
+                          </q-list>
+                          <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
+                            <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое.
+                          </div>
+                        </div>
+                      </q-tab-panel>
+
+                      <q-tab-panel name="links">
+                        <div v-if="selectedElement?.ports?.length" class="connections-info">
+                          <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
+                            <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
+                              size="16px" />
+                            <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
+
+                            <div v-if="port.isConnected?.()" class="q-ml-auto">
+                              <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
+                                @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
+                            </div>
+                            <span v-else class="q-ml-auto text-negative">не подключен</span>
+                          </div>
+                        </div>
+                        <div v-else class="text-center q-pa-md text-grey">
+                          Нет портов у выбранного элемента
+                        </div>
+                      </q-tab-panel>
+                    </q-tab-panels>
                   </div>
-                </q-tab-panel>
-
-                <q-tab-panel name="positions">
-                  <div class="single-element-info">
-                    <q-list dense>
-                      <q-item>
-                        <q-item-section class="param-label-col"><q-item-label>X (px):</q-item-label></q-item-section>
-                        <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.x" step="1" dense outlined
-                            :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'x')" />
-                        </q-item-section>
-                      </q-item>
-                      <q-item>
-                        <q-item-section class="param-label-col"><q-item-label>Y (px):</q-item-label></q-item-section>
-                        <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.y" step="1" dense outlined
-                            :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'y')" />
-                        </q-item-section>
-                      </q-item>
-                      <q-item>
-                        <q-item-section class="param-label-col"><q-item-label>Поворот
-                            (°):</q-item-label></q-item-section>
-                        <q-item-section>
-                          <q-input :dark="isDarkTheme" type="number" v-model.number="selectedElement.rotation" step="1" dense outlined
-                            :disable="isElementLocked(selectedElement)" @update:model-value="val => onParameterChange(val, 'rotation')" />
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                    <div class="q-mt-md">
-                      <div class="text-subtitle2 q-mb-sm">Поворот</div>
-                      <q-btn-group spread :dark="isDarkTheme">
-                        <q-btn :dark="isDarkTheme" label="↺ 45°" @click="rotateLeft45" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" label="↻ 45°" @click="rotateRight45" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" label="↺ 90°" @click="rotateLeft90" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" label="↻ 90°" @click="rotateRight90" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" label="↺ 180°" @click="rotateLeft180" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" label="↻ 180°" @click="rotateRight180" :disable="isElementLocked(selectedElement)" />
-                      </q-btn-group>
-                    </div>
-                    <div class="q-mt-md">
-                      <div class="text-subtitle2 q-mb-sm">Слои</div>
-                      <q-btn-group :dark="isDarkTheme">
-                        <q-btn :dark="isDarkTheme" icon="vertical_align_top" @click="moveToTop" label="Вверх"
-                          :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" icon="arrow_upward" @click="moveUp" label="Выше" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" icon="arrow_downward" @click="moveDown" label="Ниже" :disable="isElementLocked(selectedElement)" />
-                        <q-btn :dark="isDarkTheme" icon="vertical_align_bottom" @click="moveToBottom" label="Вниз"
-                          :disable="isElementLocked(selectedElement)" />
-                      </q-btn-group>
-                    </div>
-                    <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
-                      <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое. Перемещение и
-                      поворот недоступны.
-                    </div>
-                  </div>
-                </q-tab-panel>
-
-                <q-tab-panel name="callout">
-                  <div class="single-element-info">
-                    <q-list dense>
-                      <q-item>
-                        <q-item-section class="param-label-col"><q-item-label>Показывать
-                            выноску:</q-item-label></q-item-section>
-                        <q-item-section>
-                          <q-toggle :dark="isDarkTheme" v-model="selectedElement.showCallout" :disable="isElementLocked(selectedElement)"
-                            @update:model-value="val => onParameterChange(val, 'showCallout')" />
-                        </q-item-section>
-                      </q-item>
-                    </q-list>
-                    <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
-                      <q-icon name="lock" size="14px" /> Элемент находится на заблокированном слое.
-                    </div>
-                  </div>
-                </q-tab-panel>
-
-                <q-tab-panel name="links">
-                  <div v-if="selectedElement?.ports?.length" class="connections-info">
-                    <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                      <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
-                        size="16px" />
-                      <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
-
-                      <div v-if="port.isConnected?.()" class="q-ml-auto">
-                        <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
-                          @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
-                      </div>
-                      <span v-else class="q-ml-auto text-negative">не подключен</span>
-                    </div>
-                  </div>
-                  <div v-else class="text-center q-pa-md text-grey">
-                    Нет портов у выбранного элемента
-                  </div>
-                </q-tab-panel>
-              </q-tab-panels>
+                  <q-card-section>
+                    <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
+                  </q-card-section>
+                </q-card>
+                <q-card v-else :dark="isDarkTheme" square flat>
+                  <q-card-section>
+                    Выберите элемент
+                  </q-card-section>
+                </q-card>
+              </template>
+            </q-splitter>
+          </template>
+          <template v-slot:after>
+            <div class="q-pa-sm fit">
+              <q-table flat :title="activeLayer.name" dense :rows="activeLayer.elements" :columns="columns" row-key="name" :dark="isDarkTheme"
+                virtual-scroll v-model:pagination="pagination" :rows-per-page-options="[0]" selection="multiple" :selected="tableSelectedRows"
+                @update:selected="onTableSelectionChange" @row-click="onTableRowClick" style="height: 100%;" />
             </div>
-            <q-card-section>
-              <q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" />
-            </q-card-section>
-          </q-card>
-        </div>
-        <div v-show="showProjectSettings" class="fit">
-          111
-        </div>
+          </template>
+        </q-splitter>
       </template>
     </q-splitter>
   </div>
@@ -348,6 +372,8 @@ const showNotify = (options) => Notify.create(options);
 // Состояние
 const splitterModel1 = ref(20);
 const splitterModel2 = ref(60);
+const splitterModel3 = ref(70);
+const splitterModel4 = ref(80);
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
 const showPorts = ref(true);
@@ -371,11 +397,86 @@ const selectedTreeNode = ref(null);
 const expandedTreeNodes = ref([]);
 const showProjectSettings = ref(false);
 
+// таблица
+const columns = ref([
+  { name: 'id', label: 'ID', field: 'id', sortable: true, align: 'left' },
+  { name: 'type', label: 'Тип', field: (row) => getElementTypeName(row), sortable: true, align: 'left' },
+  { name: 'name', label: 'Имя', field: 'name', sortable: true, align: 'left' },
+  { name: 'a', label: 'A, мм', field: 'a', sortable: true, align: 'left' },
+  { name: 'b', label: 'B, мм', field: 'b', sortable: true, align: 'left' },
+  { name: 'c', label: 'C, мм', field: (row) => (row.c !== undefined ? row.c : '-'), sortable: true, align: 'left' },
+]);
+const pagination = ref({
+  rowsPerPage: 0
+})
+const tableSelectedRows = ref([]);
+
+// Синхронизация из таблицы -> в selectionManager и дерево
+const onTableSelectionChange = (selectedRows) => {
+  if (selectedRows.length === 0) {
+    updateSelection([]);
+    tableSelectedRows.value = [];
+    return;
+  }
+
+  // Находим реальные объекты элементов
+  const selectedElementsList = selectedRows
+    .map(row => {
+      // Поиск элемента в слоях по id
+      for (const layer of layers.value) {
+        const found = layer.elements.find(el => el.id === row.id);
+        if (found) return found;
+      }
+      return null;
+    })
+    .filter(el => el !== null);
+
+  updateSelection(selectedElementsList);
+  tableSelectedRows.value = selectedRows;
+};
+const onTableRowClick = (evt, row) => {
+  const element = allElements.value.find(el => el.id === row.id);
+  if (element) {
+    if (evt.ctrlKey || evt.metaKey) {
+      // Множественный выбор с Ctrl
+      const currentSelection = [...selectedElements.value];
+      const index = currentSelection.findIndex(el => el.id === element.id);
+      if (index === -1) {
+        currentSelection.push(element);
+      } else {
+        currentSelection.splice(index, 1);
+      }
+      updateSelection(currentSelection);
+    } else {
+      // Одиночный выбор
+      updateSelection([element]);
+    }
+  }
+};
+// Синхронизация из selectionManager -> в таблицу
+const syncTableWithSelection = () => {
+  if (selectedElements.value.length === 0) {
+    tableSelectedRows.value = [];
+    return;
+  }
+
+  // Создаем массив строк для таблицы на основе выбранных элементов
+  const selectedRowsData = selectedElements.value.map(el => ({
+    id: el.id,
+    type: el.getTypeName?.() || el.type,
+    name: el.name || `${el.type}_${el.id}`
+  }));
+
+  tableSelectedRows.value = selectedRowsData;
+};
+
 // Структура данных - слои
 const layers = ref([
   { id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }
 ]);
 const activeLayerId = ref('layer_default');
+const activeLayer = computed(() => layers.value.find(l => l.id === activeLayerId.value));
+
 
 // ID счетчики
 let nextElementId = 1;
@@ -455,8 +556,8 @@ const projectTree = computed(() => {
     result.push({
       id: `layer_${layer.id}`,
       label: layer.name,
-      icon: layer.locked ? 'lock' : (layer.visible ? 'layers' : 'layers_clear'),
-      color: layer.locked ? 'negative' : (layer.visible ? 'primary' : 'grey'),
+      icon: 'layers',
+      color: 'primary',
       info: `${layer.elements.length} эл.`,
       children: layer.elements.map(el => buildElementNode(el, layer)),
       layerId: layer.id,
@@ -511,6 +612,19 @@ const updateSelection = (newSelection, skipRender = false) => {
     selectedElements.value = newSelection;
     renderer?.setSelectedElements(newSelection);
     selectedTreeNode.value = (newSelection.length === 1 && newSelection[0]) ? newSelection[0].id : null;
+
+    // Синхронизируем с таблицей
+    if (newSelection.length === 0) {
+      tableSelectedRows.value = [];
+    } else {
+      const selectedRowsData = newSelection.map(el => ({
+        id: el.id,
+        type: el.getTypeName?.() || el.type,
+        name: el.name || `${el.type}_${el.id}`
+      }));
+      tableSelectedRows.value = selectedRowsData;
+    }
+
     if (!skipRender) scheduleRender();
   } finally {
     isUpdatingSelection = false;
@@ -1152,5 +1266,7 @@ watch(mmPerPx, (val) => {
   }
   debouncedDraw();
 });
-
+watch(selectedElements, () => {
+  syncTableWithSelection();
+}, { deep: true });
 </script>
