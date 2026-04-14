@@ -511,6 +511,17 @@ const layers = ref([
 const activeLayerId = ref('layer_default');
 const activeLayer = computed(() => layers.value.find(l => l.id === activeLayerId.value));
 
+const traceMode = ref('8dir');
+const isTraceModeActive = ref(false);
+const traceStartPort = ref(null);
+
+
+// Отмена режима рисования
+const cancelTraceMode = () => {
+  isTraceModeActive.value = false;
+  interactionManager?.cancelTrace();
+  scheduleRender();
+};
 
 // ID счетчики
 let nextElementId = 1;
@@ -621,7 +632,8 @@ const renderOptions = {
   isDarkTheme: readonly(isDarkTheme),
   gridStepM: readonly(gridStepM),
   mmPerPx: readonly(mmPerPx),
-  mouseWorldPos
+  mouseWorldPos,
+  traceMode: readonly(traceMode),
 };
 
 // ========== ОСНОВНЫЕ ФУНКЦИИ ==========
@@ -899,7 +911,11 @@ const handleKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }
   else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); pasteElements(); }
   else if (e.key === 'Delete' || e.key === 'Del') { e.preventDefault(); deleteSelected(); }
-  else if (e.key === 'Escape') { e.preventDefault(); clearSelection(); }
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    clearSelection();
+    if (isTraceModeActive.value) cancelTraceMode();
+  }
 };
 
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
@@ -1247,6 +1263,19 @@ onMounted(() => {
     if (!isUpdatingSelection) updateSelection(moving, true);
   });
   interactionManager.setAutoUpdateConnections(autoUpdateConnections.value);
+  interactionManager.setOnElementCreated((element) => {
+    layers.value = [...layers.value];
+    updateSelection([element]);
+    scheduleRender();
+  });
+  interactionManager.setOnTraceStart((port) => {
+    isTraceModeActive.value = true;
+  });
+
+  interactionManager.setOnError((message) => {
+    showNotify({ type: 'warning', message, timeout: 2000 });
+  });
+
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
   loadFromLocalStorage();

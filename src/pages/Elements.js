@@ -15,7 +15,7 @@ export class BaseElement {
     this.ports = [];
     this.callouts = [];
     this.showCallout = true;
-    this._lineWidth = 10; // Толщина линии, px
+    this._lineWidth = 6; // Толщина линии по умолчанию, px
   }
 
   get lineWidth() {

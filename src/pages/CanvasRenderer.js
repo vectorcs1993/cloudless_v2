@@ -162,6 +162,10 @@ export class CanvasRenderer {
       ctx.restore();
     }
 
+    if (this.traceGhostPoints && this.traceGhostPoints.length > 1) {
+      this.drawTracePreview(ctx);
+    }
+
     ctx.restore();
 
     if (this.selectionRect) {
@@ -215,7 +219,43 @@ export class CanvasRenderer {
       this.selectionRect.endY = y;
     }
   }
+  drawTracePreview(ctx) {
+    if (!this.traceGhostPoints || this.traceGhostPoints.length < 2) return;
 
+    ctx.save();
+    ctx.strokeStyle = '#00ff00';
+    ctx.fillStyle = '#00ff00';
+    ctx.lineWidth = 2 / this.scale.value;
+    ctx.setLineDash([5 / this.scale.value, 5 / this.scale.value]);
+
+    // Рисуем линии
+    for (let i = 0; i < this.traceGhostPoints.length - 1; i++) {
+      const p1 = this.traceGhostPoints[i];
+      const p2 = this.traceGhostPoints[i + 1];
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+
+    // Рисуем точки изгибов
+    for (let i = 1; i < this.traceGhostPoints.length - 1; i++) {
+      const p = this.traceGhostPoints[i];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4 / this.scale.value, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Рисуем конечную точку
+    const lastPoint = this.traceGhostPoints[this.traceGhostPoints.length - 1];
+    ctx.beginPath();
+    ctx.arc(lastPoint.x, lastPoint.y, 5 / this.scale.value, 0, 2 * Math.PI);
+    ctx.fillStyle = '#00ff00';
+    ctx.fill();
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
   endSelectionRect() {
     this.selectionRect = null;
   }
@@ -332,6 +372,9 @@ export class CanvasRenderer {
   }
 
   drawCallouts(ctx) {
+    // Если активен режим рисования - не рисуем выноски (или рисуем полупрозрачными)
+    const isTraceActive = this.options.traceActive?.value;
+
     const visibleElements = this.getVisibleElements();
     for (const element of visibleElements) {
       if (!this.isElementVisible(element)) continue;
@@ -344,7 +387,12 @@ export class CanvasRenderer {
         for (const callout of element.callouts) {
           if (this.isCalloutVisible(callout, element)) {
             try {
+              if (isTraceActive) {
+                ctx.save();
+                ctx.globalAlpha = 0.3; // Полупрозрачные при рисовании
+              }
               callout.draw(ctx, this.scale.value, this.options.isDarkTheme.value, element);
+              if (isTraceActive) ctx.restore();
             } catch (err) {
               console.warn('Error drawing callout:', err);
             }
@@ -368,5 +416,9 @@ export class CanvasRenderer {
 
   updatePortSettings(settings) {
     this.portSettings = { ...this.portSettings, ...settings };
+  }
+
+  setTraceGhostPoints(points) {
+    this.traceGhostPoints = points;
   }
 }
