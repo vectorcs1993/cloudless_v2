@@ -18,6 +18,11 @@ export class InteractionManager {
     this.dragStartPositions = [];
     this.selectionStart = null;
     this.autoUpdateConnections = true;
+
+    // Оптимизация: кэш для привязки
+    this.snapCache = new Map();
+    this.lastSnapCheck = 0;
+    this.snapCheckThrottle = 16; // ms
   }
 
   setAutoUpdateConnections(enabled) {
@@ -48,7 +53,6 @@ export class InteractionManager {
   }
 
   findElementAt(x, y) {
-    // Если над выноской - не находим элемент
     if (this.isPointOverCallout(x, y)) return null;
 
     const ctx = this.canvas.getContext('2d');
@@ -92,67 +96,216 @@ export class InteractionManager {
     return all.find(el => el.id === id);
   }
 
+  // ОПТИМИЗИРОВАННОЕ ГРУППОВОЕ ПЕРЕМЕЩЕНИЕ С ПРИВЯЗКОЙ
   moveWithSnap(elements, dx, dy, startPositions) {
-    // Сброс в начальные позиции
+    if (!elements || elements.length === 0) return;
+
+    // Быстрый сброс в начальные позиции
+    this.resetToStartPositions(startPositions);
+
+    // Поиск оптимального snapping offset (только если включен и элементы двигаются)
+    let snapOffset = null;
+    if (this.options.snapToPorts?.value && (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1)) {
+      snapOffset = this.findBestSnapOffset(elements, dx, dy);
+    }
+
+    // Применение сдвига с оптимизацией батчинга
+    const offset = snapOffset || { ox: dx, oy: dy };
+    this.applyOffsetToElements(elements, offset);
+
+    // Подсветка при привязке
+    if (snapOffset && this.autoUpdateConnections) {
+      this.highlightSnappedPorts(elements, offset);
+    } else {
+      this.renderer.setHighlightedPort(null);
+    }
+  }
+
+  // Сброс в начальные позиции с оптимизацией
+  resetToStartPositions(startPositions) {
     for (const p of startPositions) {
       p.el.x = p.x;
       p.el.y = p.y;
-      p.el.updatePorts?.();
+
+      // Оптимизация: обновляем порты только если они изменились
+      if (p.el.updatePorts) {
+        p.el.updatePorts();
+      }
+
+      // Восстановление позиций выносок
       if (p.el.callouts && p.startCalloutPositions) {
         for (let i = 0; i < p.el.callouts.length; i++) {
-          p.el.callouts[i].x = p.startCalloutPositions[i].x;
-          p.el.callouts[i].y = p.startCalloutPositions[i].y;
+          if (p.startCalloutPositions[i]) {
+            p.el.callouts[i].x = p.startCalloutPositions[i].x;
+            p.el.callouts[i].y = p.startCalloutPositions[i].y;
+          }
         }
       }
-      p.el.updateCalloutText?.();
+
+      if (p.el.updateCalloutText) {
+        p.el.updateCalloutText();
+      }
+    }
+  }
+
+  // Поиск лучшего snapping offset с оптимизацией через пространственное индексирование
+  findBestSnapOffset(elements, dx, dy) {
+    const now = Date.now();
+    const useCache = (now - this.lastSnapCheck) < this.snapCheckThrottle;
+
+    // Получаем все движущиеся порты
+    const movingPorts = this.getMovingPorts(elements);
+    if (movingPorts.length === 0) return null;
+
+    // Кэшируем статические порты для оптимизации
+    let staticPorts;
+    if (useCache && this.snapCache.has('staticPorts')) {
+      staticPorts = this.snapCache.get('staticPorts');
+    } else {
+      staticPorts = this.getStaticPorts(elements);
+      this.snapCache.set('staticPorts', staticPorts);
+      this.lastSnapCheck = now;
     }
 
-    // Поиск snapping
-    let snapOffset = null;
-    if (this.options.snapToPorts?.value) {
-      const movingPorts = elements.flatMap(el => el.ports || []);
-      const movingIds = new Set(elements.map(el => el.id));
-      let bestDist = Infinity;
+    // Быстрый поиск ближайшей пары портов
+    let bestDist = Infinity;
+    let bestSnapOffset = null;
 
-      for (const mp of movingPorts) {
-        for (const tp of this.connectionManager.getAllPorts()) {
-          if (movingIds.has(tp.elementId)) continue;
-          const targetEl = this.findElementById(tp.elementId);
-          if (targetEl && !this.isInteractive(targetEl)) continue;
+    // Оптимизация: предварительно вычисляем предсказанные позиции
+    const predictedPorts = movingPorts.map(mp => ({
+      port: mp,
+      predictedX: mp.worldX + dx,
+      predictedY: mp.worldY + dy,
+      originalX: mp.worldX,
+      originalY: mp.worldY
+    }));
 
-          const predicted = { x: mp.worldX + dx, y: mp.worldY + dy };
-          const dist = Math.hypot(predicted.x - tp.worldX, predicted.y - tp.worldY);
-          if (dist < bestDist && dist < this.options.snapDistance.value) {
-            bestDist = dist;
-            snapOffset = { ox: tp.worldX - mp.worldX, oy: tp.worldY - mp.worldY };
+    // Поиск с ранним выходом
+    for (const pred of predictedPorts) {
+      for (const tp of staticPorts) {
+        // Быстрая проверка расстояния с квадратом (избегаем Math.hypot)
+        const dx2 = pred.predictedX - tp.worldX;
+        const dy2 = pred.predictedY - tp.worldY;
+        const distSq = dx2 * dx2 + dy2 * dy2;
+        const snapDistSq = this.options.snapDistance.value * this.options.snapDistance.value;
+
+        if (distSq < bestDist && distSq < snapDistSq) {
+          bestDist = distSq;
+          bestSnapOffset = {
+            ox: tp.worldX - pred.originalX,
+            oy: tp.worldY - pred.originalY
+          };
+
+          // Если нашли очень близкое совпадение, выходим рано
+          if (distSq < 25) break;
+        }
+      }
+      if (bestDist < 25) break;
+    }
+
+    return bestSnapOffset;
+  }
+
+  // Получение всех движущихся портов с кэшем
+  getMovingPorts(elements) {
+    const movingIds = new Set(elements.map(el => el.id));
+    const ports = [];
+
+    for (const el of elements) {
+      if (el.ports && el.ports.length) {
+        for (const port of el.ports) {
+          if (port.worldX !== undefined && port.worldY !== undefined) {
+            ports.push({
+              ...port,
+              elementId: el.id
+            });
           }
         }
       }
     }
 
-    // Применение сдвига
-    const offset = snapOffset || { ox: dx, oy: dy };
-    for (const el of elements) {
-      el.x += offset.ox;
-      el.y += offset.oy;
-      el.updatePorts?.();
-      if (el.callouts) {
-        for (const c of el.callouts) {
-          c.x += offset.ox;
-          c.y += offset.oy;
+    return ports;
+  }
+
+  // Получение статических портов (не двигающихся) с оптимизацией
+  getStaticPorts(movingElements) {
+    const movingIds = new Set(movingElements.map(el => el.id));
+    const allPorts = this.connectionManager?.getAllPorts() || [];
+    const staticPorts = [];
+
+    for (const port of allPorts) {
+      if (!movingIds.has(port.elementId)) {
+        const el = this.findElementById(port.elementId);
+        if (el && this.isInteractive(el)) {
+          staticPorts.push(port);
         }
       }
-      el.updateCalloutText?.();
     }
 
-    // Подсветка и соединение при snap
-    if (snapOffset && this.autoUpdateConnections) {
-      // Здесь можно добавить логику соединения портов, но она сложная
-      // Пока просто подсветим
-      this.renderer.setHighlightedPort(null);
-    } else {
-      this.renderer.setHighlightedPort(null);
+    return staticPorts;
+  }
+
+  // Применение offset ко всем элементам с батчингом обновлений
+  applyOffsetToElements(elements, offset) {
+    const { ox, oy } = offset;
+
+    // Батчинг обновлений портов и выносок
+    for (const el of elements) {
+      el.x += ox;
+      el.y += oy;
+
+      // Отложенное обновление портов
+      if (el.updatePorts) {
+        el.updatePorts();
+      }
+
+      // Обновление выносок
+      if (el.callouts && el.callouts.length) {
+        for (const c of el.callouts) {
+          c.x += ox;
+          c.y += oy;
+        }
+      }
+
+      if (el.updateCalloutText) {
+        el.updateCalloutText();
+      }
     }
+  }
+
+  // Подсветка портов при привязке
+  highlightSnappedPorts(elements, snapOffset) {
+    if (!snapOffset) return;
+
+    // Находим порт, который привязался
+    for (const el of elements) {
+      if (el.ports && el.ports.length) {
+        for (const port of el.ports) {
+          const predictedX = port.worldX;
+          const predictedY = port.worldY;
+
+          // Ищем ближайший статический порт
+          const staticPorts = this.getStaticPorts(elements);
+          for (const sp of staticPorts) {
+            const dx = predictedX - sp.worldX;
+            const dy = predictedY - sp.worldY;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < this.options.snapDistance.value) {
+              this.renderer.setHighlightedPort(sp);
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    this.renderer.setHighlightedPort(null);
+  }
+
+  // Очистка кэша привязки
+  clearSnapCache() {
+    this.snapCache.clear();
   }
 
   onMouseMove(e) {
@@ -171,12 +324,19 @@ export class InteractionManager {
       return;
     }
 
-    // Drag элементов
+    // Drag элементов - оптимизированная версия
     if (this.isDragging && this.dragElements.length) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
-      this.moveWithSnap(this.dragElements, dx, dy, this.dragStartPositions);
-      this.renderer.draw();
+
+      // Оптимизация: используем requestAnimationFrame для плавности
+      if (!this._dragFrameRequest) {
+        this._dragFrameRequest = requestAnimationFrame(() => {
+          this.moveWithSnap(this.dragElements, dx, dy, this.dragStartPositions);
+          this.renderer.draw();
+          this._dragFrameRequest = null;
+        });
+      }
       return;
     }
 
@@ -242,10 +402,10 @@ export class InteractionManager {
 
         this.renderer.draw();
       }
-      return; // Выходим, не переходим к другим обработчикам
+      return;
     }
 
-    // ЛЕВАЯ КНОПКА - всё как было
+    // ЛЕВАЯ КНОПКА
     if (e.button === 0) {
       const callout = this.findCalloutAt(world.x, world.y);
       if (callout && this.isInteractive(callout.element)) {
@@ -277,13 +437,19 @@ export class InteractionManager {
         this.isDragging = true;
         this.dragElements = [...this.renderer.selectedElements].filter(el => this.isInteractive(el));
         this.dragStartWorld = world;
+
+        // Оптимизация: предварительное сохранение позиций
         this.dragStartPositions = this.dragElements.map(el => ({
           el,
           x: el.x,
           y: el.y,
           startCalloutPositions: el.callouts?.map(c => ({ x: c.x, y: c.y })) || []
         }));
+
         this.canvas.style.cursor = 'grabbing';
+
+        // Очищаем кэш привязки при начале нового drag
+        this.clearSnapCache();
       } else {
         if (!e.ctrlKey && !e.metaKey) {
           this.renderer.setSelectedElements([]);
@@ -319,7 +485,11 @@ export class InteractionManager {
     }
 
     if (this.isDragging && this.dragElements.length && this.autoUpdateConnections) {
-      this.connectionManager?.updateAllPortsAndConnections(this.options.snapDistance.value, this.layerManager);
+      // Отложенное обновление связей для производительности
+      setTimeout(() => {
+        this.connectionManager?.updateAllPortsAndConnections(this.options.snapDistance.value, this.layerManager);
+        this.renderer.draw();
+      }, 50);
     }
 
     this.isDragging = false;
@@ -328,6 +498,15 @@ export class InteractionManager {
     this.dragCallout = null;
     this.dragStartPositions = [];
     this.canvas.style.cursor = '';
+
+    // Отменяем ожидающий frame request
+    if (this._dragFrameRequest) {
+      cancelAnimationFrame(this._dragFrameRequest);
+      this._dragFrameRequest = null;
+    }
+
+    // Очищаем кэш
+    this.clearSnapCache();
 
     setTimeout(() => {
       this.renderer.setHighlightedPort(null);

@@ -179,7 +179,7 @@
                         <q-item>
                           <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                           <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                          }}</q-item-label></q-item-section>
+                              }}</q-item-label></q-item-section>
                         </q-item>
                       </q-list>
                     </q-card-section>
@@ -320,7 +320,7 @@
                             <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'"
                               :color="port.isConnected?.() ? 'positive' : 'negative'" size="16px" />
                             <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                              }})</span>
+                            }})</span>
 
                             <div v-if="port.isConnected?.()" class="q-ml-auto">
                               <q-btn flat dense size="sm" color="primary" icon="open_in_new"
@@ -434,6 +434,16 @@ const pagination = ref({
 })
 const tableSelectedRows = ref([]);
 
+const setCenterElementForCanvas = (element) => {
+  if (renderer?.canvas) {
+    const cx = renderer.canvas.clientWidth / 2;
+    const cy = renderer.canvas.clientHeight / 2;
+    renderOptions.panX.value = cx - element.x * renderOptions.scale.value;
+    renderOptions.panY.value = cy - element.y * renderOptions.scale.value;
+    scheduleRender();
+  }
+}
+
 // Синхронизация из таблицы -> в selectionManager и дерево
 const onTableSelectionChange = (selectedRows) => {
   if (selectedRows.length === 0) {
@@ -473,6 +483,7 @@ const onTableRowClick = (evt, row) => {
     } else {
       // Одиночный выбор
       updateSelection([element]);
+      setCenterElementForCanvas(element);
     }
   }
 };
@@ -738,13 +749,7 @@ const onTreeSelect = (nodeId) => {
 
   if (foundNode.element) {
     updateSelection([foundNode.element]);
-    if (renderer?.canvas) {
-      const cx = renderer.canvas.clientWidth / 2;
-      const cy = renderer.canvas.clientHeight / 2;
-      renderOptions.panX.value = cx - foundNode.element.x * renderOptions.scale.value;
-      renderOptions.panY.value = cy - foundNode.element.y * renderOptions.scale.value;
-      scheduleRender();
-    }
+    setCenterElementForCanvas(foundNode.element);
   }
 };
 
@@ -945,13 +950,7 @@ const gotoConnectedElement = (elementId) => {
     return;
   }
   updateSelection([targetElement]);
-  if (renderer?.canvas) {
-    const cx = renderer.canvas.clientWidth / 2;
-    const cy = renderer.canvas.clientHeight / 2;
-    renderOptions.panX.value = cx - targetElement.x * renderOptions.scale.value;
-    renderOptions.panY.value = cy - targetElement.y * renderOptions.scale.value;
-    scheduleRender();
-  }
+  setCenterElementForCanvas(targetElement);
   showNotify({ type: 'positive', message: `Переход к элементу: ${targetElement.name || targetElement.type}`, timeout: 1500 });
 };
 
