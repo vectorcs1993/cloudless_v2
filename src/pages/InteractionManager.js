@@ -1,4 +1,4 @@
-// InteractionManager.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// InteractionManager.js
 
 import { ElementFactory } from './ElementFactory.js';
 
@@ -25,8 +25,9 @@ export class InteractionManager {
     this.autoUpdateConnections = true;
 
     // Режим рисования трассы
-    this.traceActive = false;           // Активен ли режим рисования
-    this.traceStartPort = null;         // Стартовый порт (точка начала)
+    this.traceActive = false;
+    this.traceStartPort = null;
+    this.traceGhostPoints = [];
 
     // Кэши для оптимизации
     this.snapCache = new Map();
@@ -39,15 +40,12 @@ export class InteractionManager {
 
   startTrace(port) {
     if (!port) return;
-
     this.traceActive = true;
     this.traceStartPort = port;
-
     this.canvas.style.cursor = 'crosshair';
     if (this.onTraceStart) this.onTraceStart(port);
   }
 
-  // ПРОСТО ВЫХОД ИЗ РЕЖИМА - НИЧЕГО НЕ УДАЛЯЕМ
   cancelTrace() {
     this.traceActive = false;
     this.traceStartPort = null;
@@ -62,7 +60,12 @@ export class InteractionManager {
     if (this.onTraceCancel) this.onTraceCancel();
   }
 
-  // Создание воздуховода от стартового порта до точки
+  snapLengthToGrid(distancePx, gridStepPx) {
+    if (!gridStepPx || gridStepPx <= 0) return distancePx;
+    const snappedPx = Math.round(distancePx / gridStepPx) * gridStepPx;
+    return Math.max(30, snappedPx);
+  }
+
   createDuctFromPortToPoint(startPort, endPoint, endPort = null) {
     const activeLayer = this.layerManager?.getActiveLayer();
     if (!activeLayer || activeLayer.locked) {
@@ -100,7 +103,6 @@ export class InteractionManager {
       }
     }
 
-    // Применяем привязку направления и длины
     let finalDistance = snappedDistance;
     let finalAngle = angle;
 
@@ -144,9 +146,22 @@ export class InteractionManager {
       }
     }
 
-    const newId = this.getNextElementId();
+    const newId = this.layerManager?.getNextElementId();
+    if (!newId) {
+      if (this.onError) this.onError('Ошибка получения ID элемента');
+      return null;
+    }
+
     const newElement = ElementFactory.createElement(elementType, newId, centerX, centerY, params);
     if (!newElement) return null;
+
+    // Обновляем ID портов через layerManager
+    if (newElement.ports) {
+      for (const port of newElement.ports) {
+        const newPortId = this.layerManager?.getNextPortId();
+        if (newPortId) port.id = newPortId;
+      }
+    }
 
     newElement.updatePorts();
 
@@ -172,14 +187,6 @@ export class InteractionManager {
     return newElement;
   }
 
-  // Вспомогательный метод
-  snapLengthToGrid(distancePx, gridStepPx) {
-    if (!gridStepPx || gridStepPx <= 0) return distancePx;
-    const snappedPx = Math.round(distancePx / gridStepPx) * gridStepPx;
-    return Math.max(30, snappedPx);
-  }
-
-  // Обработка клика в режиме рисования
   handleTraceClick(worldPos) {
     if (!this.traceActive || !this.traceStartPort) return false;
 
@@ -224,7 +231,6 @@ export class InteractionManager {
     return false;
   }
 
-  // Обновление предпросмотра (от порта до курсора)
   updateTracePreview(worldPos) {
     if (!this.traceActive || !this.traceStartPort) return;
 
@@ -235,11 +241,9 @@ export class InteractionManager {
     const dy = endPoint.y - startPoint.y;
     let distance = Math.hypot(dx, dy);
 
-    // Привязка к шагу сетки
     const gridStepPx = this.options.gridStepM?.value || 50;
     const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
 
-    // Если длина изменилась, корректируем конечную точку
     if (Math.abs(snappedDistance - distance) > 0.1) {
       const angle = Math.atan2(dy, dx);
       endPoint = {
@@ -249,7 +253,6 @@ export class InteractionManager {
       distance = snappedDistance;
     }
 
-    // Привязка к 8 направлениям
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
 
@@ -280,26 +283,6 @@ export class InteractionManager {
   }
 
   // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
-
-  getNextElementId() {
-    // Пытаемся получить счетчик из options
-    if (this.options.nextElementId && typeof this.options.nextElementId.value === 'number') {
-      this.options.nextElementId.value++;
-      return this.options.nextElementId.value;
-    }
-
-    // fallback
-    const allElements = this.layerManager?.getAllElements() || [];
-    const maxId = Math.max(0, ...allElements.map(el => el.id || 0), 100);
-    return maxId + 1;
-  }
-  getNextPortId() {
-    if (this.options.nextPortId && typeof this.options.nextPortId.value === 'number') {
-      this.options.nextPortId.value++;
-      return this.options.nextPortId.value;
-    }
-    return Date.now() + Math.random();
-  }
 
   setAutoUpdateConnections(enabled) {
     this.autoUpdateConnections = enabled;
@@ -528,8 +511,6 @@ export class InteractionManager {
     const rect = this.canvas.getBoundingClientRect();
     const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
-
-
     if (this.dragCallout) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
@@ -553,7 +534,6 @@ export class InteractionManager {
       return;
     }
 
-    // панорамирование
     if (this.isPanning) {
       const deltaX = screen.x - this.dragStartScreen.x;
       const deltaY = screen.y - this.dragStartScreen.y;
@@ -563,7 +543,6 @@ export class InteractionManager {
       return;
     }
 
-    // режим рисования
     if (this.traceActive) {
       this.updateTracePreview(world);
       return;
@@ -576,7 +555,6 @@ export class InteractionManager {
       return;
     }
 
-    // Ховер
     const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
     if (!isOverCallout) {
       const element = this.findElementAt(world.x, world.y);
@@ -601,21 +579,16 @@ export class InteractionManager {
     const rect = this.canvas.getBoundingClientRect();
     const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
-    // ПРАВАЯ КНОПКА - ПРОСТО ВЫХОД ИЗ РЕЖИМА РИСОВАНИЯ (без удаления)
     if (e.button === 2) {
       e.preventDefault();
       if (this.traceActive) {
         this.cancelTrace();
         this.renderer.draw();
-        return;
       }
-      // Убираем поворот элемента по ПКМ, чтобы не мешал
       return;
     }
 
-    // ЛЕВАЯ КНОПКА
     if (e.button === 0) {
-      // Если в режиме рисования - создаем элемент
       if (this.traceActive) {
         this.handleTraceClick(world);
         this.renderer.draw();
@@ -635,7 +608,6 @@ export class InteractionManager {
       const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
       if (isOverCallout) return;
 
-      // Клик на порте - НАЧАЛО РИСОВАНИЯ
       if (this.options.showPorts?.value && !isOverCallout) {
         const port = this.findPortAt(world.x, world.y);
         if (port && this.isInteractive(this.findElementById(port.elementId))) {

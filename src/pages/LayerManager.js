@@ -1,27 +1,55 @@
+// LayerManager.js
+
 export class LayerManager {
   constructor(layers, activeLayerId = null) {
     this.layers = layers; // reactive ref to layers array
     this.activeLayerId = activeLayerId; // reactive ref to active layer id
-    this.zIndexManager = null; // будет установлен позже
-
+    this.zIndexManager = null;
 
     // Глобальные счетчики ID
-    this.nextElementId = 1;
-    this.nextPortId = 1000;
+    this._nextElementId = 1;
+    this._nextPortId = 1000;
   }
 
-  // Установка менеджера z-index
-  setZIndexManager(zIndexManager) {
-    this.zIndexManager = zIndexManager;
+  // ========== УПРАВЛЕНИЕ СЧЕТЧИКАМИ ==========
+
+  getNextElementId() {
+    this._nextElementId++;
+    return this._nextElementId;
   }
 
-  // Получение всех элементов из всех слоёв
+  getNextPortId() {
+    this._nextPortId++;
+    return this._nextPortId;
+  }
+
+  getCurrentElementId() {
+    return this._nextElementId;
+  }
+
+  getCurrentPortId() {
+    return this._nextPortId;
+  }
+
+  setCounters(elementId, portId) {
+    this._nextElementId = Math.max(this._nextElementId, elementId || 1);
+    this._nextPortId = Math.max(this._nextPortId, portId || 1000);
+  }
+
+  getCounters() {
+    return {
+      nextElementId: this._nextElementId,
+      nextPortId: this._nextPortId
+    };
+  }
+
+  // ========== УПРАВЛЕНИЕ ЭЛЕМЕНТАМИ ==========
+
   getAllElements() {
     if (!this.layers.value) return [];
     return this.layers.value.flatMap(layer => layer.elements);
   }
 
-  // Получение видимых элементов
   getVisibleElements() {
     if (!this.layers.value) return [];
     return this.layers.value.flatMap(layer =>
@@ -29,7 +57,6 @@ export class LayerManager {
     );
   }
 
-  // Получение интерактивных элементов (не заблокированных)
   getInteractiveElements() {
     if (!this.layers.value) return [];
     return this.layers.value.flatMap(layer =>
@@ -37,11 +64,8 @@ export class LayerManager {
     );
   }
 
-  // Проверка, заблокирован ли слой элемента
   isLayerLocked(element) {
     if (!element) return false;
-
-    // Находим слой, содержащий элемент
     for (const layer of this.layers.value) {
       if (layer.elements.includes(element)) {
         return layer.locked;
@@ -50,7 +74,6 @@ export class LayerManager {
     return false;
   }
 
-  // Проверка, видим ли слой элемента
   isLayerVisible(element) {
     if (!this.layers.value) return true;
     for (const layer of this.layers.value) {
@@ -61,7 +84,6 @@ export class LayerManager {
     return true;
   }
 
-  // Получение слоя элемента
   getElementLayer(element) {
     if (!this.layers.value) return null;
     for (const layer of this.layers.value) {
@@ -72,13 +94,11 @@ export class LayerManager {
     return null;
   }
 
-  // Получение активного слоя
   getActiveLayer() {
     if (!this.layers.value || !this.activeLayerId?.value) return this.layers.value?.[0];
     return this.layers.value.find(l => l.id === this.activeLayerId.value);
   }
 
-  // Добавление элемента в активный слой
   addElementToActiveLayer(element) {
     const activeLayer = this.getActiveLayer();
     if (activeLayer && !activeLayer.locked) {
@@ -88,7 +108,6 @@ export class LayerManager {
     return false;
   }
 
-  // Добавление элемента в указанный слой
   addElementToLayer(element, layerId) {
     const layer = this.layers.value.find(l => l.id === layerId);
     if (layer && !layer.locked) {
@@ -98,7 +117,6 @@ export class LayerManager {
     return false;
   }
 
-  // Удаление элемента из всех слоёв
   removeElement(element) {
     for (const layer of this.layers.value) {
       const index = layer.elements.findIndex(el => el.id === element.id);
@@ -110,13 +128,11 @@ export class LayerManager {
     return false;
   }
 
-  // Перемещение элемента между слоями
   moveElementToLayer(elementId, targetLayerId, position = 'bottom') {
     let element = null;
     let sourceLayer = null;
     let sourceIndex = -1;
 
-    // Находим элемент и его текущий слой
     for (const layer of this.layers.value) {
       const index = layer.elements.findIndex(el => el.id === elementId);
       if (index !== -1) {
@@ -129,14 +145,11 @@ export class LayerManager {
 
     if (!element || !sourceLayer) return false;
 
-    // Нельзя перемещать на заблокированный слой
     const targetLayer = this.layers.value.find(l => l.id === targetLayerId);
     if (!targetLayer || targetLayer.locked) return false;
 
-    // Удаляем из исходного слоя
     sourceLayer.elements.splice(sourceIndex, 1);
 
-    // Добавляем в целевой слой
     if (position === 'top') {
       targetLayer.elements.push(element);
     } else {
@@ -146,7 +159,8 @@ export class LayerManager {
     return true;
   }
 
-  // Создание нового слоя
+  // ========== УПРАВЛЕНИЕ СЛОЯМИ ==========
+
   addLayer(name = null) {
     const newLayer = {
       id: `layer_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -159,14 +173,12 @@ export class LayerManager {
     return newLayer;
   }
 
-  // Удаление слоя
   removeLayer(layerId, moveElementsToLayerId = null) {
     const index = this.layers.value.findIndex(l => l.id === layerId);
     if (index === -1) return false;
 
     const layer = this.layers.value[index];
 
-    // Если нужно переместить элементы в другой слой
     if (moveElementsToLayerId && layer.elements.length > 0) {
       const targetLayer = this.layers.value.find(l => l.id === moveElementsToLayerId);
       if (targetLayer && !targetLayer.locked) {
@@ -174,10 +186,8 @@ export class LayerManager {
       }
     }
 
-    // Удаляем слой
     this.layers.value.splice(index, 1);
 
-    // Если удалили активный слой, выбираем первый доступный
     if (this.activeLayerId?.value === layerId) {
       this.activeLayerId.value = this.layers.value[0]?.id || null;
     }
@@ -185,7 +195,6 @@ export class LayerManager {
     return true;
   }
 
-  // Переключение видимости слоя
   toggleLayerVisibility(layerId) {
     const layer = this.layers.value.find(l => l.id === layerId);
     if (layer) {
@@ -195,7 +204,6 @@ export class LayerManager {
     return false;
   }
 
-  // Переключение блокировки слоя
   toggleLayerLock(layerId) {
     const layer = this.layers.value.find(l => l.id === layerId);
     if (layer) {
@@ -205,7 +213,6 @@ export class LayerManager {
     return false;
   }
 
-  // Изменение порядка слоёв (перемещение вверх/вниз)
   moveLayerUp(layerId) {
     const index = this.layers.value.findIndex(l => l.id === layerId);
     if (index !== -1 && index < this.layers.value.length - 1) {
@@ -226,7 +233,6 @@ export class LayerManager {
     return false;
   }
 
-  // Переименование слоя
   renameLayer(layerId, newName) {
     const layer = this.layers.value.find(l => l.id === layerId);
     if (layer) {
@@ -236,7 +242,6 @@ export class LayerManager {
     return false;
   }
 
-  // Получение статистики по слоям
   getLayersStats() {
     return this.layers.value.map(layer => ({
       id: layer.id,
@@ -248,36 +253,13 @@ export class LayerManager {
     }));
   }
 
-  // Очистка всех слоёв (удаление всех элементов)
   clearAllLayers() {
     for (const layer of this.layers.value) {
       layer.elements = [];
     }
   }
 
-  // Получение следующего ID элемента
-  getNextElementId() {
-    this.nextElementId++;
-    return this.nextElementId;
-  }
-
-  // Получение следующего ID порта
-  getNextPortId() {
-    this.nextPortId++;
-    return this.nextPortId;
-  }
-
-  // Установка счетчиков из сохраненных данных
-  setCounters(elementId, portId) {
-    this.nextElementId = Math.max(this.nextElementId, elementId || 1);
-    this.nextPortId = Math.max(this.nextPortId, portId || 1000);
-  }
-
-  // Получение текущих значений (для сохранения)
-  getCounters() {
-    return {
-      nextElementId: this.nextElementId,
-      nextPortId: this.nextPortId
-    };
+  setZIndexManager(zIndexManager) {
+    this.zIndexManager = zIndexManager;
   }
 }

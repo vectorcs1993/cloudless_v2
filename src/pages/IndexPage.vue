@@ -179,7 +179,7 @@
                         <q-item>
                           <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                           <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                              }}</q-item-label></q-item-section>
+                          }}</q-item-label></q-item-section>
                         </q-item>
                       </q-list>
                     </q-card-section>
@@ -320,7 +320,7 @@
                             <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'"
                               :color="port.isConnected?.() ? 'positive' : 'negative'" size="16px" />
                             <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                            }})</span>
+                              }})</span>
 
                             <div v-if="port.isConnected?.()" class="q-ml-auto">
                               <q-btn flat dense size="sm" color="primary" icon="open_in_new"
@@ -523,9 +523,6 @@ const cancelTraceMode = () => {
   scheduleRender();
 };
 
-// ID счетчики
-let nextElementId = 1;
-let nextPortId = 1000;
 
 // Менеджеры
 let renderer = null;
@@ -634,8 +631,6 @@ const renderOptions = {
   mmPerPx: readonly(mmPerPx),
   mouseWorldPos,
   traceMode: readonly(traceMode),
-    nextElementId: nextElementId,
-  nextPortId: nextPortId,
 };
 
 // ========== ОСНОВНЫЕ ФУНКЦИИ ==========
@@ -842,13 +837,13 @@ const pasteElements = () => {
   for (const json of clipboardElements.value) {
     const newJson = JSON.parse(JSON.stringify(json));
     const oldId = newJson.id;
-    const newId = ++nextElementId;
+    const newId = layerManager.getNextElementId();
     oldIdToNewId.set(oldId, newId);
     newJson.id = newId;
 
     if (newJson.ports) {
       newJson.ports.forEach(port => {
-        port.id = ++nextPortId;
+        port.id = layerManager.getNextPortId();
         port.elementId = newId;
         port.connectedElementId = null;
         port.connectedPortId = null;
@@ -922,13 +917,15 @@ const handleKeyDown = (e) => {
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
 
 const saveToLocalStorage = () => {
+  const counters = layerManager?.getCounters() || { nextElementId: 1, nextPortId: 1000 };
   const data = {
     layers: layers.value.map(layer => ({
       id: layer.id, name: layer.name, visible: layer.visible, locked: layer.locked,
       elements: layer.elements.map(el => el.toJSON())
     })),
     activeLayerId: activeLayerId.value,
-    nextElementId, nextPortId,
+    nextElementId: counters.nextElementId,
+    nextPortId: counters.nextPortId,
     panX: renderOptions.panX.value,
     panY: renderOptions.panY.value,
     scale: renderOptions.scale.value,
@@ -976,7 +973,7 @@ const loadFromLocalStorage = () => {
   if (!savedData) {
     layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     activeLayerId.value = 'layer_default';
-    nextElementId = 100; nextPortId = 1000;
+    layerManager?.setCounters(100, 1000);
     updateSelection([]);
     scheduleRender();
     return;
@@ -1007,8 +1004,13 @@ const loadFromLocalStorage = () => {
     showCallouts.value = data.showCallouts ?? false;
     gridStepM.value = data.gridStepM ?? 50;
     mmPerPx.value = data.mmPerPx ?? 2;
-    nextElementId = data.nextElementId || 100;
-    nextPortId = data.nextPortId || 1000;
+
+    // Вычисляем максимальные ID из загруженных элементов
+    const allEls = allElements.value;
+    const maxElementId = Math.max(0, ...allEls.map(el => el.id || 0), data.nextElementId || 100);
+    const maxPortId = Math.max(0, ...allEls.flatMap(el => el.ports?.map(p => p.id) || []), data.nextPortId || 1000);
+
+    layerManager?.setCounters(maxElementId, maxPortId);
 
     for (const el of allElements.value) {
       el.updatePorts?.();
@@ -1030,12 +1032,11 @@ const loadFromLocalStorage = () => {
     scheduleRender();
   }
 };
-
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     activeLayerId.value = 'layer_default';
-    nextElementId = 100; nextPortId = 1000;
+    layerManager?.setCounters(100, 1000);
     clipboardElements.value = [];
     updateSelection([]);
     scheduleRender();
@@ -1113,14 +1114,16 @@ const onDrop = (e) => {
 
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
+    const newId = layerManager.getNextElementId();
     const creators = {
-      duct: () => new DuctDirect(++nextElementId, worldPos.x, worldPos.y),
-      tee: () => new Tee(++nextElementId, worldPos.x, worldPos.y),
-      elbow: () => new Elbow(++nextElementId, worldPos.x, worldPos.y),
-      cross: () => new Cross(++nextElementId, worldPos.x, worldPos.y),
-      transition: () => new Transition(++nextElementId, worldPos.x, worldPos.y)
+      duct: () => new DuctDirect(newId, worldPos.x, worldPos.y),
+      tee: () => new Tee(newId, worldPos.x, worldPos.y),
+      elbow: () => new Elbow(newId, worldPos.x, worldPos.y),
+      cross: () => new Cross(newId, worldPos.x, worldPos.y),
+      transition: () => new Transition(newId, worldPos.x, worldPos.y)
     };
-    const el = creators[dragType]();
+
+    const el = creators[dragType](newId, worldPos.x, worldPos.y);
     el.updatePorts?.();
     el.updateCalloutText?.();
 
