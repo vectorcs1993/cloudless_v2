@@ -282,9 +282,23 @@ export class InteractionManager {
   // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
   getNextElementId() {
+    // Пытаемся получить счетчик из options
+    if (this.options.nextElementId && typeof this.options.nextElementId.value === 'number') {
+      this.options.nextElementId.value++;
+      return this.options.nextElementId.value;
+    }
+
+    // fallback
     const allElements = this.layerManager?.getAllElements() || [];
     const maxId = Math.max(0, ...allElements.map(el => el.id || 0), 100);
     return maxId + 1;
+  }
+  getNextPortId() {
+    if (this.options.nextPortId && typeof this.options.nextPortId.value === 'number') {
+      this.options.nextPortId.value++;
+      return this.options.nextPortId.value;
+    }
+    return Date.now() + Math.random();
   }
 
   setAutoUpdateConnections(enabled) {

@@ -3,6 +3,11 @@ export class LayerManager {
     this.layers = layers; // reactive ref to layers array
     this.activeLayerId = activeLayerId; // reactive ref to active layer id
     this.zIndexManager = null; // будет установлен позже
+
+
+    // Глобальные счетчики ID
+    this.nextElementId = 1;
+    this.nextPortId = 1000;
   }
 
   // Установка менеджера z-index
@@ -250,10 +255,29 @@ export class LayerManager {
     }
   }
 
-  // Получение следующего доступного ID для элемента (вспомогательный метод)
+  // Получение следующего ID элемента
   getNextElementId() {
-    const allElements = this.getAllElements();
-    const maxId = Math.max(0, ...allElements.map(el => el.id), 100);
-    return maxId + 1;
+    this.nextElementId++;
+    return this.nextElementId;
+  }
+
+  // Получение следующего ID порта
+  getNextPortId() {
+    this.nextPortId++;
+    return this.nextPortId;
+  }
+
+  // Установка счетчиков из сохраненных данных
+  setCounters(elementId, portId) {
+    this.nextElementId = Math.max(this.nextElementId, elementId || 1);
+    this.nextPortId = Math.max(this.nextPortId, portId || 1000);
+  }
+
+  // Получение текущих значений (для сохранения)
+  getCounters() {
+    return {
+      nextElementId: this.nextElementId,
+      nextPortId: this.nextPortId
+    };
   }
 }

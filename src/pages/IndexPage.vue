@@ -634,6 +634,8 @@ const renderOptions = {
   mmPerPx: readonly(mmPerPx),
   mouseWorldPos,
   traceMode: readonly(traceMode),
+    nextElementId: nextElementId,
+  nextPortId: nextPortId,
 };
 
 // ========== ОСНОВНЫЕ ФУНКЦИИ ==========
