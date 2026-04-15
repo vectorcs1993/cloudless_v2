@@ -755,7 +755,6 @@ const onTreeSelect = (nodeId) => {
   if (foundNode.isLayer) {
     selectedTreeNode.value = nodeId;
     setActiveLayer(foundNode.layerId);
-    showNotify({ type: 'info', message: `Выбран слой: ${foundNode.label} (${foundNode.info})`, timeout: 1500 });
     return;
   }
 
