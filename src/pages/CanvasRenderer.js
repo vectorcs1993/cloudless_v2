@@ -219,6 +219,12 @@ export class CanvasRenderer {
       this.selectionRect.endY = y;
     }
   }
+  centerOnElement(element, canvasWidth, canvasHeight) {
+    if (!element || !canvasWidth || !canvasHeight) return;
+    this.options.panX.value = canvasWidth / 2 - element.x * this.options.scale.value;
+    this.options.panY.value = canvasHeight / 2 - element.y * this.options.scale.value;
+    this.draw();
+  }
   drawTracePreview(ctx) {
     if (!this.traceGhostPoints || this.traceGhostPoints.length < 2) return;
 

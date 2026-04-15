@@ -153,14 +153,11 @@
           <template v-slot:before>
             <q-splitter vertical :dark="isDarkTheme" v-model="splitterModel4">
               <template v-slot:before>
-                <div class="canvas-container" v-show="!showProjectSettings">
+                <div class="canvas-container" >
                   <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown"
                     @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel"
                     @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
                   </canvas>
-                </div>
-                <div v-show="showProjectSettings" class="fit">
-                  111
                 </div>
               </template>
               <template v-slot:after>
@@ -418,7 +415,6 @@ const mouseWorldPos = ref(null);
 const clipboardElements = ref([]);
 const selectedTreeNode = ref(null);
 const expandedTreeNodes = ref([]);
-const showProjectSettings = ref(false);
 
 // таблица
 const columns = ref([
@@ -433,16 +429,6 @@ const pagination = ref({
   rowsPerPage: 0
 })
 const tableSelectedRows = ref([]);
-
-const setCenterElementForCanvas = (element) => {
-  if (renderer?.canvas) {
-    const cx = renderer.canvas.clientWidth / 2;
-    const cy = renderer.canvas.clientHeight / 2;
-    renderOptions.panX.value = cx - element.x * renderOptions.scale.value;
-    renderOptions.panY.value = cy - element.y * renderOptions.scale.value;
-    scheduleRender();
-  }
-}
 
 // Синхронизация из таблицы -> в selectionManager и дерево
 const onTableSelectionChange = (selectedRows) => {
@@ -483,7 +469,7 @@ const onTableRowClick = (evt, row) => {
     } else {
       // Одиночный выбор
       updateSelection([element]);
-      setCenterElementForCanvas(element);
+      renderer.centerOnElement(element, renderer?.canvas.clientWidth, renderer?.canvas.clientHeight)
     }
   }
 };
@@ -757,7 +743,7 @@ const onTreeSelect = (nodeId) => {
 
   if (foundNode.element) {
     updateSelection([foundNode.element]);
-    setCenterElementForCanvas(foundNode.element);
+  renderer.centerOnElement(foundNode.element, renderer?.canvas.clientWidth, renderer?.canvas.clientHeight)
   }
 };
 
@@ -945,17 +931,6 @@ const saveToLocalStorage = () => {
   showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
 
-const forceUpdateConnections = () => {
-  if (connectionManager && autoUpdateConnections.value) {
-    for (const el of allElements.value) {
-      if (el.updatePorts) el.updatePorts();
-    }
-    const result = connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
-    if (result.broken > 0 || result.connected > 0) {
-      console.log(`Связи обновлены: разорвано ${result.broken}, создано ${result.connected}`);
-    }
-  }
-};
 
 const gotoConnectedElement = (elementId) => {
   const targetElement = allElements.value.find(el => el.id === elementId);
@@ -964,7 +939,7 @@ const gotoConnectedElement = (elementId) => {
     return;
   }
   updateSelection([targetElement]);
-  setCenterElementForCanvas(targetElement);
+  renderer.centerOnElement(targetElement, renderer?.canvas.clientWidth, renderer?.canvas.clientHeight);
   showNotify({ type: 'positive', message: `Переход к элементу: ${targetElement.name || targetElement.type}`, timeout: 1500 });
 };
 
@@ -1188,7 +1163,9 @@ const deleteSelected = () => {
   }
   layers.value = [...layers.value];
 
-  forceUpdateConnections();
+ if (autoUpdateConnections.value) {
+  connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
+}
   updateSelection([]);
   scheduleRender();
 };
