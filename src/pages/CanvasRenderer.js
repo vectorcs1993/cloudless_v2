@@ -238,20 +238,51 @@ export class CanvasRenderer {
       ctx.stroke();
     }
 
-    // Рисуем точки изгибов
-    for (let i = 1; i < this.traceGhostPoints.length - 1; i++) {
-      const p = this.traceGhostPoints[i];
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 4 / this.scale.value, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-
     // Рисуем конечную точку
     const lastPoint = this.traceGhostPoints[this.traceGhostPoints.length - 1];
     ctx.beginPath();
     ctx.arc(lastPoint.x, lastPoint.y, 5 / this.scale.value, 0, 2 * Math.PI);
-    ctx.fillStyle = '#00ff00';
     ctx.fill();
+
+    // ПОКАЗЫВАЕМ ДЛИНУ РЯДОМ С КУРСОРОМ
+    if (this.traceGhostPoints.length >= 2) {
+      const p1 = this.traceGhostPoints[this.traceGhostPoints.length - 2];
+      const p2 = this.traceGhostPoints[this.traceGhostPoints.length - 1];
+
+      // Длина в пикселях
+      const distancePx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+      // Переводим в миллиметры
+      const mmPerPx = this.options.mmPerPx?.value || 2;
+      const lengthMm = distancePx * mmPerPx;
+
+      // Рисуем текст ПРЯМО НАД КУРСОРОМ (в конце линии)
+      const fontSize = Math.max(10, 14 / this.scale.value);
+      ctx.font = `${fontSize}px Arial`;
+      ctx.fillStyle = '#00ff00';
+      ctx.setLineDash([]);
+      ctx.shadowBlur = 0;
+
+      const text = `${Math.round(lengthMm)} мм`;
+      const textWidth = ctx.measureText(text).width;
+      const padding = 4 / this.scale.value;
+
+      // Позиция рядом с курсором (смещаем вверх и в сторону)
+      const offsetX = 15 / this.scale.value;
+      const offsetY = -20 / this.scale.value;
+
+      // Фон для текста
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(
+        p2.x + offsetX - padding,
+        p2.y + offsetY - fontSize - padding,
+        textWidth + padding * 2,
+        fontSize + padding * 2
+      );
+
+      ctx.fillStyle = '#00ff00';
+      ctx.fillText(text, p2.x + offsetX, p2.y + offsetY);
+    }
 
     ctx.setLineDash([]);
     ctx.restore();
