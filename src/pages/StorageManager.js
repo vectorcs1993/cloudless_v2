@@ -23,6 +23,8 @@ export class StorageManager {
       panX: state.panX,
       panY: state.panY,
       scale: state.scale,
+      mmPerPx: state.mmPerPx,
+      totalAirFlow: state.totalAirFlow,
       version: '2.0',
       savedAt: new Date().toISOString()
     };

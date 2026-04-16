@@ -73,7 +73,12 @@
                     <div>
                       <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
                         class="inline-input" debounce="500" />
-                      <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+                      <span class="hint-text q-pa-sm">(1px = {{ mmPerPx }} мм)</span>
+                    </div>
+                    <label>Общий расход воздуховодов (м3/ч):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="totalAirFlow" step="1" min="100" max="99999" dense outlined
+                        class="inline-input" debounce="500" />
                     </div>
                   </div>
                 </q-tab-panel>
@@ -154,7 +159,7 @@
                     <q-card-section class="row items-center justify-between">
                       <q-list class="full-width" :dark="isDarkTheme" dense>
                         <q-item><q-item-section caption>ID</q-item-section><q-item-section>{{ selectedElement?.id
-                            }}</q-item-section></q-item>
+                        }}</q-item-section></q-item>
                         <q-item><q-item-section caption>Тип</q-item-section><q-item-section>{{
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
@@ -171,7 +176,7 @@
                           <q-list dense>
                             <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                               <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                                  }}:</q-item-label></q-item-section>
+                              }}:</q-item-label></q-item-section>
                               <q-item-section>
                                 <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                                   :disable="isElementLocked(selectedElement)"
@@ -185,7 +190,7 @@
                                   @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
                               </q-item-section>
                               <q-item-section side class="param-unit-col"><span v-if="param.unit">{{ param.unit
-                                  }}</span><span v-else>—</span></q-item-section>
+                              }}</span><span v-else>—</span></q-item-section>
                             </q-item>
                           </q-list>
                           <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
@@ -257,7 +262,7 @@
                             <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
                               size="16px" />
                             <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                              }})</span>
+                            }})</span>
                             <div v-if="port.isConnected?.()" class="q-ml-auto">
                               <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
                                 @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
@@ -355,6 +360,7 @@ const autoUpdateConnections = ref(true);
 const snapDistance = ref(10);
 // ========== НАСТРОЙКИ ПРОЕКТА ==========
 const mmPerPx = ref(2);
+const totalAirFlow = ref(3000);
 const tabEditor = ref('library');
 const tabLayer = ref('elements');
 const tabElement = ref('parameters');
@@ -484,6 +490,8 @@ const saveProjectToLocalStorage = () => {
     panX: renderOptions.panX.value,
     panY: renderOptions.panY.value,
     scale: renderOptions.scale.value,
+    mmPerPx: mmPerPx.value,
+    totalAirFlow: totalAirFlow.value,
   });
   showNotify({ type: 'positive', message: 'Проект сохранён!', timeout: 1000 });
 };
@@ -499,7 +507,6 @@ const saveSettingsToLocalStorage = () => {
     snapToPorts: snapToPorts.value,
     autoUpdateConnections: autoUpdateConnections.value,
     showCallouts: showCallouts.value,
-    mmPerPx: mmPerPx.value,
     gridStepM: gridStepM.value,
   });
 };
@@ -515,7 +522,6 @@ const loadSettingsFromLocalStorage = () => {
     snapToPorts.value = settings.snapToPorts ?? true;
     autoUpdateConnections.value = settings.autoUpdateConnections ?? true;
     showCallouts.value = settings.showCallouts ?? true;
-    mmPerPx.value = settings.mmPerPx ?? 2;
     gridStepM.value = settings.gridStepM ?? 50;
   }
 };
@@ -537,6 +543,9 @@ const loadProjectFromLocalStorage = () => {
     renderOptions.panX.value = data.panX || 0;
     renderOptions.panY.value = data.panY || 0;
     renderOptions.scale.value = data.scale || 1;
+
+    mmPerPx.value = data.mmPerPx || 2;
+    totalAirFlow.value = data.totalAirFlow || 3000;
 
     const allEls = allElements.value;
     const maxElementId = Math.max(0, ...allEls.map(el => el.id || 0), data.nextElementId || 100);
