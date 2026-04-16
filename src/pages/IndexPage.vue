@@ -1,6 +1,6 @@
 <template>
   <div class="app" :class="{ 'dark-theme': isDarkTheme }">
-    <q-splitter :dark="isDarkTheme" v-model="splitterModel1" :limits="[20, 80]" class="full-height-splitter">
+    <q-splitter :dark="isDarkTheme" v-model="splitterModel1" :limits="[15, 80]" class="full-height-splitter">
       <template v-slot:before>
         <q-splitter horizontal :dark="isDarkTheme" v-model="splitterModel2">
           <template v-slot:before>
@@ -15,7 +15,8 @@
               <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
                 <q-tab name="tools" label="Инструменты" />
                 <q-tab name="library" label="Библиотека" />
-                <q-tab name="settings" label="Настройки" />
+                <q-tab name="settings_editor" label="Редактор" />
+                <q-tab name="settings_project" label="Проект" />
               </q-tabs>
               <q-separator />
               <q-tab-panels v-model="tabEditor" :dark="isDarkTheme">
@@ -36,14 +37,8 @@
                     </div>
                   </div>
                 </q-tab-panel>
-                <q-tab-panel name="settings">
+                <q-tab-panel name="settings_editor">
                   <div class="settings-grid">
-                    <label>Масштаб размеров (мм/px):</label>
-                    <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
-                        class="inline-input" debounce="500" />
-                      <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
-                    </div>
                     <label>Масштаб сетки:</label>
                     <div>
                       <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
@@ -70,6 +65,16 @@
                     <div><q-toggle v-model="showColors" /></div>
                     <label>Показывать оси элементов:</label>
                     <div><q-toggle v-model="showElementAxes" /></div>
+                  </div>
+                </q-tab-panel>
+                <q-tab-panel name="settings_project">
+                  <div class="settings-grid">
+                    <label>Масштаб размеров (мм/px):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="mmPerPx" step="0.5" min="0.5" max="10" dense outlined
+                        class="inline-input" debounce="500" />
+                      <span class="hint-text">(1px = {{ mmPerPx }} мм)</span>
+                    </div>
                   </div>
                 </q-tab-panel>
               </q-tab-panels>
@@ -149,7 +154,7 @@
                     <q-card-section class="row items-center justify-between">
                       <q-list class="full-width" :dark="isDarkTheme" dense>
                         <q-item><q-item-section caption>ID</q-item-section><q-item-section>{{ selectedElement?.id
-                        }}</q-item-section></q-item>
+                            }}</q-item-section></q-item>
                         <q-item><q-item-section caption>Тип</q-item-section><q-item-section>{{
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
@@ -166,7 +171,7 @@
                           <q-list dense>
                             <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                               <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                              }}:</q-item-label></q-item-section>
+                                  }}:</q-item-label></q-item-section>
                               <q-item-section>
                                 <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                                   :disable="isElementLocked(selectedElement)"
@@ -180,7 +185,7 @@
                                   @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
                               </q-item-section>
                               <q-item-section side class="param-unit-col"><span v-if="param.unit">{{ param.unit
-                              }}</span><span v-else>—</span></q-item-section>
+                                  }}</span><span v-else>—</span></q-item-section>
                             </q-item>
                           </q-list>
                           <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
@@ -252,7 +257,7 @@
                             <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
                               size="16px" />
                             <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                            }})</span>
+                              }})</span>
                             <div v-if="port.isConnected?.()" class="q-ml-auto">
                               <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
                                 @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
@@ -333,10 +338,11 @@ document.title = 'Редактор воздуховодов онлайн';
 const showNotify = (options) => Notify.create(options);
 
 // ========== РЕАКТИВНЫЕ ПЕРЕМЕННЫЕ ==========
-const splitterModel1 = ref(20);
+const splitterModel1 = ref(15);
 const splitterModel2 = ref(60);
 const splitterModel3 = ref(70);
 const splitterModel4 = ref(80);
+// ========== НАСТРОЙКИ РЕДАКТОРА ==========
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
 const showPorts = ref(true);
@@ -345,16 +351,25 @@ const showColors = ref(true);
 const showElementAxes = ref(false);
 const snapToPorts = ref(true);
 const gridStepM = ref(50);
-const mmPerPx = ref(2);
 const autoUpdateConnections = ref(true);
 const snapDistance = ref(10);
+// ========== НАСТРОЙКИ ПРОЕКТА ==========
+const mmPerPx = ref(2);
 const tabEditor = ref('library');
 const tabLayer = ref('elements');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
 const selectedElements = ref([]);
 const mouseWorldPos = ref(null);
-const layers = ref([{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }]);
+const layers = ref([
+  {
+    id: 'layer_default',
+    name: 'Слой 1',
+    visible: true,
+    locked: false,
+    elements: [],
+  }
+]);
 const activeLayerId = ref('layer_default');
 const traceMode = ref('8dir');
 const isTraceModeActive = ref(false);
@@ -379,7 +394,6 @@ const clearSelection = () => updateSelection([], true);
 const setActiveLayer = (layerId) => {
   clearSelection();
   activeLayerId.value = layerId;
-  showNotify({ type: 'info', message: `Активный слой: ${layers.value.find(l => l.id === layerId).name}`, timeout: 1000 });
 };
 
 const isElementLocked = (element) => layerManager?.isLayerLocked(element) || false;
@@ -459,54 +473,108 @@ const pasteElements = () => {
   }
 };
 
-// Сохранение/загрузка
-const saveToLocalStorage = () => {
+// Сохранение проекта (без настроек)
+const saveProjectToLocalStorage = () => {
   const counters = layerManager.getCounters();
   storageManager.saveFullState({
-    layers: layers.value, activeLayerId: activeLayerId.value,
-    nextElementId: counters.nextElementId, nextPortId: counters.nextPortId,
-    panX: renderOptions.panX.value, panY: renderOptions.panY.value, scale: renderOptions.scale.value,
-    showColors: showColors.value, showElementAxes: showElementAxes.value, isDarkTheme: isDarkTheme.value,
-    showGrid: showGrid.value, showPorts: showPorts.value, snapToPorts: snapToPorts.value,
-    autoUpdateConnections: autoUpdateConnections.value, showCallouts: showCallouts.value,
-    gridStepM: gridStepM.value, mmPerPx: mmPerPx.value,
+    layers: layers.value,
+    activeLayerId: activeLayerId.value,
+    nextElementId: counters.nextElementId,
+    nextPortId: counters.nextPortId,
+    panX: renderOptions.panX.value,
+    panY: renderOptions.panY.value,
+    scale: renderOptions.scale.value,
   });
-  showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
+  showNotify({ type: 'positive', message: 'Проект сохранён!', timeout: 1000 });
 };
 
-const loadFromLocalStorage = () => {
+// Сохранение настроек редактора
+const saveSettingsToLocalStorage = () => {
+  storageManager.saveSettings({
+    showColors: showColors.value,
+    showElementAxes: showElementAxes.value,
+    isDarkTheme: isDarkTheme.value,
+    showGrid: showGrid.value,
+    showPorts: showPorts.value,
+    snapToPorts: snapToPorts.value,
+    autoUpdateConnections: autoUpdateConnections.value,
+    showCallouts: showCallouts.value,
+    mmPerPx: mmPerPx.value,
+    gridStepM: gridStepM.value,
+  });
+};
+// Загрузка настроек редактора
+const loadSettingsFromLocalStorage = () => {
+  const settings = storageManager.loadSettings();
+  if (settings) {
+    showColors.value = settings.showColors ?? true;
+    showElementAxes.value = settings.showElementAxes ?? false;
+    isDarkTheme.value = settings.isDarkTheme ?? false;
+    showGrid.value = settings.showGrid ?? true;
+    showPorts.value = settings.showPorts ?? true;
+    snapToPorts.value = settings.snapToPorts ?? true;
+    autoUpdateConnections.value = settings.autoUpdateConnections ?? true;
+    showCallouts.value = settings.showCallouts ?? true;
+    mmPerPx.value = settings.mmPerPx ?? 2;
+    gridStepM.value = settings.gridStepM ?? 50;
+  }
+};
+// Загрузка проекта
+const loadProjectFromLocalStorage = () => {
   const data = storageManager.loadFullState();
   if (!data) { resetToDefault(); return; }
   try {
     if (data.layers?.length) {
-      layers.value = data.layers.map(layer => ({ ...layer, elements: (layer.elements || []).map(elJson => ElementFactory.createFromJSON(elJson)) }));
+      layers.value = data.layers.map(layer => ({
+        ...layer,
+        elements: (layer.elements || []).map(elJson => ElementFactory.createFromJSON(elJson))
+      }));
     } else {
       const oldElements = data.elements?.map(elJson => ElementFactory.createFromJSON(elJson)) || [];
       layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: oldElements }];
     }
     activeLayerId.value = data.activeLayerId || layers.value[0]?.id || 'layer_default';
-    renderOptions.panX.value = data.panX || 0; renderOptions.panY.value = data.panY || 0; renderOptions.scale.value = data.scale || 1;
-    showColors.value = data.showColors ?? true; showElementAxes.value = data.showElementAxes ?? false;
-    isDarkTheme.value = data.isDarkTheme ?? false; showGrid.value = data.showGrid ?? false;
-    showPorts.value = data.showPorts ?? false; snapToPorts.value = data.snapToPorts ?? false;
-    autoUpdateConnections.value = data.autoUpdateConnections ?? false; showCallouts.value = data.showCallouts ?? false;
-    gridStepM.value = data.gridStepM ?? 50; mmPerPx.value = data.mmPerPx ?? 2;
+    renderOptions.panX.value = data.panX || 0;
+    renderOptions.panY.value = data.panY || 0;
+    renderOptions.scale.value = data.scale || 1;
+
     const allEls = allElements.value;
     const maxElementId = Math.max(0, ...allEls.map(el => el.id || 0), data.nextElementId || 100);
     const maxPortId = Math.max(0, ...allEls.flatMap(el => el.ports?.map(p => p.id) || []), data.nextPortId || 1000);
     layerManager?.setCounters(maxElementId, maxPortId);
-    for (const el of allElements.value) { el.updatePorts?.(); el.updateCalloutText?.(); }
-    setTimeout(() => { connectionManager?.updateAllPortsAndConnections?.(snapDistance.value, layerManager); scheduleRender(); }, 100);
-    updateSelection([]); scheduleRender();
-  } catch (error) { console.error(error); resetToDefault(); }
+
+    for (const el of allElements.value) {
+      el.updatePorts?.();
+      el.updateCalloutText?.();
+    }
+
+    setTimeout(() => {
+      connectionManager?.updateAllPortsAndConnections?.(snapDistance.value, layerManager);
+      scheduleRender();
+    }, 100);
+
+    updateSelection([]);
+    scheduleRender();
+  } catch (error) {
+    console.error(error);
+    resetToDefault();
+  }
+};
+// Общее сохранение (и проект, и настройки)
+const saveToLocalStorage = () => {
+  saveProjectToLocalStorage();
+  saveSettingsToLocalStorage();
+  showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
 
+// Сброс всего
 const resetToDefault = () => {
   if (confirm('Сбросить все изменения?')) {
     layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
     activeLayerId.value = 'layer_default';
     layerManager?.setCounters(100, 1000);
-    updateSelection([]); scheduleRender();
+    updateSelection([]);
+    scheduleRender();
   }
 };
 
@@ -579,6 +647,7 @@ const handleKeyDown = (e) => {
 
 // ========== СОЗДАНИЕ МЕНЕДЖЕРОВ (после объявления всех функций) ==========
 let storageManager = new StorageManager('hvac_editor_data');
+loadSettingsFromLocalStorage();
 let layerManager = new LayerManager(layers, activeLayerId);
 let zIndexManager = new ZIndexManager(layers);
 let connectionManager = new ConnectionManager(allElements, layerManager);
@@ -641,13 +710,17 @@ scheduleRender = scheduleRenderReal;
 updateSelection = updateSelectionReal;
 
 // Watchers
-watch([showGrid, showPorts, showCallouts, showColors, isDarkTheme, showElementAxes], () => scheduleRender());
+watch([showColors, showElementAxes, isDarkTheme, showGrid, showPorts, snapToPorts, autoUpdateConnections, showCallouts, mmPerPx, gridStepM], () => {
+  saveSettingsToLocalStorage();
+  scheduleRender();
+}, { deep: true });
 watch(mmPerPx, (val) => {
   globalScale.setMmPerPx(val);
   for (const el of allElements.value) { el.updatePorts?.(); el.updateCalloutText?.(); }
   scheduleRender();
 });
 watch(selectedElements, () => { tableManager?.syncWithSelection(selectedElements.value); }, { deep: true });
+
 
 // ========== ИНИЦИАЛИЗАЦИЯ ==========
 onMounted(() => {
@@ -673,7 +746,7 @@ onMounted(() => {
   interactionManager.setOnError((message) => showNotify({ type: 'warning', message, timeout: 2000 }));
   watch(autoUpdateConnections, (val) => interactionManager?.setAutoUpdateConnections(val));
 
-  loadFromLocalStorage();
+  loadProjectFromLocalStorage();
 
   const resizeObserver = new ResizeObserver(() => scheduleRender());
   resizeObserver.observe(mainCanvas.value);
