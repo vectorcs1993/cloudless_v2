@@ -190,7 +190,7 @@ export class InteractionManager {
   handleTraceClick(worldPos) {
     if (!this.traceActive || !this.traceStartPort) return false;
 
-    const targetPort = this.findPortAt(worldPos.x, worldPos.y, 20);
+    const targetPort = this.findPortAt(worldPos.x, worldPos.y, 5);
     let newElement = null;
 
     if (targetPort && targetPort !== this.traceStartPort) {
@@ -338,7 +338,7 @@ export class InteractionManager {
     return null;
   }
 
-  findPortAt(x, y, maxDist = 15) {
+  findPortAt(x, y, maxDist = 5) {
     if (this.isPointOverCallout(x, y)) return null;
     const ports = this.connectionManager?.getAllPorts() || [];
     let closestPort = null;
@@ -701,6 +701,11 @@ export class InteractionManager {
 
   onWheel(e) {
     e.preventDefault();
+
+    if (e.buttons & 4) {
+      return;
+    }
+
     const before = this.renderer.screenToWorld(e.clientX, e.clientY);
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const newScale = Math.min(Math.max(this.options.scale.value * delta, 0.2), 5);

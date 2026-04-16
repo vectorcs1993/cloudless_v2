@@ -151,4 +151,16 @@ export class ElementFactory {
 
     return element;
   }
+
+  static createGhostElement(type, x, y) {
+    const creators = {
+      duct: () => new DuctDirect(-1, x, y),
+      tee: () => new Tee(-1, x, y),
+      elbow: () => new Elbow(-1, x, y),
+      cross: () => new Cross(-1, x, y),
+      transition: () => new Transition(-1, x, y)
+    };
+    const creator = creators[type];
+    return creator ? creator() : null;
+  }
 }

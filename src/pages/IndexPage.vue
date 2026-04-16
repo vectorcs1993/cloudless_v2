@@ -1026,20 +1026,11 @@ const updateAllPortsAndConnections = () => {
 
 // ========== DRAG & DROP ==========
 
-const createGhostElement = (type, x, y) => {
-  const creators = {
-    duct: () => new DuctDirect(-1, x, y),
-    tee: () => new Tee(-1, x, y), elbow: () => new Elbow(-1, x, y),
-    cross: () => new Cross(-1, x, y), transition: () => new Transition(-1, x, y)
-  };
-  return creators[type]?.() || null;
-};
-
 const onDragStart = (e, item) => {
   dragType = item.type;
   const worldPos = renderer?.screenToWorld(e.clientX, e.clientY);
   if (worldPos) {
-    ghostElement = createGhostElement(dragType, worldPos.x, worldPos.y);
+    ghostElement = ElementFactory.createGhostElement(dragType, worldPos.x, worldPos.y);
     renderer?.setGhostElement(ghostElement);
     scheduleRender();
   }
