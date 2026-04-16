@@ -262,4 +262,30 @@ export class LayerManager {
   setZIndexManager(zIndexManager) {
     this.zIndexManager = zIndexManager;
   }
+
+  getElementById(elementId) {
+    for (const layer of this.layers.value) {
+      const el = layer.elements.find(e => e.id === elementId);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  removeElementById(elementId) {
+    for (const layer of this.layers.value) {
+      const index = layer.elements.findIndex(e => e.id === elementId);
+      if (index !== -1) {
+        layer.elements.splice(index, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  removeElementsByIds(elementIds) {
+    const idsSet = new Set(elementIds);
+    for (const layer of this.layers.value) {
+      layer.elements = layer.elements.filter(el => !idsSet.has(el.id));
+    }
+  }
 }

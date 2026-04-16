@@ -153,7 +153,7 @@
           <template v-slot:before>
             <q-splitter vertical :dark="isDarkTheme" v-model="splitterModel4">
               <template v-slot:before>
-                <div class="canvas-container" >
+                <div class="canvas-container">
                   <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown"
                     @mousemove="onCanvasMouseMove" @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel"
                     @contextmenu.prevent @dragover="onDragOver" @drop="onDrop" tabindex="0">
@@ -176,7 +176,7 @@
                         <q-item>
                           <q-item-section><q-item-label caption>Тип</q-item-label></q-item-section>
                           <q-item-section><q-item-label>{{ getElementTypeName(selectedElement)
-                          }}</q-item-label></q-item-section>
+                              }}</q-item-label></q-item-section>
                         </q-item>
                       </q-list>
                     </q-card-section>
@@ -317,7 +317,7 @@
                             <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'"
                               :color="port.isConnected?.() ? 'positive' : 'negative'" size="16px" />
                             <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                              }})</span>
+                            }})</span>
 
                             <div v-if="port.isConnected?.()" class="q-ml-auto">
                               <q-btn flat dense size="sm" color="primary" icon="open_in_new"
@@ -373,6 +373,7 @@ import { ZIndexManager } from './ZIndexManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
+import { ClipboardManager } from './ClipboardManager.js';
 import { SelectionManager } from './SelectionManager.js';
 import { LayerManager } from './LayerManager.js';
 import { BaseElement } from './Elements.js';
@@ -518,6 +519,7 @@ let selectionManager = null;
 let layerManager = null;
 let zIndexManager = null;
 let storageManager = null;
+let clipboardManager = null;
 
 // Drag and drop
 let dragType = null;
@@ -743,7 +745,7 @@ const onTreeSelect = (nodeId) => {
 
   if (foundNode.element) {
     updateSelection([foundNode.element]);
-  renderer.centerOnElement(foundNode.element, renderer?.canvas.clientWidth, renderer?.canvas.clientHeight)
+    renderer.centerOnElement(foundNode.element, renderer?.canvas.clientWidth, renderer?.canvas.clientHeight)
   }
 };
 
@@ -793,100 +795,22 @@ const isElementLocked = (element) => {
 // ========== КОПИРОВАНИЕ/ВСТАВКА ==========
 
 const copySelected = () => {
-  if (!selectedElements.value.length) return;
-  clipboardElements.value = selectedElements.value.map(el => {
-    const json = el.toJSON();
-    json.callouts = [];
-    return json;
-  });
-  showNotify({ type: 'positive', message: `Скопировано ${clipboardElements.value.length} элементов`, timeout: 2000 });
+  if (selectedElements.value.length) {
+    clipboardManager.copy(selectedElements.value);
+    showNotify({ type: 'positive', message: `Скопировано ${selectedElements.value.length} элементов`, timeout: 2000 });
+  }
 };
 
 const pasteElements = () => {
-  if (!clipboardElements.value.length) return;
-
-  const activeLayer = layerManager.getActiveLayer();
-  if (!activeLayer) {
-    showNotify({ type: 'warning', message: 'Нет активного слоя для вставки', timeout: 2000 });
-    return;
+  const newElements = clipboardManager.paste(50, 50);
+  if (newElements.length) {
+    layers.value = [...layers.value];
+    updateSelection(newElements);
+    scheduleRender();
+    showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов`, timeout: 2000 });
+  } else {
+    showNotify({ type: 'warning', message: 'Не удалось вставить элементы (возможно, слой заблокирован)', timeout: 2000 });
   }
-  if (activeLayer.locked) {
-    showNotify({ type: 'warning', message: 'Активный слой заблокирован!', timeout: 2000 });
-    return;
-  }
-
-  const newElements = [];
-  const oldIdToNewId = new Map();
-  const offsetX = 50;
-  const offsetY = 50;
-
-  for (const json of clipboardElements.value) {
-    const newJson = JSON.parse(JSON.stringify(json));
-    const oldId = newJson.id;
-    const newId = layerManager.getNextElementId();
-    oldIdToNewId.set(oldId, newId);
-    newJson.id = newId;
-
-    if (newJson.ports) {
-      newJson.ports.forEach(port => {
-        port.id = layerManager.getNextPortId();
-        port.elementId = newId;
-        port.connectedElementId = null;
-        port.connectedPortId = null;
-      });
-    }
-
-    newJson.x = (newJson.x || 0) + offsetX;
-    newJson.y = (newJson.y || 0) + offsetY;
-    newJson.callouts = [];
-
-    const el = ElementFactory.createFromJSON(newJson);
-    if (el) {
-      el.name = `${el.name.replace(/\s*\(копия.*\)\s*$/, '')} (копия)`;
-      if (el.showCallout !== false) {
-        const topLeft = el.getTopLeft();
-        const calloutY = topLeft.y - 50;
-        el.addCallout(el.x, calloutY);
-        el.updateCalloutText();
-      }
-      newElements.push(el);
-    }
-  }
-
-  // Восстанавливаем связи между скопированными элементами
-  for (let i = 0; i < newElements.length; i++) {
-    const newEl = newElements[i];
-    const oldJson = clipboardElements.value[i];
-    if (newEl.ports && oldJson.ports) {
-      for (let pIdx = 0; pIdx < newEl.ports.length; pIdx++) {
-        const newPort = newEl.ports[pIdx];
-        const oldPort = oldJson.ports[pIdx];
-        if (oldPort.connectedElementId && oldPort.connectedPortId) {
-          const newTargetId = oldIdToNewId.get(oldPort.connectedElementId);
-          if (newTargetId) {
-            const targetElement = newElements.find(el => el.id === newTargetId);
-            if (targetElement && targetElement.ports) {
-              const targetPort = targetElement.ports.find(p => p.id === oldPort.connectedPortId);
-              if (targetPort) {
-                connectionManager.connectPorts(newPort, targetPort);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  for (const el of newElements) {
-    if (el.updatePorts) el.updatePorts();
-  }
-
-  activeLayer.elements.push(...newElements);
-  layers.value = [...layers.value];
-  updateSelection(newElements);
-  scheduleRender();
-
-  showNotify({ type: 'positive', message: `Вставлено ${newElements.length} элементов в слой "${activeLayer.name}"`, timeout: 2000 });
 };
 
 const handleKeyDown = (e) => {
@@ -903,12 +827,9 @@ const handleKeyDown = (e) => {
 // ========== СОХРАНЕНИЕ/ЗАГРУЗКА ==========
 
 const saveToLocalStorage = () => {
-  const counters = layerManager?.getCounters() || { nextElementId: 1, nextPortId: 1000 };
-  const data = {
-    layers: layers.value.map(layer => ({
-      id: layer.id, name: layer.name, visible: layer.visible, locked: layer.locked,
-      elements: layer.elements.map(el => el.toJSON())
-    })),
+  const counters = layerManager.getCounters();
+  storageManager.saveFullState({
+    layers: layers.value,
     activeLayerId: activeLayerId.value,
     nextElementId: counters.nextElementId,
     nextPortId: counters.nextPortId,
@@ -925,9 +846,7 @@ const saveToLocalStorage = () => {
     showCallouts: showCallouts.value,
     gridStepM: gridStepM.value,
     mmPerPx: mmPerPx.value,
-    version: '2.0'
-  };
-  localStorage.setItem('hvac_editor_data', JSON.stringify(data));
+  });
   showNotify({ type: 'positive', message: 'Сохранено!', timeout: 1000 });
 };
 
@@ -944,17 +863,13 @@ const gotoConnectedElement = (elementId) => {
 };
 
 const loadFromLocalStorage = () => {
-  const savedData = localStorage.getItem('hvac_editor_data');
-  if (!savedData) {
-    layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
-    activeLayerId.value = 'layer_default';
-    layerManager?.setCounters(100, 1000);
-    updateSelection([]);
-    scheduleRender();
+  const data = storageManager.loadFullState();
+  if (!data) {
+    // сброс в defaults
+    resetToDefault();
     return;
   }
   try {
-    const data = JSON.parse(savedData);
     if (data.layers?.length) {
       layers.value = data.layers.map(layer => ({
         ...layer,
@@ -1143,20 +1058,15 @@ const moveDown = () => { if (selectedElement.value) { zIndexManager?.moveDown(se
 
 const deleteSelected = () => {
   if (!selectedElements.value.length) return;
-  const toDelete = new Set(selectedElements.value.map(el => el.id));
-
+  const ids = selectedElements.value.map(el => el.id);
   for (const el of selectedElements.value) {
     connectionManager?.disconnectElement(el);
   }
-
-  for (const layer of layers.value) {
-    layer.elements = layer.elements.filter(el => !toDelete.has(el.id));
-  }
+  layerManager.removeElementsByIds(ids);
   layers.value = [...layers.value];
-
- if (autoUpdateConnections.value) {
-  connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
-}
+  if (autoUpdateConnections.value) {
+    connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
+  }
   updateSelection([]);
   scheduleRender();
 };
@@ -1224,6 +1134,7 @@ onMounted(() => {
   layerManager = new LayerManager(layers, activeLayerId);
   zIndexManager = new ZIndexManager(layers);
   connectionManager = new ConnectionManager(allElements, layerManager);
+  clipboardManager = new ClipboardManager(layerManager, connectionManager);
   renderer = new CanvasRenderer(mainCanvas.value, layers, renderOptions);
   selectionManager = new SelectionManager(allElements, renderer, layerManager);
   interactionManager = new InteractionManager(
