@@ -1,12 +1,13 @@
+// ConnectionManager.js
+
 export class ConnectionManager {
   constructor(elements, layerManager = null) {
     this.elements = elements;
     this.layerManager = layerManager;
-    this.connections = new Map();
+    this.connections = new Map(); // Оставляем для быстрого доступа, но теперь порты хранят массив
     this.isUpdating = false;
   }
 
-  // МЕТОД ДОЛЖЕН БЫТЬ ОБЪЯВЛЕН
   getAllPorts() {
     const allPorts = [];
     const allElements = this.elements.value || [];
@@ -33,6 +34,14 @@ export class ConnectionManager {
     if (port1.id === port2.id) return false;
     if (port1.elementId === port2.elementId) return false;
 
+    // Убираем проверку на уже существующее соединение?
+    // НЕТ, нужно проверять, но не блокировать если порт1 имеет другие соединения
+    // Просто проверяем конкретную пару
+    const alreadyConnected = port1.connections.some(
+      c => c.connectedElementId === port2.elementId && c.connectedPortId === port2.id
+    );
+    if (alreadyConnected) return false; // Эта конкретная пара уже соединена
+
     if (this.layerManager) {
       const element1 = this.getElementById(port1.elementId);
       const element2 = this.getElementById(port2.elementId);
@@ -45,67 +54,68 @@ export class ConnectionManager {
   connectPorts(port1, port2) {
     if (!this.canConnectPorts(port1, port2)) return false;
 
-    if (port1.isConnected()) {
-      this.disconnectPort(port1);
-    }
-    if (port2.isConnected()) {
-      this.disconnectPort(port2);
-    }
+    // Добавляем двусторонние связи
+    port1.addConnection(port2.elementId, port2.id);
+    port2.addConnection(port1.elementId, port1.id);
 
-    port1.connectedElementId = port2.elementId;
-    port1.connectedPortId = port2.id;
-    port2.connectedElementId = port1.elementId;
-    port2.connectedPortId = port1.id;
-
-    this.connections.set(port1.id, {
-      connectedPortId: port2.id,
-      elementId: port2.elementId
-    });
-    this.connections.set(port2.id, {
-      connectedPortId: port1.id,
-      elementId: port1.elementId
-    });
+    // Обновляем Map для быстрого доступа
+    this.updateConnectionMap();
 
     return true;
   }
 
-  disconnectPort(port) {
-    if (!port || !port.isConnected()) return false;
+  updateConnectionMap() {
+    this.connections.clear();
+    const allPorts = this.getAllPorts();
+    for (const port of allPorts) {
+      for (const conn of port.connections) {
+        this.connections.set(port.id + '_' + conn.connectedPortId, {
+          connectedPortId: conn.connectedPortId,
+          elementId: conn.connectedElementId
+        });
+      }
+    }
+  }
 
-    const connectedPort = this.getPortById(port.connectedPortId);
-    if (connectedPort) {
-      connectedPort.connectedElementId = null;
-      connectedPort.connectedPortId = null;
-      this.connections.delete(connectedPort.id);
+  disconnectPort(port, targetPortId = null) {
+    if (!port) return false;
+
+    if (targetPortId) {
+      // Отключаем только от конкретного порта
+      const targetPort = this.getPortById(targetPortId);
+      if (targetPort) {
+        port.removeConnection(targetPort.elementId, targetPortId);
+        targetPort.removeConnection(port.elementId, port.id);
+      }
+    } else {
+      // Отключаем от всех
+      for (const conn of port.connections) {
+        const connectedPort = this.getPortById(conn.connectedPortId);
+        if (connectedPort) {
+          connectedPort.removeConnection(port.elementId, port.id);
+        }
+      }
+      port.removeAllConnections();
     }
 
-    port.connectedElementId = null;
-    port.connectedPortId = null;
-    this.connections.delete(port.id);
-
+    this.updateConnectionMap();
     return true;
   }
 
   disconnectPorts(port1, port2) {
     if (!port1 || !port2) return false;
 
-    port1.connectedElementId = null;
-    port1.connectedPortId = null;
-    port2.connectedElementId = null;
-    port2.connectedPortId = null;
+    port1.removeConnection(port2.elementId, port2.id);
+    port2.removeConnection(port1.elementId, port1.id);
 
-    this.connections.delete(port1.id);
-    this.connections.delete(port2.id);
-
+    this.updateConnectionMap();
     return true;
   }
 
   disconnectElement(element) {
     if (!element.ports) return false;
     for (const port of element.ports) {
-      if (port.isConnected()) {
-        this.disconnectPort(port);
-      }
+      this.disconnectPort(port);
     }
     return true;
   }
@@ -118,6 +128,9 @@ export class ConnectionManager {
     for (const targetPort of allPorts) {
       if (targetPort.id === port.id) continue;
       if (targetPort.elementId === port.elementId) continue;
+
+      // НЕ ПРОВЕРЯЕМ targetPort.connections.length > 0 - пропускаем эту проверку!
+      // Просто проверяем можно ли соединить
       if (!this.canConnectPorts(port, targetPort)) continue;
 
       const distance = Math.hypot(port.worldX - targetPort.worldX, port.worldY - targetPort.worldY);
@@ -147,38 +160,63 @@ export class ConnectionManager {
         portMap.set(port.id, port);
       }
 
+      // 1. Проверяем существующие связи
       for (const port of allPorts) {
-        if (port.isConnected()) {
-          const connectedPort = portMap.get(port.connectedPortId);
+        const connectionsToRemove = [];
+        for (const conn of port.connections) {
+          const connectedPort = portMap.get(conn.connectedPortId);
 
           if (!connectedPort) {
-            this.disconnectPort(port);
+            connectionsToRemove.push(conn);
             brokenCount++;
             continue;
           }
 
+          // Проверяем взаимность связи
+          const isMutual = connectedPort.connections.some(
+            c => c.connectedPortId === port.id
+          );
+
+          if (!isMutual) {
+            connectionsToRemove.push(conn);
+            brokenCount++;
+            continue;
+          }
+
+          // Проверяем расстояние
           const distance = Math.hypot(port.worldX - connectedPort.worldX, port.worldY - connectedPort.worldY);
           if (distance > maxDistance) {
-            this.disconnectPort(port);
+            connectionsToRemove.push(conn);
             brokenCount++;
-            continue;
           }
+        }
 
-          if (connectedPort.connectedPortId !== port.id) {
-            this.disconnectPort(port);
-            brokenCount++;
-            continue;
-          }
+        for (const conn of connectionsToRemove) {
+          port.removeConnection(conn.connectedElementId, conn.connectedPortId);
         }
       }
 
-      for (const port of allPorts) {
-        if (port.isConnected()) continue;
+      // 2. Создаем новые связи - ВАЖНО: порт коллектора может иметь МНОГО соединений
+      // Сортируем порты: сначала те, у которых мало соединений (приоритет)
+      const sortedPorts = [...allPorts].sort((a, b) => {
+        // Приоритет у портов с меньшим количеством соединений
+        return (a.connections?.length || 0) - (b.connections?.length || 0);
+      });
 
+      for (const port of sortedPorts) {
+        // Находим ближайший порт, даже если у порта уже есть соединения
         const bestMatch = this.findClosestPort(port, maxDistance);
         if (bestMatch) {
-          this.connectPorts(port, bestMatch);
-          connectedCount++;
+          // Проверяем, не соединены ли уже эти порты
+          const alreadyConnected = port.connections.some(
+            c => c.connectedPortId === bestMatch.id
+          );
+
+          if (!alreadyConnected) {
+            this.connectPorts(port, bestMatch);
+            connectedCount++;
+            console.log(`Соединен порт ${port.id} с ${bestMatch.id}`);
+          }
         }
       }
     } finally {
@@ -194,12 +232,15 @@ export class ConnectionManager {
 
   getAllConnections() {
     const connections = [];
-    for (const [portId, connection] of this.connections) {
-      connections.push({
-        portId,
-        connectedPortId: connection.connectedPortId,
-        elementId: connection.elementId
-      });
+    const allPorts = this.getAllPorts();
+    for (const port of allPorts) {
+      for (const conn of port.connections) {
+        connections.push({
+          portId: port.id,
+          connectedPortId: conn.connectedPortId,
+          elementId: conn.connectedElementId
+        });
+      }
     }
     return connections;
   }
@@ -207,8 +248,7 @@ export class ConnectionManager {
   clearAllConnections() {
     const allPorts = this.getAllPorts();
     for (const port of allPorts) {
-      port.connectedElementId = null;
-      port.connectedPortId = null;
+      port.connections = [];
     }
     this.connections.clear();
   }

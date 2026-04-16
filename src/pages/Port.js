@@ -1,4 +1,5 @@
-// ========== КЛАСС ПОРТА ==========
+// Port.js
+
 export class Port {
   constructor(id, elementId, direction, side, localX, localY, worldX, worldY) {
     this.id = id;
@@ -9,23 +10,78 @@ export class Port {
     this.localY = localY;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.connectedElementId = null;
-    this.connectedPortId = null;
+    // ИЗМЕНЕНИЕ: массив соединений вместо одного
+    this.connections = []; // [{ connectedElementId, connectedPortId }]
     this.radius = 5;
   }
 
   isConnected() {
-    return this.connectedElementId !== null;
+    return this.connections.length > 0;
+  }
+
+  getConnectionCount() {
+    return this.connections.length;
+  }
+
+  addConnection(elementId, portId) {
+    // Проверяем, нет ли уже такого соединения
+    if (!this.connections.find(c => c.connectedElementId === elementId && c.connectedPortId === portId)) {
+      this.connections.push({ connectedElementId: elementId, connectedPortId: portId });
+    }
+  }
+
+  removeConnection(elementId, portId) {
+    this.connections = this.connections.filter(
+      c => !(c.connectedElementId === elementId && c.connectedPortId === portId)
+    );
+  }
+
+  removeAllConnections() {
+    this.connections = [];
+  }
+
+  getConnections() {
+    return [...this.connections];
+  }
+
+  // Для обратной совместимости (если где-то используется старое поле)
+  get connectedElementId() {
+    return this.connections.length > 0 ? this.connections[0].connectedElementId : null;
+  }
+
+  set connectedElementId(value) {
+    // Для обратной совместимости - устанавливаем первое соединение
+    if (value === null) {
+      this.connections = [];
+    } else if (this.connections.length === 0) {
+      this.connections.push({ connectedElementId: value, connectedPortId: null });
+    } else {
+      this.connections[0].connectedElementId = value;
+    }
+  }
+
+  get connectedPortId() {
+    return this.connections.length > 0 ? this.connections[0].connectedPortId : null;
+  }
+
+  set connectedPortId(value) {
+    if (this.connections.length === 0) {
+      this.connections.push({ connectedElementId: null, connectedPortId: value });
+    } else {
+      this.connections[0].connectedPortId = value;
+    }
   }
 
   disconnect() {
-    this.connectedElementId = null;
-    this.connectedPortId = null;
+    this.connections = [];
+  }
+
+  disconnectFrom(portId) {
+    this.connections = this.connections.filter(c => c.connectedPortId !== portId);
   }
 
   connectTo(port) {
-    this.connectedElementId = port.elementId;
-    this.connectedPortId = port.id;
+    this.addConnection(port.elementId, port.id);
   }
 
   getDirectionName() {
@@ -55,10 +111,13 @@ export class Port {
 
   getColor(isHighlighted = false) {
     if (isHighlighted) return '#ff00ff';
-    return '#888888';
+    const connectionCount = this.connections?.length || 0;
+    if (connectionCount === 0) return '#888888';
+    if (connectionCount === 1) return '#00cc00'; // Зеленый
+    if (connectionCount === 2) return '#ffaa00'; // Оранжевый
+    return '#ff0000'; // Красный для 3+ (нагрузка)
   }
 
-  // ОБНОВЛЕННЫЙ МЕТОД ОТРИСОВКИ
   draw(ctx, scale, mmPerPx, isDarkTheme, isHighlighted = false) {
     if (this.worldX === undefined || this.worldY === undefined) return;
 
@@ -73,6 +132,16 @@ export class Port {
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1 / scale;
     ctx.stroke();
+
+    // Если больше одного соединения - рисуем маленькую цифру
+    if (this.connections.length > 1) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.max(8, radius)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(this.connections.length.toString(), this.worldX, this.worldY);
+    }
+
     ctx.restore();
   }
 
@@ -86,8 +155,7 @@ export class Port {
       localY: this.localY,
       worldX: this.worldX,
       worldY: this.worldY,
-      connectedElementId: this.connectedElementId,
-      connectedPortId: this.connectedPortId,
+      connections: this.connections.map(c => ({ ...c })), // Сохраняем все соединения
       radius: this.radius
     };
   }

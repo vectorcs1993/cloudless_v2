@@ -14,7 +14,6 @@
               </q-card-section>
               <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
                 <q-tab name="tools" label="Инструменты" />
-                <q-tab name="library" label="Библиотека" />
                 <q-tab name="settings_editor" label="Редактор" />
                 <q-tab name="settings_project" label="Проект" />
               </q-tabs>
@@ -27,13 +26,21 @@
                     <q-btn :color="currentTool === 'trace' ? 'primary' : 'default'" @click="currentTool = 'trace'" icon="show_chart" label="Рисование"
                       class="full-width" />
                   </div>
-                </q-tab-panel>
-                <q-tab-panel name="library">
-                  <div class="drag-items">
-                    <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true"
-                      @dragstart="(e) => dragDropManager.onDragStart(e, item)" @dragend="() => dragDropManager.onDragEnd()">
-                      <div class="drag-item-preview" v-html="item.svg"></div>
-                      <span class="drag-item-label">{{ item.label }}</span>
+                  <div v-if="currentTool === 'select'" class="text-caption text-grey q-mt-sm">
+                    Перетащите элементы на холст
+                  </div>
+                  <div v-if="currentTool === 'trace'" class="text-caption text-grey q-mt-sm">
+                    Нарисуйте схему воздуховодов используя линии
+                  </div>
+                  <div class="q-mt-md" v-if="currentTool === 'select'">
+                    <div class="text-subtitle2 q-mb-sm">Библиотека элементов</div>
+                    <div class="drag-items">
+                      <div v-for="item in dragItems" :key="item.type" class="drag-item" :class="{ 'drag-item-disabled': currentTool !== 'select' }"
+                        :draggable="currentTool === 'select'" @dragstart="(e) => currentTool === 'select' && dragDropManager.onDragStart(e, item)"
+                        @dragend="() => dragDropManager.onDragEnd()">
+                        <div class="drag-item-preview" v-html="item.svg"></div>
+                        <span class="drag-item-label">{{ item.label }}</span>
+                      </div>
                     </div>
                   </div>
                 </q-tab-panel>
@@ -78,6 +85,11 @@
                     <label>Общий расход воздуховодов (м3/ч):</label>
                     <div>
                       <q-input :dark="isDarkTheme" type="number" v-model.number="totalAirFlow" step="1" min="100" max="99999" dense outlined
+                        class="inline-input" debounce="500" />
+                    </div>
+                    <label>Температура воздуха (°C):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="temperature" step="1" min="-60" max="120" dense outlined
                         class="inline-input" debounce="500" />
                     </div>
                   </div>
@@ -153,7 +165,7 @@
                 <q-card v-if="selectedElements.length > 0" :dark="isDarkTheme" square flat>
                   <q-card-section class="row items-center justify-between">
                     <div class="q-m-none">Выбрано элементов: {{ selectedElements.length }}</div>
-                    <q-btn icon="close" flat dense v-close-popup @click="clearSelection" />
+                    <q-btn icon="delete" color="negative" dense v-close-popup @click="deleteSelected" />
                   </q-card-section>
                   <div v-if="selectedElements.length === 1">
                     <q-card-section class="row items-center justify-between">
@@ -164,7 +176,7 @@
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
                     </q-card-section>
-                    <q-tabs v-model="tabElement" :dark="isDarkTheme" no-caps>
+                    <q-tabs align="left" v-model="tabElement" :dark="isDarkTheme" no-caps>
                       <q-tab name="parameters" label="Параметры" />
                       <q-tab name="positions" label="Позиция" />
                       <q-tab name="callout" label="Выноска" />
@@ -259,22 +271,30 @@
                       <q-tab-panel name="links">
                         <div v-if="selectedElement?.ports?.length" class="connections-info">
                           <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                            <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
-                              size="16px" />
-                            <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction
-                            }})</span>
-                            <div v-if="port.isConnected?.()" class="q-ml-auto">
-                              <q-btn flat dense size="sm" color="primary" icon="open_in_new" :label="`→ Элемент ${port.connectedElementId}`"
-                                @click="gotoConnectedElement(port.connectedElementId)" class="connection-link-btn" />
+                            <div class="row items-center q-mb-sm">
+                              <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
+                                size="16px" />
+                              <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
+                              <span class="q-ml-sm text-caption" v-if="port.connections?.length">
+                                ({{ port.connections.length }} подключений)
+                              </span>
                             </div>
-                            <span v-else class="q-ml-auto text-negative">не подключен</span>
+
+                            <div v-if="port.connections?.length" class="q-ml-md">
+                              <div v-for="(conn, idx) in port.connections" :key="idx" class="row items-center q-mb-xs">
+                                <q-icon name="link" size="12px" color="primary" />
+                                <span class="q-ml-sm">→ Элемент {{ conn.connectedElementId }}</span>
+                                <q-btn flat dense size="xs" color="primary" icon="open_in_new" @click="gotoConnectedElement(conn.connectedElementId)"
+                                  class="q-ml-sm" />
+                              </div>
+                            </div>
+                            <div v-else class="q-ml-md text-negative text-caption">не подключен</div>
                           </div>
                         </div>
                         <div v-else class="text-center q-pa-md text-grey">Нет портов у выбранного элемента</div>
                       </q-tab-panel>
                     </q-tab-panels>
                   </div>
-                  <q-card-section><q-btn label="Удалить" icon="delete" color="negative" @click="deleteSelected" class="full-width" /></q-card-section>
                 </q-card>
                 <q-card v-else :dark="isDarkTheme" square flat><q-card-section>Выберите
                     элемент</q-card-section></q-card>
@@ -361,7 +381,8 @@ const snapDistance = ref(10);
 // ========== НАСТРОЙКИ ПРОЕКТА ==========
 const mmPerPx = ref(2);
 const totalAirFlow = ref(3000);
-const tabEditor = ref('library');
+const temperature = ref(20);
+const tabEditor = ref('tools');
 const tabLayer = ref('elements');
 const tabElement = ref('parameters');
 const mainCanvas = ref(null);
@@ -432,21 +453,23 @@ const addNewLayer = () => {
 };
 
 const removeLayerWithConfirm = (layerId) => {
-  if (layers.value.length === 1) { showNotify({ type: 'warning', message: 'Нельзя удалить последний слой!', timeout: 2000 }); return; }
-  const layer = layers.value.find(l => l.id === layerId);
-  if (!layer) return;
-  if (layer.elements.length > 0) {
-    if (confirm(`Слой "${layer.name}" содержит ${layer.elements.length} элементов. Переместить их на первый слой?`)) {
-      layerManager.removeLayer(layerId, layers.value[0].id);
+  if (confirm('Удалить слой?')) {
+    if (layers.value.length === 1) { showNotify({ type: 'warning', message: 'Нельзя удалить последний слой!', timeout: 2000 }); return; }
+    const layer = layers.value.find(l => l.id === layerId);
+    if (!layer) return;
+    if (layer.elements.length > 0) {
+      if (confirm(`Слой "${layer.name}" содержит ${layer.elements.length} элементов. Переместить их на первый слой?`)) {
+        layerManager.removeLayer(layerId, layers.value[0].id);
+        layers.value = [...layers.value];
+        showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён, элементы перемещены`, timeout: 2000 });
+      } else return;
+    } else {
+      layerManager.removeLayer(layerId);
       layers.value = [...layers.value];
-      showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён, элементы перемещены`, timeout: 2000 });
-    } else return;
-  } else {
-    layerManager.removeLayer(layerId);
-    layers.value = [...layers.value];
-    showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён`, timeout: 2000 });
+      showNotify({ type: 'positive', message: `Слой "${layer.name}" удалён`, timeout: 2000 });
+    }
+    scheduleRender();
   }
-  scheduleRender();
 };
 
 const toggleLayerLock = (layerId) => {
@@ -605,8 +628,10 @@ const moveToBottom = () => elementOpsManager?.moveToBottom(selectedElement.value
 const moveUp = () => elementOpsManager?.moveUp(selectedElement.value);
 const moveDown = () => elementOpsManager?.moveDown(selectedElement.value);
 const deleteSelected = () => {
-  elementOpsManager?.deleteSelected(selectedElements.value);
-  updateSelection([]);
+  if (confirm(selectedElements.value.length > 1 ? 'Удалить элементы?' : 'Удалить элемент?')) {
+    elementOpsManager?.deleteSelected(selectedElements.value);
+    updateSelection([]);
+  }
 };
 
 // Drag & Drop обертка

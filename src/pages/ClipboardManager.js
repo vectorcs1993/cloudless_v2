@@ -7,15 +7,17 @@ export class ClipboardManager {
     this.clipboard = []; // хранит JSON элементов
   }
 
+  // В методе copy
   copy(elements) {
     if (!elements.length) return false;
     this.clipboard = elements.map(el => {
       const json = el.toJSON();
-      json.callouts = []; // выноски не копируем
+      json.callouts = [];
       return json;
     });
     return true;
   }
+
 
   paste(offsetX = 50, offsetY = 50) {
     if (!this.clipboard.length) return [];
@@ -66,14 +68,16 @@ export class ClipboardManager {
         for (let pIdx = 0; pIdx < newEl.ports.length; pIdx++) {
           const newPort = newEl.ports[pIdx];
           const oldPort = oldJson.ports[pIdx];
-          if (oldPort.connectedElementId && oldPort.connectedPortId) {
-            const newTargetId = oldIdToNewId.get(oldPort.connectedElementId);
-            if (newTargetId) {
-              const targetElement = newElements.find(el => el.id === newTargetId);
-              if (targetElement && targetElement.ports) {
-                const targetPort = targetElement.ports.find(p => p.id === oldPort.connectedPortId);
-                if (targetPort) {
-                  this.connectionManager.connectPorts(newPort, targetPort);
+          if (oldPort.connections && oldPort.connections.length > 0) {
+            for (const conn of oldPort.connections) {
+              const newTargetId = oldIdToNewId.get(conn.connectedElementId);
+              if (newTargetId) {
+                const targetElement = newElements.find(el => el.id === newTargetId);
+                if (targetElement && targetElement.ports) {
+                  const targetPort = targetElement.ports.find(p => p.id === conn.connectedPortId);
+                  if (targetPort) {
+                    this.connectionManager.connectPorts(newPort, targetPort);
+                  }
                 }
               }
             }
