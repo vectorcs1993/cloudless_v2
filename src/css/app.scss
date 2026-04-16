@@ -185,3 +185,33 @@
   opacity: 0.7;
   margin-right: 8px;
 }
+
+/* Контейнер для всей панели слоев */
+.layer-panel-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Фиксированные вкладки (не скроллятся) */
+.layer-tabs-fixed {
+  flex-shrink: 0;
+  /* Запрещаем сжатие */
+  background: inherit;
+}
+
+/* Прокручиваемая область для панелей */
+.layer-panels-scrollable {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  /* Важно для корректной работы flex */
+}
+
+/* Содержимое каждой панели */
+.layer-panel-content {
+  height: 100%;
+  padding: 0;
+  /* Убираем стандартные отступы, если нужно */
+}
