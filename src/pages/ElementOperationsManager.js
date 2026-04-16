@@ -12,15 +12,22 @@ export class ElementOperationsManager {
   rotateElement(element, angleDeg) {
     if (!element) return;
     if (this.layerManager.isLayerLocked(element)) return;
-
     element.rotation = (element.rotation + angleDeg + 360) % 360;
     element.updatePorts?.();
     element.updateCalloutText?.();
-
     if (this.connectionManager && this.autoUpdateConnections.value) {
       this.connectionManager.updateAllPortsAndConnections(this.snapDistance.value, this.layerManager);
+      console.log('  Связи обновлены');
     }
-    this.scheduleRender();
+    if (this.renderer) {
+      this.renderer.draw();
+    } else {
+      this.scheduleRender();
+    }
+  }
+
+  setRenderer(renderer) {
+    this.renderer = renderer;
   }
 
   rotateLeft45(element) { this.rotateElement(element, -45); }

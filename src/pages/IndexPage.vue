@@ -8,12 +8,25 @@
               <q-card-section>
                 <div class="text-h6">Расчёт воздуховодов онлайн</div>
               </q-card-section>
+              <q-card-section class="save-controls">
+                <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
+                <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
+              </q-card-section>
               <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
+                <q-tab name="tools" label="Инструменты" />
                 <q-tab name="library" label="Библиотека" />
                 <q-tab name="settings" label="Настройки" />
               </q-tabs>
               <q-separator />
               <q-tab-panels v-model="tabEditor" :dark="isDarkTheme">
+                <q-tab-panel name="tools">
+                  <div class="tools-panel">
+                    <q-btn :color="currentTool === 'select' ? 'primary' : 'default'" @click="currentTool = 'select'" icon="pan_tool" label="Выделение"
+                      class="full-width q-mb-sm" />
+                    <q-btn :color="currentTool === 'trace' ? 'primary' : 'default'" @click="currentTool = 'trace'" icon="show_chart" label="Рисование"
+                      class="full-width" />
+                  </div>
+                </q-tab-panel>
                 <q-tab-panel name="library">
                   <div class="drag-items">
                     <div v-for="item in dragItems" :key="item.type" class="drag-item" draggable="true"
@@ -60,10 +73,6 @@
                   </div>
                 </q-tab-panel>
               </q-tab-panels>
-              <q-card-section class="save-controls">
-                <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
-                <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
-              </q-card-section>
             </q-card>
           </template>
           <template v-slot:after>
@@ -349,6 +358,7 @@ const layers = ref([{ id: 'layer_default', name: 'Слой 1', visible: true, lo
 const activeLayerId = ref('layer_default');
 const traceMode = ref('8dir');
 const isTraceModeActive = ref(false);
+const currentTool = ref('select');
 
 const activeLayer = computed(() => layers.value.find(l => l.id === activeLayerId.value));
 const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
@@ -647,7 +657,7 @@ onMounted(() => {
 
   renderer = new CanvasRenderer(mainCanvas.value, layers, renderOptions);
   selectionManager = new SelectionManager(allElements, renderer, layerManager);
-  interactionManager = new InteractionManager(mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager);
+  interactionManager = new InteractionManager(mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager, currentTool);
   dragDropManager = new DragDropManager(renderer, layerManager, updateSelection, scheduleRender, showNotify);
   traceManager = new TraceManager(interactionManager, scheduleRender);
 

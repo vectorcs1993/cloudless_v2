@@ -3,7 +3,7 @@
 import { ElementFactory } from './ElementFactory.js';
 
 export class InteractionManager {
-  constructor(canvas, elements, renderer, connectionManager, selectionManager, options, layerManager = null) {
+  constructor(canvas, elements, renderer, connectionManager, selectionManager, options, layerManager = null, currentTool) {
     this.canvas = canvas;
     this.renderer = renderer;
     this.connectionManager = connectionManager;
@@ -27,6 +27,7 @@ export class InteractionManager {
     // Режим рисования трассы
     this.traceActive = false;
     this.traceStartPort = null;
+    this.traceStartPoint = null;
     this.traceGhostPoints = [];
 
     // Кэши для оптимизации
@@ -34,6 +35,8 @@ export class InteractionManager {
     this.lastSnapCheck = 0;
     this.snapCheckThrottle = 16;
     this._dragFrameRequest = null;
+
+    this.currentTool = currentTool; // ref
   }
 
   // ========== РЕЖИМ РИСОВАНИЯ ==========
@@ -42,13 +45,23 @@ export class InteractionManager {
     if (!port) return;
     this.traceActive = true;
     this.traceStartPort = port;
+    this.traceStartPoint = null;
     this.canvas.style.cursor = 'crosshair';
     if (this.onTraceStart) this.onTraceStart(port);
+  }
+
+  startTraceFromPoint(point) {
+    this.traceActive = true;
+    this.traceStartPort = null;
+    this.traceStartPoint = point;
+    this.canvas.style.cursor = 'crosshair';
+    if (this.onTraceStart) this.onTraceStart(null);
   }
 
   cancelTrace() {
     this.traceActive = false;
     this.traceStartPort = null;
+    this.traceStartPoint = null;
     this.traceGhostPoints = [];
 
     if (this.renderer) {
@@ -82,11 +95,9 @@ export class InteractionManager {
       return null;
     }
 
-    // Привязка к шагу сетки
     const gridStepPx = this.options.gridStepM?.value || 50;
     const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
 
-    // Привязка к 8 направлениям
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
 
@@ -134,7 +145,6 @@ export class InteractionManager {
       rotation: finalAngle
     };
 
-    // Автоподбор размера из исходного порта
     const sourceElement = this.findElementById(startPort.elementId);
     if (sourceElement && sourceElement.a) params.a = sourceElement.a;
 
@@ -155,7 +165,6 @@ export class InteractionManager {
     const newElement = ElementFactory.createElement(elementType, newId, centerX, centerY, params);
     if (!newElement) return null;
 
-    // Обновляем ID портов через layerManager
     if (newElement.ports) {
       for (const port of newElement.ports) {
         const newPortId = this.layerManager?.getNextPortId();
@@ -165,7 +174,6 @@ export class InteractionManager {
 
     newElement.updatePorts();
 
-    // Создаем выноску
     const topLeft = newElement.getTopLeft();
     newElement.addCallout(newElement.x, topLeft.y - 50);
     newElement.updateCalloutText();
@@ -187,24 +195,229 @@ export class InteractionManager {
     return newElement;
   }
 
+  createDuctFromPointToPoint(startPoint, endPoint) {
+    const activeLayer = this.layerManager?.getActiveLayer();
+    if (!activeLayer || activeLayer.locked) {
+      if (this.onError) this.onError('Слой заблокирован');
+      return null;
+    }
+
+    let dx = endPoint.x - startPoint.x;
+    let dy = endPoint.y - startPoint.y;
+    let distance = Math.hypot(dx, dy);
+
+    if (distance < 5) {
+      if (this.onError) this.onError('Слишком короткий воздуховод');
+      return null;
+    }
+
+    const gridStepPx = this.options.gridStepM?.value || 50;
+    const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
+
+    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (angle < 0) angle += 360;
+
+    const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    let minDiff = 180;
+    let snappedAngle = angle;
+
+    for (const sa of snapAngles) {
+      let diff = Math.abs(angle - sa);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < minDiff) {
+        minDiff = diff;
+        snappedAngle = sa;
+      }
+    }
+
+    let finalDistance = snappedDistance;
+    let finalAngle = angle;
+
+    if (minDiff <= 30) {
+      finalAngle = snappedAngle;
+    }
+
+    const rad = finalAngle * Math.PI / 180;
+    const finalDx = Math.cos(rad) * finalDistance;
+    const finalDy = Math.sin(rad) * finalDistance;
+
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const distanceMm = finalDistance * mmPerPx;
+
+    if (distanceMm < 30) {
+      if (this.onError) this.onError('Слишком короткий воздуховод (мин. 30 мм)');
+      return null;
+    }
+
+    const halfLengthPx = finalDistance / 2;
+    const centerX = startPoint.x + Math.cos(rad) * halfLengthPx;
+    const centerY = startPoint.y + Math.sin(rad) * halfLengthPx;
+
+    const params = {
+      b: Math.max(30, distanceMm),
+      a: 125,
+      sectionType: 'round',
+      rotation: finalAngle
+    };
+
+    const newId = this.layerManager?.getNextElementId();
+    if (!newId) {
+      if (this.onError) this.onError('Ошибка получения ID элемента');
+      return null;
+    }
+
+    const newElement = ElementFactory.createElement('duct', newId, centerX, centerY, params);
+    if (!newElement) return null;
+
+    if (newElement.ports) {
+      for (const port of newElement.ports) {
+        const newPortId = this.layerManager?.getNextPortId();
+        if (newPortId) port.id = newPortId;
+      }
+    }
+
+    newElement.updatePorts();
+
+    const topLeft = newElement.getTopLeft();
+    newElement.addCallout(newElement.x, topLeft.y - 50);
+    newElement.updateCalloutText();
+    newElement.showCallout = true;
+
+    activeLayer.elements.push(newElement);
+
+    if (this.onElementCreated) this.onElementCreated(newElement);
+    return newElement;
+  }
+
+  createDuctFromPointToPort(startPoint, endPort) {
+    const activeLayer = this.layerManager?.getActiveLayer();
+    if (!activeLayer || activeLayer.locked) {
+      if (this.onError) this.onError('Слой заблокирован');
+      return null;
+    }
+
+    let dx = endPort.worldX - startPoint.x;
+    let dy = endPort.worldY - startPoint.y;
+    let distance = Math.hypot(dx, dy);
+
+    if (distance < 5) {
+      if (this.onError) this.onError('Слишком короткий воздуховод');
+      return null;
+    }
+
+    const gridStepPx = this.options.gridStepM?.value || 50;
+    const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
+
+    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (angle < 0) angle += 360;
+
+    const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    let minDiff = 180;
+    let snappedAngle = angle;
+
+    for (const sa of snapAngles) {
+      let diff = Math.abs(angle - sa);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < minDiff) {
+        minDiff = diff;
+        snappedAngle = sa;
+      }
+    }
+
+    let finalDistance = snappedDistance;
+    let finalAngle = angle;
+
+    if (minDiff <= 30) {
+      finalAngle = snappedAngle;
+    }
+
+    const rad = finalAngle * Math.PI / 180;
+    const finalDx = Math.cos(rad) * finalDistance;
+    const finalDy = Math.sin(rad) * finalDistance;
+
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const distanceMm = finalDistance * mmPerPx;
+
+    if (distanceMm < 30) {
+      if (this.onError) this.onError('Слишком короткий воздуховод (мин. 30 мм)');
+      return null;
+    }
+
+    const halfLengthPx = finalDistance / 2;
+    const centerX = startPoint.x + Math.cos(rad) * halfLengthPx;
+    const centerY = startPoint.y + Math.sin(rad) * halfLengthPx;
+
+    let elementType = 'duct';
+    let params = {
+      b: Math.max(30, distanceMm),
+      a: 125,
+      sectionType: 'round',
+      rotation: finalAngle
+    };
+
+    const targetElement = this.findElementById(endPort.elementId);
+    if (targetElement && targetElement.a && targetElement.a !== params.a) {
+      elementType = 'transition';
+      params.a2 = targetElement.a;
+    }
+
+    const newId = this.layerManager?.getNextElementId();
+    if (!newId) {
+      if (this.onError) this.onError('Ошибка получения ID элемента');
+      return null;
+    }
+
+    const newElement = ElementFactory.createElement(elementType, newId, centerX, centerY, params);
+    if (!newElement) return null;
+
+    if (newElement.ports) {
+      for (const port of newElement.ports) {
+        const newPortId = this.layerManager?.getNextPortId();
+        if (newPortId) port.id = newPortId;
+      }
+    }
+
+    newElement.updatePorts();
+
+    const topLeft = newElement.getTopLeft();
+    newElement.addCallout(newElement.x, topLeft.y - 50);
+    newElement.updateCalloutText();
+    newElement.showCallout = true;
+
+    activeLayer.elements.push(newElement);
+
+    const outletPort = newElement.ports.find(p => p.direction === 'outlet' || p.direction === 'right');
+    if (endPort && outletPort) {
+      this.connectionManager?.connectPorts(endPort, outletPort);
+    }
+
+    if (this.onElementCreated) this.onElementCreated(newElement);
+    return newElement;
+  }
+
   handleTraceClick(worldPos) {
-    if (!this.traceActive || !this.traceStartPort) return false;
+    if (!this.traceActive) return false;
+
+    const startPort = this.traceStartPort;
+    const startPoint = this.traceStartPoint;
+
+    if (!startPort && !startPoint) return false;
 
     const targetPort = this.findPortAt(worldPos.x, worldPos.y, 5);
-    let newElement = null;
 
-    if (targetPort && targetPort !== this.traceStartPort) {
-      newElement = this.createDuctFromPortToPoint(
-        this.traceStartPort,
-        { x: targetPort.worldX, y: targetPort.worldY },
-        targetPort
-      );
-    } else {
-      newElement = this.createDuctFromPortToPoint(
-        this.traceStartPort,
-        worldPos,
-        null
-      );
+    let newElement = null;
+    if (startPort) {
+      if (targetPort && targetPort !== startPort) {
+        newElement = this.createDuctFromPortToPoint(startPort, { x: targetPort.worldX, y: targetPort.worldY }, targetPort);
+      } else {
+        newElement = this.createDuctFromPortToPoint(startPort, worldPos, null);
+      }
+    } else if (startPoint) {
+      if (targetPort) {
+        newElement = this.createDuctFromPointToPort(startPoint, targetPort);
+      } else {
+        newElement = this.createDuctFromPointToPoint(startPoint, worldPos);
+      }
     }
 
     if (newElement) {
@@ -223,6 +436,7 @@ export class InteractionManager {
       const outletPort = newElement.ports.find(p => p.direction === 'outlet' || p.direction === 'right');
       if (outletPort) {
         this.traceStartPort = outletPort;
+        this.traceStartPoint = null;
       } else {
         this.cancelTrace();
       }
@@ -232,9 +446,17 @@ export class InteractionManager {
   }
 
   updateTracePreview(worldPos) {
-    if (!this.traceActive || !this.traceStartPort) return;
+    if (!this.traceActive) return;
 
-    const startPoint = { x: this.traceStartPort.worldX, y: this.traceStartPort.worldY };
+    let startPoint;
+    if (this.traceStartPort) {
+      startPoint = { x: this.traceStartPort.worldX, y: this.traceStartPort.worldY };
+    } else if (this.traceStartPoint) {
+      startPoint = this.traceStartPoint;
+    } else {
+      return;
+    }
+
     let endPoint = { x: worldPos.x, y: worldPos.y };
 
     const dx = endPoint.x - startPoint.x;
@@ -559,10 +781,12 @@ export class InteractionManager {
     if (!isOverCallout) {
       const element = this.findElementAt(world.x, world.y);
       this.renderer.setHighlightedElements(element ? [element] : []);
-      if (this.options.showPorts?.value) {
+      if (this.options.showPorts?.value && this.currentTool?.value === 'select') {
         const port = this.findPortAt(world.x, world.y);
         this.renderer.setHighlightedPort(port);
-        this.canvas.style.cursor = port ? 'crosshair' : (element ? 'pointer' : 'default');
+        this.canvas.style.cursor = element ? 'pointer' : 'default';
+      } else if (this.currentTool?.value === 'trace') {
+        this.canvas.style.cursor = 'crosshair';
       } else {
         this.canvas.style.cursor = element ? 'pointer' : 'default';
       }
@@ -589,10 +813,30 @@ export class InteractionManager {
     }
 
     if (e.button === 0) {
+      // Если активен режим рисования
+      if (this.currentTool?.value === 'trace') {
+        // Не начинаем рисование заново, если уже рисуем
+        if (!this.traceActive) {
+          const port = this.findPortAt(world.x, world.y);
+          if (port && this.isInteractive(this.findElementById(port.elementId))) {
+            this.startTrace(port);
+          } else {
+            this.startTraceFromPoint(world);
+          }
+          this.renderer.draw();
+          return;
+        } else {
+          // Если уже рисуем - обрабатываем клик как завершение сегмента
+          this.handleTraceClick(world);
+          this.renderer.draw();
+          return;
+        }
+      }
+
+      // Режим выделения (select) - существующая логика
       if (this.traceActive) {
-        this.handleTraceClick(world);
+        this.cancelTrace();
         this.renderer.draw();
-        return;
       }
 
       const callout = this.findCalloutAt(world.x, world.y);
@@ -607,15 +851,6 @@ export class InteractionManager {
 
       const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
       if (isOverCallout) return;
-
-      if (this.options.showPorts?.value && !isOverCallout) {
-        const port = this.findPortAt(world.x, world.y);
-        if (port && this.isInteractive(this.findElementById(port.elementId))) {
-          this.startTrace(port);
-          this.renderer.draw();
-          return;
-        }
-      }
 
       const element = this.findElementAt(world.x, world.y);
       if (element) {
@@ -684,7 +919,6 @@ export class InteractionManager {
     this.dragElements = [];
     this.dragCallout = null;
     this.dragStartPositions = [];
-    this.canvas.style.cursor = '';
 
     if (this._dragFrameRequest) {
       cancelAnimationFrame(this._dragFrameRequest);
