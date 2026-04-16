@@ -284,14 +284,15 @@
           </template>
           <template v-slot:after>
             <q-card class="layer-panel-container" :dark="isDarkTheme" flat>
-              <q-tabs v-model="tabLayer" :dark="isDarkTheme" no-caps class="layer-tabs-fixed">
-                <q-tab name="elements" label="Элементы слоя" />
-                <q-tab name="settings" label="Настройки слоя" />
+              <q-tabs align="left" v-model="tabLayer" :dark="isDarkTheme" no-caps class="layer-tabs-fixed">
+                <q-tab name="elements" label="Элементы" />
+                <q-tab name="settings" label="Настройки" />
+                     <q-tab name="console" label="Вывод данных" />
               </q-tabs>
               <q-tab-panels v-model="tabLayer" :dark="isDarkTheme" animated class="layer-panels-scrollable">
-                <q-tab-panel name="elements" class="layer-panel-content">
+                <q-tab-panel :disable="false" name="elements" class="layer-panel-content">
                   <div class="fit">
-                    <q-table flat dense :rows="activeLayer.elements" :columns="tableManager.getColumns().value"
+                    <q-table  flat dense :rows="activeLayer.elements" :columns="tableManager.getColumns().value"
                       row-key="id" :dark="isDarkTheme" virtual-scroll
                       v-model:pagination="tableManager.getPagination().value" :rows-per-page-options="[0]"
                       selection="multiple" :selected="tableManager.getSelectedRows().value"
