@@ -1,4 +1,5 @@
-import { computed } from 'vue';
+// TreeManager.js
+import { ref, computed } from 'vue';
 
 export class TreeManager {
   constructor(layers, activeLayerId, onSelectLayer, onSelectElement, showNotify) {
@@ -8,34 +9,37 @@ export class TreeManager {
     this.onSelectElement = onSelectElement;
     this.showNotify = showNotify;
 
-    this.selectedTreeNode = null;
-    this.expandedTreeNodes = [];
+    this.selectedTreeNode = ref(null);
+    this.expandedTreeNodes = ref([]);
+
+    // СОЗДАЕМ REACTIVE COMPUTED
+    this.projectTree = computed(() => this.buildProjectTree());
   }
 
-  getProjectTree() {
-    const buildElementNode = (item, layerInfo) => ({
-      id: item.id,
-      label: `${item.name || item.id}`,
-      icon: 'rectangle',
-      color: item.color || '#888',
-      info: '',
-      element: item,
-      layerId: layerInfo?.id,
-      layerName: layerInfo?.name,
-      layerLocked: layerInfo?.locked,
-      layerVisible: layerInfo?.visible,
-      isLayer: false,
-    });
+  buildProjectTree() {
+    const layersArray = this.layers.value || this.layers;
 
     const result = [];
-    for (const layer of this.layers.value) {
+    for (const layer of layersArray) {
       result.push({
         id: `layer_${layer.id}`,
         label: layer.name,
         icon: 'layers',
         color: 'primary',
         info: `${layer.elements.length} эл.`,
-        children: layer.elements.map(el => buildElementNode(el, layer)),
+        children: layer.elements.map(el => ({
+          id: el.id,
+          label: `${el.name || el.id}`,
+          icon: 'rectangle',
+          color: el.color || '#888',
+          info: '',
+          element: el,
+          layerId: layer.id,
+          layerName: layer.name,
+          layerLocked: layer.locked,
+          layerVisible: layer.visible,
+          isLayer: false,
+        })),
         layerId: layer.id,
         layerName: layer.name,
         layerLocked: layer.locked,
@@ -45,6 +49,11 @@ export class TreeManager {
       });
     }
     return result;
+  }
+
+  // ВОЗВРАЩАЕМ COMPUTED ЗНАЧЕНИЕ
+  getProjectTree() {
+    return this.projectTree.value;
   }
 
   onTreeSelect(nodeId, projectTree) {
@@ -65,7 +74,7 @@ export class TreeManager {
     if (!foundNode) return;
 
     if (foundNode.isLayer) {
-      this.selectedTreeNode = nodeId;
+      this.selectedTreeNode.value = nodeId;
       this.onSelectLayer?.(foundNode.layerId);
       return;
     }
@@ -84,13 +93,13 @@ export class TreeManager {
       }
       return ids;
     };
-    this.expandedTreeNodes = getAllIds(projectTree);
-    return this.expandedTreeNodes;
+    this.expandedTreeNodes.value = getAllIds(projectTree);
+    return this.expandedTreeNodes.value;
   }
 
   collapseAll() {
-    this.expandedTreeNodes = [];
-    return this.expandedTreeNodes;
+    this.expandedTreeNodes.value = [];
+    return this.expandedTreeNodes.value;
   }
 
   onTreeNodeContextMenu(event, node) {
@@ -103,18 +112,18 @@ export class TreeManager {
   }
 
   setSelectedTreeNode(nodeId) {
-    this.selectedTreeNode = nodeId;
+    this.selectedTreeNode.value = nodeId;
   }
 
   getSelectedTreeNode() {
-    return this.selectedTreeNode;
+    return this.selectedTreeNode.value;
   }
 
   getExpandedTreeNodes() {
-    return this.expandedTreeNodes;
+    return this.expandedTreeNodes.value;
   }
 
   setExpandedTreeNodes(nodes) {
-    this.expandedTreeNodes = nodes;
+    this.expandedTreeNodes.value = nodes;
   }
 }
