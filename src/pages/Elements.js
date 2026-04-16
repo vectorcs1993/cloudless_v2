@@ -54,7 +54,10 @@ export class BaseElement {
       'cross': 'Крестовина',
     };
   }
-
+  getTypeName() {
+    const types = BaseElement.getAvailableTypes();
+    return types[this.type] || this.type;
+  }
   getWidth() { throw new Error('Метод getWidth должен быть переопределен'); }
   getHeight() { throw new Error('Метод getHeight должен быть переопределен'); }
   getPorts() { throw new Error('Метод getPorts должен быть переопределен'); }
