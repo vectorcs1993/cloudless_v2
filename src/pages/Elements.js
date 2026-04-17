@@ -107,8 +107,6 @@ export class BaseElement {
   getParameters() {
     return [
       { name: 'name', label: 'Имя', type: 'text', value: this.name },
-      { name: 'color', label: 'Цвет', type: 'color', value: this.color },
-      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 1, min: 1, max: 18, value: this._lineWidth, unit: 'px' },
     ];
   }
 
@@ -216,59 +214,108 @@ export class BaseElement {
 
 // ========== БАЗОВЫЙ КЛАСС ВОЗДУХОВОДА ==========
 export class DuctBase extends BaseElement {
-  constructor(id, type, x, y, name, sectionType = 'round', size) {
+
+  _defaultMaterialType = 'galvanized';
+  _defaultSectionType = 'round';
+
+  constructor(id, type, x, y, name, materialType = this._defaultMaterialType, sectionType = this._defaultSectionType, a, b, c) {
     super(id, type, x, y, name);
-    this._a = size;
+    this._a = a;
+    this._b = b;
+    this._c = c;
     this._sectionType = sectionType;
+    this._materialType = materialType;
   }
-
+  static getMaterialsTypes() {
+    return [
+      { label: 'Оцинкованная сталь', value: 'galvanized' },
+      { label: 'Нержавеющая сталь', value: 'stainless' },
+      { label: 'Пластик', value: 'plastic' },
+      { label: 'Алюминий', value: 'aluminum' },
+      { label: 'Другой', value: 'custom' }
+    ];
+  }
+  static getSectionTypes() {
+    return [
+      { label: 'Прямоугольное', value: 'rectangular' },
+      { label: 'Круглое', value: 'round' }
+    ];
+  }
   get a() { return this._a; }
-
   set a(value) {
     if (this._a === value) return;
     this._a = value;
-    // Центр остается на месте, размеры изменяются
     this.updatePorts();
   }
-
+  get b() { return this._b; }
+  set b(value) {
+    if (this._b === value) return;
+    this._b = value;
+    this.updatePorts();
+    this.updateCalloutText();
+  }
+  get c() {
+    if (this._sectionType === 'rectangular') return this._c;
+    return null;
+  }
+  set c(value) {
+    if (this._c === value) return;
+    this._c = value;
+    this.updateCalloutText();
+  }
   get sectionType() { return this._sectionType; }
-
   set sectionType(newType) {
     if (this._sectionType === newType) return;
     this._sectionType = newType;
     this.updateCalloutText();
+  }
+  get materialType() { return this._materialType; }
+  set materialType(newType) {
+    if (this._materialType === newType) return;
+    this._materialType = newType;
   }
 
   getCalloutText() {
     return `${super.getCalloutText()}\nA: ${this._a} мм`;
   }
 
+  getMaterial() {
+    return DuctBase.getMaterialsTypes().find((mt) => mt.value === this._materialType);
+  }
+
+  getSection() {
+    return DuctBase.getSectionTypes().find((mt) => mt.value === this._sectionType);
+  }
+
   getParameters() {
-    return [
-      ...super.getParameters(),
-      {
-        name: 'sectionType', label: 'Тип сечения', type: 'select', options: [
-          { value: 'rectangular', label: 'Прямоугольное' },
-          { value: 'round', label: 'Круглое' }
-        ], value: this.sectionType
-      },
-      {
-        name: 'a',
-        label: 'A',
-        type: 'number',
-        step: 10,
-        min: 20,
-        value: this._a,
-        unit: 'мм'
-      },
+    const params = [...super.getParameters(),
+    {
+      name: 'materialType', label: 'Материал', type: 'select', options: DuctBase.getMaterialsTypes(), value: this.materialType,
+    },
+    {
+      name: 'sectionType', label: 'Тип сечения', type: 'select', options: DuctBase.getSectionTypes(), value: this.sectionType,
+    },
+    {
+      name: 'a', label: this._sectionType === 'rectangular' ? 'Ширина' : 'Диаметр', type: 'number', step: 10, min: 20, value: this._a, unit: 'мм',
+    },
+    {
+      name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм',
+    }
     ];
+    if (this._sectionType === 'rectangular') {
+      params.push({ name: 'c', label: 'Высота', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });
+    }
+    return params;
   }
 
   toJSON() {
     return {
       ...super.toJSON(),
       a: this._a,
+      b: this._b,
+      c: this._c,
       sectionType: this._sectionType,
+      materialType: this._materialType,
     };
   }
 }

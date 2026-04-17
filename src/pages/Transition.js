@@ -2,8 +2,8 @@ import { DuctDirect } from './DuctDirect.js';
 import { Port } from './Port.js';
 
 export class Transition extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', sectionType2 = 'round', a = 125, a2 = 200, b = 500, c = 125, c2 = 150) {
-    super(id, x_px, y_px, sectionType, a, b, c);
+  constructor(id, x_px, y_px, materialType = 'galvanized', sectionType = 'round', sectionType2 = 'round', a = 125, a2 = 200, b = 500, c = 125, c2 = 150) {
+    super(id, x_px, y_px, materialType, sectionType, a, b, c);
     this.type = 'transition';
     this.name = `Переход ${id}`;
     this._sectionType2 = sectionType2;
@@ -41,25 +41,7 @@ export class Transition extends DuctDirect {
 
   getParameters() {
     const params = [
-      { name: 'name', label: 'Имя', type: 'text', value: this.name },
-      { name: 'color', label: 'Цвет', type: 'color', value: this.color },
-      { name: 'lineWidth', label: 'Толщина линии', type: 'number', step: 2, min: 2, max: 18, value: this.lineWidth, unit: 'px' },
-      {
-        name: 'sectionType', label: 'Тип сечения входа', type: 'select', options: [
-          { value: 'rectangular', label: 'Прямоугольное' },
-          { value: 'round', label: 'Круглое' }
-        ], value: this._sectionType
-      },
-      {
-        name: 'a',
-        label: this._sectionType === 'round' ? 'Диаметр входа' : 'Ширина входа',
-        type: 'number',
-        step: 10,
-        min: 20,
-        max: 1000,
-        value: this._a,
-        unit: 'мм'
-      },
+      ...super.getParameters(),
       {
         name: 'sectionType2',
         label: 'Тип сечения выхода',

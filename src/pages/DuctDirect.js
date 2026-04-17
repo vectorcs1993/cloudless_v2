@@ -2,25 +2,8 @@ import { BaseElement, DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
 export class DuctDirect extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', a = 125, b = 750, c = 125) {
-    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, sectionType, a);
-    this._b = b;
-    this._c = c;
-  }
-
-  get b() { return this._b; }
-  set b(value) {
-    if (this._b === value) return;
-    this._b = value;
-    this.updatePorts();
-    this.updateCalloutText();
-  }
-
-  get c() { return this._c; }
-  set c(value) {
-    if (this._c === value) return;
-    this._c = value;
-    this.updateCalloutText();
+  constructor(id, x_px, y_px, materialType = 'galvanized', sectionType = 'round', a = 125, b = 750, c = 125) {
+    super(id, 'duct', x_px, y_px, `${BaseElement.getAvailableTypes().duct} ${id}`, materialType, sectionType, a, b, c);
   }
 
   getWidth() { return this.mmToPx(this._b); }
@@ -31,7 +14,6 @@ export class DuctDirect extends DuctBase {
     const height = this.getHeight();
     return { x: this.x - width / 2, y: this.y - height / 2 };
   }
-
   getCalloutText() {
     let text = `${super.getCalloutText()}\nL: ${this._b} мм`;
     if (this._sectionType === 'rectangular') {
@@ -41,17 +23,6 @@ export class DuctDirect extends DuctBase {
     }
     return text;
   }
-
-  getParameters() {
-    const params = [...super.getParameters(),
-    { name: 'b', label: 'Длина', type: 'number', step: 10, min: 30, value: this._b, unit: 'мм' }
-    ];
-    if (this._sectionType === 'rectangular') {
-      params.push({ name: 'c', label: 'Высота', type: 'number', step: 10, min: 20, value: this._c, unit: 'мм' });
-    }
-    return params;
-  }
-
   createPath(ctx) {
     const topLeft = this.getTopLeft();
     const endX = topLeft.x + this.getWidth();
@@ -61,7 +32,6 @@ export class DuctDirect extends DuctBase {
     ctx.moveTo(topLeft.x, centerY);
     ctx.lineTo(endX, centerY);
   }
-
   getPorts() {
     const ports = [];
     const rotation = this.rotation || 0;
@@ -77,9 +47,5 @@ export class DuctDirect extends DuctBase {
       this.id, 'outlet', 'right', this.getWidth(), 0, outletPos.x, outletPos.y));
 
     return ports;
-  }
-
-  toJSON() {
-    return { ...super.toJSON(), b: this._b, c: this._c };
   }
 }

@@ -11,6 +11,7 @@ export class ElementFactory {
   static createElement(type, id, x_px, y_px, params = {}) {
     const sectionType = params.sectionType || 'round';
     const sectionType2 = params.sectionType2 || 'round';
+    const materialType = params.materialType || 'galvanized';
     const a = params.a || 50;
     const b = params.b || 50;
     const c = params.c || 50;
@@ -20,7 +21,7 @@ export class ElementFactory {
 
     switch (type) {
       case 'duct':
-        const duct = new DuctDirect(id, x_px, y_px, sectionType, a, b, c);
+        const duct = new DuctDirect(id, x_px, y_px, materialType, sectionType, a, b, c);
         if (params.rotation !== undefined) duct.rotation = params.rotation;
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
@@ -31,6 +32,7 @@ export class ElementFactory {
       case 'transition':
         const transition = new Transition(
           id, x_px, y_px,
+          materialType,
           params.sectionType || 'round',
           params.sectionType2 || 'round',
           params.a || 125,
@@ -47,7 +49,7 @@ export class ElementFactory {
         return transition;
 
       case 'tee':
-        const tee = new Tee(id, x_px, y_px, sectionType, a);
+        const tee = new Tee(id, x_px, y_px, materialType, sectionType, a);
         if (params.l1 !== undefined) tee.l1 = params.l1;
         if (params.l2 !== undefined) tee.l2 = params.l2;
         if (params.l3 !== undefined) tee.l3 = params.l3;
@@ -60,7 +62,7 @@ export class ElementFactory {
         return tee;
 
       case 'cross':
-        const cross = new Cross(id, x_px, y_px, sectionType, a);
+        const cross = new Cross(id, x_px, y_px, materialType, sectionType, a);
         if (params.l1 !== undefined) cross.l1 = params.l1;
         if (params.l2 !== undefined) cross.l2 = params.l2;
         if (params.rotation !== undefined) cross.rotation = params.rotation;
@@ -71,7 +73,7 @@ export class ElementFactory {
         return cross;
 
       case 'elbow':
-        const elbow = new Elbow(id, x_px, y_px, sectionType, a);
+        const elbow = new Elbow(id, x_px, y_px, materialType, sectionType, a);
         if (params.r !== undefined) elbow.r = params.r;
         if (params.direction !== undefined) elbow.direction = params.direction; // ДОБАВЛЕНО: поддержка направления
         if (params.rotation !== undefined) elbow.rotation = params.rotation;
@@ -94,6 +96,7 @@ export class ElementFactory {
       {
         sectionType: jsonData.sectionType,
         sectionType2: jsonData.sectionType2,
+        materialType: jsonData.materialType,
         a: jsonData.a,
         a2: jsonData.a2,
         b: jsonData.b,

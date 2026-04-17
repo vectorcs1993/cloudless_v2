@@ -92,6 +92,16 @@
                       <q-input :dark="isDarkTheme" type="number" v-model.number="temperature" step="1" min="-60" max="120" dense outlined
                         class="inline-input" debounce="500" />
                     </div>
+                    <label>Атмосферное давление (Па):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="atmosphericPressure" step="1" min="-999999" max="999999" dense
+                        outlined class="inline-input" debounce="500" />
+                    </div>
+                    <label>Шероховатость стенок (мм):</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="roughness" step="0.1" min="0" max="5" dense outlined
+                        class="inline-input" debounce="500" />
+                    </div>
                   </div>
                 </q-tab-panel>
               </q-tab-panels>
@@ -178,7 +188,7 @@
                     </q-card-section>
                     <q-tabs align="left" v-model="tabElement" :dark="isDarkTheme" no-caps>
                       <q-tab name="parameters" label="Параметры" />
-                      <q-tab name="positions" label="Позиция" />
+                      <q-tab name="element_settings" label="Отрисовка" />
                       <q-tab name="callout" label="Выноска" />
                       <q-tab name="links" label="Связи" />
                     </q-tabs>
@@ -211,7 +221,7 @@
                           </div>
                         </div>
                       </q-tab-panel>
-                      <q-tab-panel name="positions">
+                      <q-tab-panel name="element_settings">
                         <div class="single-element-info">
                           <q-list dense>
                             <q-item><q-item-section class="param-label-col">X
@@ -226,6 +236,13 @@
                                 (°):</q-item-section><q-item-section><q-input :dark="isDarkTheme" type="number"
                                   v-model.number="selectedElement.rotation" step="1" dense outlined :disable="isElementLocked(selectedElement)"
                                   @update:model-value="val => onParameterChange(val, 'rotation')" /></q-item-section></q-item>
+                            <q-item><q-item-section class="param-label-col">Толщина линии
+                                (px):</q-item-section><q-item-section><q-input :dark="isDarkTheme" type="number"
+                                  v-model.number="selectedElement.lineWidth" step="2" dense outlined :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, 'lineWidth')" /></q-item-section></q-item>
+                            <q-item><q-item-section class="param-label-col">Цвет:</q-item-section><q-item-section><q-input :dark="isDarkTheme"
+                                  type="color" v-model.number="selectedElement.color" dense outlined :disable="isElementLocked(selectedElement)"
+                                  @update:model-value="val => onParameterChange(val, 'color')" /></q-item-section></q-item>
                           </q-list>
                           <div class="q-mt-md">
                             <div class="text-subtitle2 q-mb-sm">Поворот</div>
@@ -380,8 +397,10 @@ const autoUpdateConnections = ref(true);
 const snapDistance = ref(10);
 // ========== НАСТРОЙКИ ПРОЕКТА ==========
 const mmPerPx = ref(2);
-const totalAirFlow = ref(3000);
-const temperature = ref(20);
+const totalAirFlow = ref(3000); // общий расход воздуха
+const temperature = ref(20); // температура воздуха
+const atmosphericPressure = ref(101300); // атмосферное давление
+const roughness = ref(0.1);  // шероховатость стенок
 const tabEditor = ref('tools');
 const tabLayer = ref('elements');
 const tabElement = ref('parameters');

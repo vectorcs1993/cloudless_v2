@@ -9,11 +9,13 @@ export class TableManager {
 
     this.columns = ref([
       { name: 'id', label: 'ID', field: 'id', sortable: true, align: 'left' },
-      { name: 'type', label: 'Тип', field: (row) => this.getElementTypeName(row), sortable: true, align: 'left' },
-      { name: 'name', label: 'Имя', field: 'name', sortable: true, align: 'left' },
+      { name: 'type', label: 'Тип элемента', field: (row) => this.getElementTypeName(row), sortable: true, align: 'left' },
+      { name: 'name', label: 'Наименование', field: 'name', sortable: true, align: 'left' },
+      { name: 'material', label: 'Материал', field: (row) => this.getElementMaterialName(row), sortable: true, align: 'left' },
+      { name: 'section', label: 'Тип сечения', field: (row) => this.getElementSectionName(row), sortable: true, align: 'left' },
       { name: 'a', label: 'A, мм', field: 'a', sortable: true, align: 'left' },
       { name: 'b', label: 'B, мм', field: 'b', sortable: true, align: 'left' },
-      { name: 'c', label: 'C, мм', field: (row) => (row.c !== undefined ? row.c : '-'), sortable: true, align: 'left' },
+      { name: 'c', label: 'C, мм', field: (row) => this.getElementC(row), sortable: true, align: 'left' },
     ]);
 
     this.pagination = ref({ rowsPerPage: 0 });
@@ -23,7 +25,15 @@ export class TableManager {
   getElementTypeName(el) {
     return el?.getTypeName?.() || el?.type || 'Неизвестно';
   }
-
+  getElementMaterialName(el) {
+    return el?.getMaterial?.().label || '-';
+  }
+  getElementSectionName(el) {
+    return el?.getSection?.().label || '-';
+  }
+  getElementC(el) {
+    return el?.c || '-';
+  }
   onTableSelectionChange(selectedRows, updateSelectionCallback) {
     if (selectedRows.length === 0) {
       updateSelectionCallback([]);

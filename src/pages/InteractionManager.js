@@ -46,6 +46,8 @@ export class InteractionManager {
     this.traceActive = true;
     this.traceStartPort = port;
     this.traceStartPoint = null;
+    // КРИТИЧНО: точка старта строго из координат порта
+    this.traceStartWorldPoint = { x: port.worldX, y: port.worldY };
     this.canvas.style.cursor = 'crosshair';
     if (this.onTraceStart) this.onTraceStart(port);
   }
@@ -54,6 +56,7 @@ export class InteractionManager {
     this.traceActive = true;
     this.traceStartPort = null;
     this.traceStartPoint = point;
+    this.traceStartWorldPoint = { x: point.x, y: point.y };
     this.canvas.style.cursor = 'crosshair';
     if (this.onTraceStart) this.onTraceStart(null);
   }
@@ -62,6 +65,7 @@ export class InteractionManager {
     this.traceActive = false;
     this.traceStartPort = null;
     this.traceStartPoint = null;
+    this.traceStartWorldPoint = null;
     this.traceGhostPoints = [];
 
     if (this.renderer) {
@@ -403,20 +407,30 @@ export class InteractionManager {
 
     if (!startPort && !startPoint) return false;
 
+    // Используем сохраненную точку старта
+    const startWorldPoint = this.traceStartWorldPoint;
+    if (!startWorldPoint) return false;
+
     const targetPort = this.findPortAt(worldPos.x, worldPos.y, 5);
 
     let newElement = null;
     if (startPort) {
+      // Рисование от порта - используем мир.координаты порта
       if (targetPort && targetPort !== startPort) {
-        newElement = this.createDuctFromPortToPoint(startPort, { x: targetPort.worldX, y: targetPort.worldY }, targetPort);
+        newElement = this.createDuctFromPortToPoint(
+          startPort,
+          { x: targetPort.worldX, y: targetPort.worldY },
+          targetPort
+        );
       } else {
         newElement = this.createDuctFromPortToPoint(startPort, worldPos, null);
       }
     } else if (startPoint) {
+      // Рисование от точки на холсте
       if (targetPort) {
-        newElement = this.createDuctFromPointToPort(startPoint, targetPort);
+        newElement = this.createDuctFromPointToPort(startWorldPoint, targetPort);
       } else {
-        newElement = this.createDuctFromPointToPoint(startPoint, worldPos);
+        newElement = this.createDuctFromPointToPoint(startWorldPoint, worldPos);
       }
     }
 
@@ -433,10 +447,12 @@ export class InteractionManager {
 
       if (this.onElementCreated) this.onElementCreated(newElement);
 
+      // После создания элемента продолжаем рисование от его выходного порта
       const outletPort = newElement.ports.find(p => p.direction === 'outlet' || p.direction === 'right');
       if (outletPort) {
         this.traceStartPort = outletPort;
         this.traceStartPoint = null;
+        this.traceStartWorldPoint = { x: outletPort.worldX, y: outletPort.worldY };
       } else {
         this.cancelTrace();
       }
@@ -448,15 +464,9 @@ export class InteractionManager {
   updateTracePreview(worldPos) {
     if (!this.traceActive) return;
 
-    let startPoint;
-    if (this.traceStartPort) {
-      startPoint = { x: this.traceStartPort.worldX, y: this.traceStartPort.worldY };
-    } else if (this.traceStartPoint) {
-      startPoint = this.traceStartPoint;
-    } else {
-      return;
-    }
+    if (!this.traceStartWorldPoint) return;
 
+    const startPoint = this.traceStartWorldPoint;
     let endPoint = { x: worldPos.x, y: worldPos.y };
 
     const dx = endPoint.x - startPoint.x;
@@ -815,10 +825,11 @@ export class InteractionManager {
     if (e.button === 0) {
       // Если активен режим рисования
       if (this.currentTool?.value === 'trace') {
-        // Не начинаем рисование заново, если уже рисуем
         if (!this.traceActive) {
-          const port = this.findPortAt(world.x, world.y);
+          // Увеличиваем радиус поиска порта до 15 пикселей
+          const port = this.findPortAt(world.x, world.y, 15);
           if (port && this.isInteractive(this.findElementById(port.elementId))) {
+            // ВАЖНО: передаем сам порт, а не координаты мыши
             this.startTrace(port);
           } else {
             this.startTraceFromPoint(world);
@@ -826,7 +837,6 @@ export class InteractionManager {
           this.renderer.draw();
           return;
         } else {
-          // Если уже рисуем - обрабатываем клик как завершение сегмента
           this.handleTraceClick(world);
           this.renderer.draw();
           return;

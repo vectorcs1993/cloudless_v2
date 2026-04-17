@@ -2,8 +2,8 @@ import { BaseElement, DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
 export class Cross extends DuctBase {
-  constructor(id, x_px, y_px, sectionType = 'round', a = 125) {
-    super(id, 'cross', x_px, y_px, `${BaseElement.getAvailableTypes().cross} ${id}`, sectionType, a);
+  constructor(id, x_px, y_px, materialType = 'galvanized', sectionType = 'round', a = 125) {
+    super(id, 'cross', x_px, y_px, `${BaseElement.getAvailableTypes().cross} ${id}`, materialType, sectionType, a);
     this._b = 100;
     this._l1 = 250;
     this._l2 = 250;

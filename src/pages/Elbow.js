@@ -2,8 +2,8 @@ import { DuctDirect } from './DuctDirect.js';
 import { Port } from './Port.js';
 
 export class Elbow extends DuctDirect {
-  constructor(id, x_px, y_px, sectionType = 'round', a = 125, r = 125) {
-    super(id, x_px, y_px, sectionType, a, r, a);
+  constructor(id, x_px, y_px, materialType = 'galvanized', sectionType = 'round', a = 125, r = 125) {
+    super(id, x_px, y_px, materialType, sectionType, a, r, a);
     this._r = r;
     this._direction = 'bottom';
     this.type = 'elbow';
