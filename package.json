@@ -10,7 +10,7 @@
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev",
     "build": "quasar build",
-    "deploy": "scp -r C:\\Users\\vecto\\cloudless_v2\\dist\\spa\\* aeroduct_ru_usr@aeroduct.ru:/var/www/aeroduct_ru_usr/data/www/aeroduct.ru",
+    "deploy": "deploy.bat",
     "postinstall": "quasar prepare"
   },
   "dependencies": {
