@@ -1047,7 +1047,63 @@ export class InteractionManager {
       this.renderer.draw();
     }, 100);
   }
+  // В InteractionManager.js добавьте метод:
 
+  onMouseLeave() {
+    // Завершаем перетаскивание элементов
+    if (this.isDragging && this.dragElements.length) {
+      this.isDragging = false;
+      this.dragElements = [];
+      this.dragStartPositions = [];
+
+      if (this.autoUpdateConnections) {
+        setTimeout(() => {
+          this.connectionManager?.updateAllPortsAndConnections(
+            this.options.snapDistance?.value || 10,
+            this.layerManager
+          );
+          this.renderer?.draw();
+        }, 50);
+      }
+
+      this.renderer?.setHighlightedPort(null);
+      this.renderer?.draw();
+    }
+
+    // Завершаем перетаскивание выноски
+    if (this.dragCallout) {
+      this.dragCallout = null;
+      this.dragStartPositions = [];
+      this.renderer?.draw();
+    }
+
+    // Завершаем рисование
+    if (this.traceActive) {
+      this.cancelTrace();
+    }
+
+    // Завершаем трансформацию
+    if (this.transformActive && this.transformManager?.isTransforming()) {
+      this.transformManager.cancelTransform();
+      this.transformActive = false;
+      this.renderer?.setTransformGhostPoints([]);
+      this.renderer?.draw();
+    }
+
+    // Завершаем выделение
+    if (this.isSelecting) {
+      this.isSelecting = false;
+      this.selectionStart = null;
+      this.renderer?.endSelectionRect();
+      this.renderer?.draw();
+    }
+
+    // Сбрасываем курсор
+    this.canvas.style.cursor = 'default';
+
+    // Очищаем кэш
+    this.clearSnapCache();
+  }
   onWheel(e) {
     e.preventDefault();
 

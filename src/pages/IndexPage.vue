@@ -10,7 +10,7 @@
               </q-card-section>
               <q-card-section class="save-controls">
                 <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
-                <q-btn @click="resetToDefault" color="warning" icon="refresh" label="Сброс" dense />
+                <q-btn @click="onReset" color="warning" icon="refresh" label="Сброс" dense />
               </q-card-section>
               <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
                 <q-tab name="tools" label="Инструменты" />
@@ -20,14 +20,11 @@
               <q-separator />
               <q-tab-panels v-model="tabEditor" :dark="isDarkTheme">
                 <q-tab-panel name="tools">
-                  <div class="tools-panel">
-                    <q-btn :color="currentTool === 'select' ? 'primary' : 'default'" @click="currentTool = 'select'" icon="pan_tool" label="Выделение"
-                      class="full-width q-mb-sm" />
-                    <q-btn :color="currentTool === 'trace' ? 'primary' : 'default'" @click="currentTool = 'trace'" icon="show_chart" label="Рисование"
-                      class="full-width" />
-                    <q-btn :color="currentTool === 'transform' ? 'primary' : 'default'" @click="currentTool = 'transform'" icon="transform"
-                      label="Трансформация" class="full-width q-mt-sm" />
-                  </div>
+                  <q-btn-toggle dark="isDarkTheme" v-model="currentTool" toggle-color="primary" class="q-mb-sm" :options="[
+                    { label: 'Выделение', value: 'select', icon: 'pan_tool' },
+                    { label: 'Рисование', value: 'trace', icon: 'show_chart' },
+                    { label: 'Трансформация', value: 'transform', icon: 'transform' }
+                  ]" />
                   <div v-if="currentTool === 'select'" class="text-caption text-grey q-mt-sm">
                     Перетащите элементы на холст
                   </div>
@@ -48,15 +45,8 @@
                       </div>
                     </div>
                   </div>
-                </q-tab-panel>
-                <q-tab-panel name="settings_editor">
-                  <div class="settings-grid">
-                    <label>Масштаб сетки:</label>
-                    <div>
-                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
-                        class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
-                      <span class="hint-text">px</span>
-                    </div>
+                  <div class="q-mt-md" v-if="currentTool === 'trace' || currentTool === 'transform'">
+                    <div class="text-subtitle2 q-mb-sm">Параметры</div>
                     <label>Шаг длины:</label>
                     <div>
                       <q-input :dark="isDarkTheme" type="number" v-model.number="snapLengthMm" step="10" min="10" max="200" dense outlined
@@ -68,6 +58,16 @@
                       <q-input :dark="isDarkTheme" type="number" v-model.number="snapAngleDeg" step="5" min="5" max="90" dense outlined
                         class="inline-input" @update:model-value="onSnapAngleChange" />
                       <span class="hint-text">°</span>
+                    </div>
+                  </div>
+                </q-tab-panel>
+                <q-tab-panel name="settings_editor">
+                  <div class="settings-grid">
+                    <label>Масштаб сетки:</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
+                        class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
+                      <span class="hint-text">px</span>
                     </div>
                     <label>Темная тема:</label>
                     <div><q-toggle v-model="isDarkTheme" /></div>
@@ -184,8 +184,8 @@
               <template v-slot:before>
                 <div class="canvas-container">
                   <canvas class="main-canvas" ref="mainCanvas" @mousedown="onCanvasMouseDown" @mousemove="onCanvasMouseMove"
-                    @mouseup="onCanvasMouseUp" @wheel.prevent="onWheel" @contextmenu.prevent @dragover="(e) => dragDropManager.onDragOver(e)"
-                    @drop="(e) => onDrop(e)" tabindex="0"></canvas>
+                    @mouseup="onCanvasMouseUp" @mouseleave="onCanvasMouseLeave" @wheel.prevent="onWheel" @contextmenu.prevent
+                    @dragover="(e) => dragDropManager.onDragOver(e)" @drop="(e) => onDrop(e)" tabindex="0"></canvas>
                 </div>
               </template>
               <template v-slot:after>
@@ -198,7 +198,7 @@
                     <q-card-section class="row items-center justify-between">
                       <q-list class="full-width" :dark="isDarkTheme" dense>
                         <q-item><q-item-section caption>ID</q-item-section><q-item-section>{{ selectedElement?.id
-                        }}</q-item-section></q-item>
+                            }}</q-item-section></q-item>
                         <q-item><q-item-section caption>Тип</q-item-section><q-item-section>{{
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
@@ -215,7 +215,7 @@
                           <q-list dense>
                             <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                               <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                              }}:</q-item-label></q-item-section>
+                                  }}:</q-item-label></q-item-section>
                               <q-item-section>
                                 <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                                   :disable="isElementLocked(selectedElement)"
@@ -229,7 +229,7 @@
                                   @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
                               </q-item-section>
                               <q-item-section side class="param-unit-col"><span v-if="param.unit">{{ param.unit
-                              }}</span><span v-else>—</span></q-item-section>
+                                  }}</span><span v-else>—</span></q-item-section>
                             </q-item>
                           </q-list>
                           <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
@@ -654,14 +654,18 @@ const saveToLocalStorage = () => {
 
 // Сброс всего
 const resetToDefault = () => {
-  if (confirm('Сбросить все изменения?')) {
-    layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
-    activeLayerId.value = 'layer_default';
-    layerManager?.setCounters(100, 1000);
-    updateSelection([]);
-    scheduleRender();
-  }
+  layers.value = [{ id: 'layer_default', name: 'Слой 1', visible: true, locked: false, elements: [] }];
+  activeLayerId.value = 'layer_default';
+  layerManager?.setCounters(0, 1000);
+  updateSelection([]);
+  scheduleRender();
 };
+
+const onReset = () => {
+  if (confirm('Сбросить все изменения?')) {
+    resetToDefault();
+  }
+}
 
 const updateAllPortsAndConnections = () => {
   const restored = connectionManager?.updateAllPortsAndConnections?.(snapDistance.value) || { broken: 0, connected: 0 };
@@ -721,6 +725,57 @@ const onCanvasMouseMove = (e) => {
   }
 };
 const onCanvasMouseUp = (e) => { if (dragDropManager?.dragType) return; interactionManager?.onMouseUp(e); updateSelection([...renderer?.selectedElements || []]); scheduleRender(); };
+const onCanvasMouseLeave = (e) => {
+  // Используем метод из InteractionManager если он есть
+  if (interactionManager?.onMouseLeave) {
+    interactionManager.onMouseLeave();
+  } else {
+    // Fallback логика
+    if (interactionManager?.isDragging) {
+      interactionManager.isDragging = false;
+      interactionManager.dragElements = [];
+      interactionManager.dragStartPositions = [];
+
+      if (interactionManager.autoUpdateConnections) {
+        setTimeout(() => {
+          connectionManager?.updateAllPortsAndConnections(
+            snapDistance.value,
+            layerManager
+          );
+          scheduleRender();
+        }, 50);
+      }
+
+      renderer?.setHighlightedPort(null);
+      scheduleRender();
+    }
+
+    if (interactionManager?.traceActive) {
+      interactionManager.cancelTrace();
+      scheduleRender();
+    }
+
+    if (interactionManager?.transformActive && transformManager?.isTransforming()) {
+      transformManager.cancelTransform();
+      interactionManager.transformActive = false;
+      renderer?.setTransformGhostPoints([]);
+      scheduleRender();
+    }
+
+    if (interactionManager?.dragCallout) {
+      interactionManager.dragCallout = null;
+      interactionManager.dragStartPositions = [];
+      scheduleRender();
+    }
+
+    if (mainCanvas.value) {
+      mainCanvas.value.style.cursor = 'default';
+    }
+  }
+};
+const onWindowMouseLeave = (e) => {
+  onCanvasMouseLeave(e);
+};
 const onWheel = (e) => { interactionManager?.onWheel(e); scheduleRender(); };
 const onGridStepChange = (val) => { gridStepM.value = Math.min(500, Math.max(50, parseInt(val) || 50)); scheduleRender(); };
 const onSnapLengthChange = (val) => { snapLengthMm.value = Math.max(10, Math.min(200, val)); };
@@ -868,11 +923,14 @@ onMounted(() => {
   mainCanvas.value.focus();
   scheduleRender();
 
+  window.addEventListener('mouseleave', onWindowMouseLeave);
+
   onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeyDown);
     resizeObserver.disconnect();
     if (redrawTimeout) clearTimeout(redrawTimeout);
     if (renderFrameRequest) cancelAnimationFrame(renderFrameRequest);
+    window.removeEventListener('mouseleave', onWindowMouseLeave);
   });
 });
 </script>
