@@ -25,12 +25,17 @@
                       class="full-width q-mb-sm" />
                     <q-btn :color="currentTool === 'trace' ? 'primary' : 'default'" @click="currentTool = 'trace'" icon="show_chart" label="Рисование"
                       class="full-width" />
+                    <q-btn :color="currentTool === 'transform' ? 'primary' : 'default'" @click="currentTool = 'transform'" icon="transform"
+                      label="Трансформация" class="full-width q-mt-sm" />
                   </div>
                   <div v-if="currentTool === 'select'" class="text-caption text-grey q-mt-sm">
                     Перетащите элементы на холст
                   </div>
                   <div v-if="currentTool === 'trace'" class="text-caption text-grey q-mt-sm">
                     Нарисуйте схему воздуховодов используя линии
+                  </div>
+                  <div v-if="currentTool === 'transform'" class="text-caption text-grey q-mt-sm">
+                    Перетащите порт элемента, чтобы изменить его длину и угол
                   </div>
                   <div class="q-mt-md" v-if="currentTool === 'select'">
                     <div class="text-subtitle2 q-mb-sm">Библиотека элементов</div>
@@ -51,6 +56,18 @@
                       <q-input :dark="isDarkTheme" type="number" v-model.number="gridStepM" step="10" min="50" max="500" dense outlined
                         class="inline-input" debounce="300" @update:model-value="onGridStepChange" />
                       <span class="hint-text">px</span>
+                    </div>
+                    <label>Шаг длины:</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="snapLengthMm" step="10" min="10" max="200" dense outlined
+                        class="inline-input" @update:model-value="onSnapLengthChange" />
+                      <span class="hint-text">мм</span>
+                    </div>
+                    <label>Шаг угла:</label>
+                    <div>
+                      <q-input :dark="isDarkTheme" type="number" v-model.number="snapAngleDeg" step="5" min="5" max="90" dense outlined
+                        class="inline-input" @update:model-value="onSnapAngleChange" />
+                      <span class="hint-text">°</span>
                     </div>
                     <label>Темная тема:</label>
                     <div><q-toggle v-model="isDarkTheme" /></div>
@@ -366,6 +383,7 @@ import { TableManager } from './TableManager.js';
 import { ElementOperationsManager } from './ElementOperationsManager.js';
 import { DragDropManager } from './DragDropManager.js';
 import { TraceManager } from './TraceManager.js';
+import { TransformManager } from './TransformManager.js';
 import { BaseElement } from './Elements.js';
 import { dragItems } from './dragItems.js';
 import { DuctDirect } from './DuctDirect.js';
@@ -393,6 +411,8 @@ const showColors = ref(true);
 const showElementAxes = ref(false);
 const snapToPorts = ref(true);
 const gridStepM = ref(50);
+const snapLengthMm = ref(50);  // Шаг длины в миллиметрах
+const snapAngleDeg = ref(45);  // Шаг угла в градусах
 const autoUpdateConnections = ref(true);
 const snapDistance = ref(10);
 // ========== НАСТРОЙКИ ПРОЕКТА ==========
@@ -470,7 +490,21 @@ const addNewLayer = () => {
   showNotify({ type: 'positive', message: `Создан слой: ${newLayer.name}`, timeout: 2000 });
   scheduleRender();
 };
+const expandAllTree = () => {
+  if (treeManager) {
+    const allIds = treeManager.expandAll(treeManager.getProjectTree());
+    treeManager.setExpandedTreeNodes(allIds);
+    scheduleRender();
+  }
+};
 
+// Свернуть всё дерево
+const collapseAllTree = () => {
+  if (treeManager) {
+    treeManager.collapseAll();
+    scheduleRender();
+  }
+};
 const removeLayerWithConfirm = (layerId) => {
   if (confirm('Удалить слой?')) {
     if (layers.value.length === 1) { showNotify({ type: 'warning', message: 'Нельзя удалить последний слой!', timeout: 2000 }); return; }
@@ -647,9 +681,11 @@ const moveToBottom = () => elementOpsManager?.moveToBottom(selectedElement.value
 const moveUp = () => elementOpsManager?.moveUp(selectedElement.value);
 const moveDown = () => elementOpsManager?.moveDown(selectedElement.value);
 const deleteSelected = () => {
-  if (confirm(selectedElements.value.length > 1 ? 'Удалить элементы?' : 'Удалить элемент?')) {
-    elementOpsManager?.deleteSelected(selectedElements.value);
-    updateSelection([]);
+  if (selectedElements.value.length > 0) {
+    if (confirm(selectedElements.value.length > 1 ? 'Удалить элементы?' : 'Удалить элемент?')) {
+      elementOpsManager?.deleteSelected(selectedElements.value);
+      updateSelection([]);
+    }
   }
 };
 
@@ -687,6 +723,8 @@ const onCanvasMouseMove = (e) => {
 const onCanvasMouseUp = (e) => { if (dragDropManager?.dragType) return; interactionManager?.onMouseUp(e); updateSelection([...renderer?.selectedElements || []]); scheduleRender(); };
 const onWheel = (e) => { interactionManager?.onWheel(e); scheduleRender(); };
 const onGridStepChange = (val) => { gridStepM.value = Math.min(500, Math.max(50, parseInt(val) || 50)); scheduleRender(); };
+const onSnapLengthChange = (val) => { snapLengthMm.value = Math.max(10, Math.min(200, val)); };
+const onSnapAngleChange = (val) => { snapAngleDeg.value = Math.max(5, Math.min(90, val)); };
 const getElementTypeName = (el) => el?.getTypeName?.() || BaseElement.getAvailableTypes()[el?.type] || el?.type || 'Неизвестно';
 const getElementParameters = (el) => el?.getParameters?.() || [];
 
@@ -695,7 +733,15 @@ const handleKeyDown = (e) => {
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') { e.preventDefault(); copySelected(); }
   else if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') { e.preventDefault(); pasteElements(); }
   else if (e.key === 'Delete' || e.key === 'Del') { e.preventDefault(); deleteSelected(); }
-  else if (e.key === 'Escape') { e.preventDefault(); clearSelection(); if (isTraceModeActive.value) traceManager?.cancelTrace(); }
+  else if (e.key === 'Escape') {
+    e.preventDefault();
+    clearSelection();
+    if (isTraceModeActive.value) traceManager?.cancelTrace();
+    if (transformManager?.isTransforming()) {
+      transformManager.cancelTransform();
+      scheduleRender();
+    }
+  }
 };
 
 // ========== СОЗДАНИЕ МЕНЕДЖЕРОВ (после объявления всех функций) ==========
@@ -722,6 +768,7 @@ let selectionManager = null;
 let interactionManager = null;
 let dragDropManager = null;
 let traceManager = null;
+let transformManager = null;
 
 let redrawTimeout = null;
 let isUpdatingSelection = false;
@@ -729,12 +776,24 @@ let renderFrameRequest = null;
 
 // Параметры рендерера
 const renderOptions = {
-  scale: ref(1), panX: ref(0), panY: ref(0),
-  showGrid: readonly(showGrid), showPorts: readonly(showPorts), showColors: readonly(showColors),
-  showCallouts: readonly(showCallouts), snapToPorts: readonly(snapToPorts), snapDistance: readonly(snapDistance),
-  autoUpdateConnections: readonly(autoUpdateConnections), showElementAxes: readonly(showElementAxes),
-  isDarkTheme: readonly(isDarkTheme), gridStepM: readonly(gridStepM), mmPerPx: readonly(mmPerPx),
-  mouseWorldPos, traceMode: readonly(traceMode),
+  scale: ref(1),
+  panX: ref(0),
+  panY: ref(0),
+  showGrid: readonly(showGrid),
+  showPorts: readonly(showPorts),
+  showColors: readonly(showColors),
+  showCallouts: readonly(showCallouts),
+  snapToPorts: readonly(snapToPorts),
+  snapDistance: readonly(snapDistance),
+  autoUpdateConnections: readonly(autoUpdateConnections),
+  showElementAxes: readonly(showElementAxes),
+  isDarkTheme: readonly(isDarkTheme),
+  gridStepM: readonly(gridStepM),
+  mmPerPx: readonly(mmPerPx),
+  snapLengthMm: readonly(snapLengthMm),
+  snapAngleDeg: readonly(snapAngleDeg),
+  mouseWorldPos,
+  traceMode: readonly(traceMode),
 };
 
 // Реальные реализации scheduleRender и updateSelection
@@ -786,7 +845,8 @@ onMounted(() => {
   interactionManager = new InteractionManager(mainCanvas.value, allElements, renderer, connectionManager, selectionManager, renderOptions, layerManager, currentTool);
   dragDropManager = new DragDropManager(renderer, layerManager, updateSelection, scheduleRender, showNotify);
   traceManager = new TraceManager(interactionManager, scheduleRender);
-
+  transformManager = new TransformManager(interactionManager, scheduleRender);
+  interactionManager.transformManager = transformManager;
   if (tableManager) tableManager.setRenderer?.(renderer);
   if (treeManager) treeManager.setRenderer?.(renderer);
   if (elementOpsManager) elementOpsManager.setRenderer?.(renderer);

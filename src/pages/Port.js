@@ -96,16 +96,27 @@ export class Port {
     this.worldY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad) + centerY;
   }
 
+
   getRadius(scale, mmPerPx, isHighlighted = false, highlightScale = 1.5) {
+    // Физический размер порта в миллиметрах (36 мм - это примерно 1.5 дюйма)
     const portSizeMm = 36;
+
+    // Переводим миллиметры в пиксели при текущем масштабе мм/пиксель
     let radiusPx = (portSizeMm / mmPerPx) / 2;
+
+    // Применяем масштаб отображения (zoom)
     let radius = radiusPx / scale;
-    const minScreenRadius = 3;
-    const maxScreenRadius = 36;
+
+    // Ограничиваем минимальный и максимальный размер на экране
+    const minScreenRadius = 2;
+    const maxScreenRadius = 4;
     radius = Math.min(maxScreenRadius, Math.max(minScreenRadius, radius));
+
+    // Если порт подсвечен - увеличиваем размер
     if (isHighlighted) {
       radius *= highlightScale;
     }
+
     return radius;
   }
 

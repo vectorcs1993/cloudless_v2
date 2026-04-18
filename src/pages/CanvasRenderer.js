@@ -23,6 +23,112 @@ export class CanvasRenderer {
       highlightScale: 1.5,
       borderWidth: 0,
     };
+
+    this.transformGhostPoints = [];
+  }
+
+
+  setTransformGhostPoints(points) {
+    this.transformGhostPoints = points || [];
+  }
+
+
+  drawTransformPreview(ctx) {
+    if (!this.transformGhostPoints || this.transformGhostPoints.length < 2) return;
+
+    ctx.save();
+
+    const p1 = this.transformGhostPoints[0];
+    const p2 = this.transformGhostPoints[1];
+
+    // Рисуем основную линию (оранжевая, пунктирная)
+    ctx.strokeStyle = '#ff6600';
+    ctx.fillStyle = '#ff6600';
+    ctx.lineWidth = 3 / this.scale.value;
+    ctx.setLineDash([8 / this.scale.value, 6 / this.scale.value]);
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+
+    // Рисуем начальную точку (кружок)
+    ctx.beginPath();
+    ctx.arc(p1.x, p1.y, 6 / this.scale.value, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ff6600';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5 / this.scale.value;
+    ctx.stroke();
+
+    // Рисуем конечную точку (кружок)
+    ctx.beginPath();
+    ctx.arc(p2.x, p2.y, 6 / this.scale.value, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ff6600';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5 / this.scale.value;
+    ctx.stroke();
+
+    // Вычисляем длину
+    const distancePx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const snapLengthMm = this.options.snapLengthMm?.value || 50;
+
+    const lengthMm = distancePx * mmPerPx;
+    const snappedLengthMm = Math.round(lengthMm / snapLengthMm) * snapLengthMm;
+
+    // Показываем длину рядом с серединой линии
+    const fontSize = Math.max(10, 14 / this.scale.value);
+    ctx.font = `${fontSize}px Arial`;
+    ctx.fillStyle = '#ff6600';
+    ctx.setLineDash([]);
+
+    const text = `${snappedLengthMm} мм`;
+    const textWidth = ctx.measureText(text).width;
+    const padding = 4 / this.scale.value;
+
+    // Позиция текста - смещаем от середины линии
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+
+    // Смещаем текст в зависимости от угла линии
+    const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const offsetX = Math.cos(angle + Math.PI / 2) * 20 / this.scale.value;
+    const offsetY = Math.sin(angle + Math.PI / 2) * 20 / this.scale.value;
+
+    // Фон для текста
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(
+      midX + offsetX - textWidth / 2 - padding,
+      midY + offsetY - fontSize - padding,
+      textWidth + padding * 2,
+      fontSize + padding * 2
+    );
+
+    // Сам текст
+    ctx.fillStyle = '#ff6600';
+    ctx.fillText(text, midX + offsetX - textWidth / 2, midY + offsetY - padding);
+
+    // Показываем маленькую подпись с шагом
+    const hintText = `шаг ${snapLengthMm} мм`;
+    const hintFontSize = Math.max(8, 10 / this.scale.value);
+    ctx.font = `${hintFontSize}px Arial`;
+    const hintWidth = ctx.measureText(hintText).width;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(
+      midX + offsetX - hintWidth / 2 - padding,
+      midY + offsetY,
+      hintWidth + padding * 2,
+      hintFontSize + padding * 2
+    );
+
+    ctx.fillStyle = '#ffaa66';
+    ctx.fillText(hintText, midX + offsetX - hintWidth / 2, midY + offsetY + hintFontSize);
+
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   setGhostElement(element) {
@@ -164,6 +270,10 @@ export class CanvasRenderer {
 
     if (this.traceGhostPoints && this.traceGhostPoints.length > 1) {
       this.drawTracePreview(ctx);
+    }
+
+    if (this.transformGhostPoints && this.transformGhostPoints.length > 1) {
+      this.drawTransformPreview(ctx);
     }
 
     ctx.restore();

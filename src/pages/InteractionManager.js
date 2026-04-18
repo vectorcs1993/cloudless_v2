@@ -37,6 +37,10 @@ export class InteractionManager {
     this._dragFrameRequest = null;
 
     this.currentTool = currentTool; // ref
+
+    this.transformActive = false;
+    this.transformPort = null;
+    this.transformElement = null;
   }
 
   // ========== РЕЖИМ РИСОВАНИЯ ==========
@@ -77,10 +81,12 @@ export class InteractionManager {
     if (this.onTraceCancel) this.onTraceCancel();
   }
 
-  snapLengthToGrid(distancePx, gridStepPx) {
-    if (!gridStepPx || gridStepPx <= 0) return distancePx;
-    const snappedPx = Math.round(distancePx / gridStepPx) * gridStepPx;
-    return Math.max(30, snappedPx);
+  snapLengthToGrid(distancePx, mmPerPx) {
+    const snapLengthMm = this.options.snapLengthMm?.value || 50;
+    const distanceMm = distancePx * mmPerPx;
+    const snappedMm = Math.round(distanceMm / snapLengthMm) * snapLengthMm;
+    const snappedPx = snappedMm / mmPerPx;
+    return Math.max(30 / mmPerPx, snappedPx);
   }
 
   createDuctFromPortToPoint(startPort, endPoint, endPort = null) {
@@ -99,13 +105,25 @@ export class InteractionManager {
       return null;
     }
 
-    const gridStepPx = this.options.gridStepM?.value || 50;
-    const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const snapLengthMm = this.options.snapLengthMm?.value || 50;
+    const snapAngleDeg = this.options.snapAngleDeg?.value || 45;
 
+    // Привязка длины к шагу (в миллиметрах)
+    let distanceMm = distance * mmPerPx;
+    const snappedDistanceMm = Math.round(distanceMm / snapLengthMm) * snapLengthMm;
+    const finalDistance = Math.max(30, snappedDistanceMm) / mmPerPx;
+
+    // Вычисляем угол
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
 
-    const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    // Привязка углов с заданным шагом
+    const snapAngles = [];
+    for (let a = 0; a < 360; a += snapAngleDeg) {
+      snapAngles.push(a);
+    }
+
     let minDiff = 180;
     let snappedAngle = angle;
 
@@ -118,21 +136,16 @@ export class InteractionManager {
       }
     }
 
-    let finalDistance = snappedDistance;
-    let finalAngle = angle;
+    const finalAngle = minDiff <= (snapAngleDeg / 2) ? snappedAngle : angle;
 
-    if (minDiff <= 30) {
-      finalAngle = snappedAngle;
-    }
-
+    // Вычисляем конечную точку
     const rad = finalAngle * Math.PI / 180;
     const finalDx = Math.cos(rad) * finalDistance;
     const finalDy = Math.sin(rad) * finalDistance;
 
-    const mmPerPx = this.options.mmPerPx?.value || 2;
-    const distanceMm = finalDistance * mmPerPx;
+    const distanceMmFinal = finalDistance * mmPerPx;
 
-    if (distanceMm < 30) {
+    if (distanceMmFinal < 30) {
       if (this.onError) this.onError('Слишком короткий воздуховод (мин. 30 мм)');
       return null;
     }
@@ -143,7 +156,7 @@ export class InteractionManager {
 
     let elementType = 'duct';
     let params = {
-      b: Math.max(30, distanceMm),
+      b: Math.max(30, distanceMmFinal),
       a: 125,
       sectionType: 'round',
       rotation: finalAngle
@@ -208,20 +221,31 @@ export class InteractionManager {
 
     let dx = endPoint.x - startPoint.x;
     let dy = endPoint.y - startPoint.y;
-    let distance = Math.hypot(dx, dy);
+    let distancePx = Math.hypot(dx, dy);
 
-    if (distance < 5) {
+    if (distancePx < 5) {
       if (this.onError) this.onError('Слишком короткий воздуховод');
       return null;
     }
 
-    const gridStepPx = this.options.gridStepM?.value || 50;
-    const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const snapLengthMm = this.options.snapLengthMm?.value || 50;
+    const snapAngleDeg = this.options.snapAngleDeg?.value || 45;
 
+    // Привязка длины
+    let distanceMm = distancePx * mmPerPx;
+    const snappedDistanceMm = Math.round(distanceMm / snapLengthMm) * snapLengthMm;
+    const finalDistancePx = Math.max(30, snappedDistanceMm) / mmPerPx;
+
+    // Привязка угла
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
 
-    const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    const snapAngles = [];
+    for (let a = 0; a < 360; a += snapAngleDeg) {
+      snapAngles.push(a);
+    }
+
     let minDiff = 180;
     let snappedAngle = angle;
 
@@ -234,31 +258,15 @@ export class InteractionManager {
       }
     }
 
-    let finalDistance = snappedDistance;
-    let finalAngle = angle;
-
-    if (minDiff <= 30) {
-      finalAngle = snappedAngle;
-    }
-
+    const finalAngle = minDiff <= (snapAngleDeg / 2) ? snappedAngle : angle;
     const rad = finalAngle * Math.PI / 180;
-    const finalDx = Math.cos(rad) * finalDistance;
-    const finalDy = Math.sin(rad) * finalDistance;
 
-    const mmPerPx = this.options.mmPerPx?.value || 2;
-    const distanceMm = finalDistance * mmPerPx;
-
-    if (distanceMm < 30) {
-      if (this.onError) this.onError('Слишком короткий воздуховод (мин. 30 мм)');
-      return null;
-    }
-
-    const halfLengthPx = finalDistance / 2;
+    const halfLengthPx = finalDistancePx / 2;
     const centerX = startPoint.x + Math.cos(rad) * halfLengthPx;
     const centerY = startPoint.y + Math.sin(rad) * halfLengthPx;
 
     const params = {
-      b: Math.max(30, distanceMm),
+      b: Math.max(30, snappedDistanceMm),
       a: 125,
       sectionType: 'round',
       rotation: finalAngle
@@ -463,7 +471,6 @@ export class InteractionManager {
 
   updateTracePreview(worldPos) {
     if (!this.traceActive) return;
-
     if (!this.traceStartWorldPoint) return;
 
     const startPoint = this.traceStartWorldPoint;
@@ -471,24 +478,26 @@ export class InteractionManager {
 
     const dx = endPoint.x - startPoint.x;
     const dy = endPoint.y - startPoint.y;
-    let distance = Math.hypot(dx, dy);
+    let distancePx = Math.hypot(dx, dy);
 
-    const gridStepPx = this.options.gridStepM?.value || 50;
-    const snappedDistance = this.snapLengthToGrid(distance, gridStepPx);
+    const mmPerPx = this.options.mmPerPx?.value || 2;
+    const snapLengthMm = this.options.snapLengthMm?.value || 50;
+    const snapAngleDeg = this.options.snapAngleDeg?.value || 45;
 
-    if (Math.abs(snappedDistance - distance) > 0.1) {
-      const angle = Math.atan2(dy, dx);
-      endPoint = {
-        x: startPoint.x + Math.cos(angle) * snappedDistance,
-        y: startPoint.y + Math.sin(angle) * snappedDistance
-      };
-      distance = snappedDistance;
-    }
+    // Привязка длины
+    let distanceMm = distancePx * mmPerPx;
+    const snappedDistanceMm = Math.round(distanceMm / snapLengthMm) * snapLengthMm;
+    const snappedDistancePx = snappedDistanceMm / mmPerPx;
 
+    // Привязка угла
     let angle = Math.atan2(dy, dx) * 180 / Math.PI;
     if (angle < 0) angle += 360;
 
-    const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+    const snapAngles = [];
+    for (let a = 0; a < 360; a += snapAngleDeg) {
+      snapAngles.push(a);
+    }
+
     let minDiff = 180;
     let snappedAngle = angle;
 
@@ -501,17 +510,41 @@ export class InteractionManager {
       }
     }
 
-    if (minDiff <= 30) {
+    // Применяем привязку если угол близок
+    if (minDiff <= (snapAngleDeg / 2)) {
       const rad = snappedAngle * Math.PI / 180;
       endPoint = {
-        x: startPoint.x + Math.cos(rad) * distance,
-        y: startPoint.y + Math.sin(rad) * distance
+        x: startPoint.x + Math.cos(rad) * snappedDistancePx,
+        y: startPoint.y + Math.sin(rad) * snappedDistancePx
+      };
+    } else {
+      // Если угол не привязывается, просто привязываем длину
+      const rad = angle * Math.PI / 180;
+      endPoint = {
+        x: startPoint.x + Math.cos(rad) * snappedDistancePx,
+        y: startPoint.y + Math.sin(rad) * snappedDistancePx
       };
     }
 
     this.traceGhostPoints = [startPoint, endPoint];
     this.renderer?.setTraceGhostPoints(this.traceGhostPoints);
     this.renderer?.draw();
+  }
+
+
+  setTransformActive(active, port = null, element = null) {
+    this.transformActive = active;
+    this.transformPort = port;
+    this.transformElement = element;
+    if (active) {
+      this.canvas.style.cursor = 'move';
+    } else {
+      this.canvas.style.cursor = '';
+    }
+  }
+
+  isTransformMode() {
+    return this.currentTool?.value === 'transform';
   }
 
   // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
@@ -738,11 +771,28 @@ export class InteractionManager {
 
   // ========== ОБРАБОТЧИКИ СОБЫТИЙ ==========
 
+  // InteractionManager.js - исправленный метод onMouseMove
+
   onMouseMove(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
     const rect = this.canvas.getBoundingClientRect();
     const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
+    // ========== ТРАНСФОРМАЦИЯ ==========
+    if (this.transformActive && this.transformManager?.isTransforming()) {
+      this.transformManager.updateTransform(
+        world,
+        this.options.gridStepM?.value || 50,
+        this.options.mmPerPx?.value || 2,
+        this.options.snapLengthMm?.value || 50,   // ← добавить
+        this.options.snapAngleDeg?.value || 45    // ← добавить
+      );
+      this.renderer.setTransformGhostPoints(this.transformManager.getGhostPoints());
+      this.renderer.draw();
+      return;
+    }
+
+    // ========== ПЕРЕМЕЩЕНИЕ ВЫНОСКИ ==========
     if (this.dragCallout) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
@@ -753,6 +803,7 @@ export class InteractionManager {
       return;
     }
 
+    // ========== ПЕРЕМЕЩЕНИЕ ЭЛЕМЕНТОВ ==========
     if (this.isDragging && this.dragElements.length) {
       const dx = world.x - this.dragStartWorld.x;
       const dy = world.y - this.dragStartWorld.y;
@@ -766,6 +817,7 @@ export class InteractionManager {
       return;
     }
 
+    // ========== ПАН ==========
     if (this.isPanning) {
       const deltaX = screen.x - this.dragStartScreen.x;
       const deltaY = screen.y - this.dragStartScreen.y;
@@ -775,11 +827,13 @@ export class InteractionManager {
       return;
     }
 
+    // ========== РЕЖИМ РИСОВАНИЯ ==========
     if (this.traceActive) {
       this.updateTracePreview(world);
       return;
     }
 
+    // ========== ВЫДЕЛЕНИЕ ПРЯМОУГОЛЬНИКОМ ==========
     if (this.isSelecting && this.selectionStart) {
       this.selectionManager?.updateSelectionRect(screen.x, screen.y);
       this.renderer.updateSelectionRect(screen.x, screen.y);
@@ -787,16 +841,32 @@ export class InteractionManager {
       return;
     }
 
+    // ========== ХАЙЛАЙТИНГ ==========
     const isOverCallout = this.options.showCallouts?.value && this.isPointOverCallout(world.x, world.y);
     if (!isOverCallout) {
       const element = this.findElementAt(world.x, world.y);
       this.renderer.setHighlightedElements(element ? [element] : []);
+
       if (this.options.showPorts?.value && this.currentTool?.value === 'select') {
         const port = this.findPortAt(world.x, world.y);
         this.renderer.setHighlightedPort(port);
         this.canvas.style.cursor = element ? 'pointer' : 'default';
       } else if (this.currentTool?.value === 'trace') {
         this.canvas.style.cursor = 'crosshair';
+      } else if (this.currentTool?.value === 'transform') {
+        // Показываем курсор move если наведены на порт воздуховода И порт не имеет подключений
+        const port = this.findPortAt(world.x, world.y, 15);
+        const el = this.findElementAt(world.x, world.y);
+        if (port && el && el.type === 'duct') {
+          // Проверяем есть ли подключения у порта
+          if (port.isConnected && port.isConnected()) {
+            this.canvas.style.cursor = 'not-allowed'; // Запрещающий курсор
+          } else {
+            this.canvas.style.cursor = 'move';
+          }
+        } else {
+          this.canvas.style.cursor = 'default';
+        }
       } else {
         this.canvas.style.cursor = element ? 'pointer' : 'default';
       }
@@ -838,6 +908,24 @@ export class InteractionManager {
           return;
         } else {
           this.handleTraceClick(world);
+          this.renderer.draw();
+          return;
+        }
+      }
+
+      if (this.currentTool?.value === 'transform') {
+        // Сначала ищем порт (с большим радиусом)
+        const port = this.findPortAt(world.x, world.y, 15);
+        const element = this.findElementAt(world.x, world.y);
+
+        if (port && element && this.transformManager?.canTransformPort(port, element)) {
+          // Дополнительная проверка на наличие подключений
+          if (port.isConnected && port.isConnected()) {
+            this.onError?.('Нельзя трансформировать воздуховод с подключениями. Сначала отключите связи.');
+            return;
+          }
+          this.transformManager?.startTransform(port, element);
+          this.transformActive = true;
           this.renderer.draw();
           return;
         }
@@ -917,12 +1005,29 @@ export class InteractionManager {
       this.renderer.draw();
     }
 
+    if (this.transformActive && this.transformManager?.isTransforming()) {
+      this.transformManager.endTransform(() => {
+        if (this.autoUpdateConnections) {
+          this.connectionManager?.updateAllPortsAndConnections(
+            this.options.snapDistance?.value || 10,
+            this.layerManager
+          );
+        }
+      });
+      this.transformActive = false;
+      this.renderer.setTransformGhostPoints([]);
+      this.renderer.draw();
+      return;
+    }
+
     if (this.isDragging && this.dragElements.length && this.autoUpdateConnections) {
       setTimeout(() => {
         this.connectionManager?.updateAllPortsAndConnections(this.options.snapDistance?.value || 10, this.layerManager);
         this.renderer.draw();
       }, 50);
     }
+
+
 
     this.isDragging = false;
     this.isPanning = false;

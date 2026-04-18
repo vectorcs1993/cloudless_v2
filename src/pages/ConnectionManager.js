@@ -224,7 +224,7 @@ export class ConnectionManager {
     }
 
     if (brokenCount > 0 || connectedCount > 0) {
-      console.log(`Связи: разорвано ${brokenCount}, создано ${connectedCount}`);
+      // console.log(`Связи: разорвано ${brokenCount}, создано ${connectedCount}`);
     }
 
     return { broken: brokenCount, connected: connectedCount };
