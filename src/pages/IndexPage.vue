@@ -4,7 +4,7 @@
       <template v-slot:before>
         <q-splitter horizontal :dark="isDarkTheme" v-model="splitterModel2">
           <template v-slot:before>
-            <q-card :dark="isDarkTheme" square class="fit" flat>
+            <q-card :dark="isDarkTheme" square flat class="layer-panel-container">
               <q-card-section>
                 <div class="text-h6">Расчёт воздуховодов онлайн</div>
               </q-card-section>
@@ -12,13 +12,13 @@
                 <q-btn @click="saveToLocalStorage" color="primary" icon="save" label="Сохранить" dense />
                 <q-btn @click="onReset" color="warning" icon="refresh" label="Сброс" dense />
               </q-card-section>
-              <q-tabs v-model="tabEditor" :dark="isDarkTheme" no-caps>
+              <q-tabs align="left" v-model="tabEditor" :dark="isDarkTheme" no-caps>
                 <q-tab name="tools" label="Инструменты" />
                 <q-tab name="settings_editor" label="Редактор" />
                 <q-tab name="settings_project" label="Проект" />
               </q-tabs>
               <q-separator />
-              <q-tab-panels v-model="tabEditor" :dark="isDarkTheme">
+              <q-tab-panels v-model="tabEditor" :dark="isDarkTheme" class="layer-panels-scrollable">
                 <q-tab-panel name="tools">
                   <q-btn-toggle dark="isDarkTheme" v-model="currentTool" toggle-color="primary" class="q-mb-sm" :options="[
                     { label: 'Выделение', value: 'select', icon: 'pan_tool' },
@@ -341,6 +341,22 @@
                 <q-tab name="elements" label="Элементы" />
                 <q-tab name="settings" label="Настройки" />
                 <q-tab name="console" label="Вывод данных" />
+                <q-space />
+                <q-card-actions>
+                  <q-btn dense color="primary" icon="format_align_left" label="Формат трассы" @click="formatTrace" :loading="isFormattingTrace"
+                    :disable="isCalculating">
+                    <template v-slot:loading>
+                      <q-spinner-dots />
+                    </template>
+                  </q-btn>
+
+                  <q-btn dense color="primary" icon="calculate" label="Рассчитать" @click="calculateSystem" :loading="isCalculating"
+                    :disable="isFormattingTrace">
+                    <template v-slot:loading>
+                      <q-spinner-dots />
+                    </template>
+                  </q-btn>
+                </q-card-actions>
               </q-tabs>
               <q-tab-panels v-model="tabLayer" :dark="isDarkTheme" class="layer-panels-scrollable">
                 <q-tab-panel :disable="false" name="elements" class="layer-panel-content">
@@ -375,6 +391,7 @@ import { ZIndexManager } from './ZIndexManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
+import { Calc } from './Calc.js';
 import { ClipboardManager } from './ClipboardManager.js';
 import { SelectionManager } from './SelectionManager.js';
 import { LayerManager } from './LayerManager.js';
@@ -402,6 +419,8 @@ const splitterModel1 = ref(15);
 const splitterModel2 = ref(60);
 const splitterModel3 = ref(70);
 const splitterModel4 = ref(80);
+const isCalculating = ref(false);
+const isFormattingTrace = ref(false);
 // ========== НАСТРОЙКИ РЕДАКТОРА ==========
 const isDarkTheme = ref(false);
 const showGrid = ref(true);
@@ -806,6 +825,7 @@ let layerManager = new LayerManager(layers, activeLayerId);
 let zIndexManager = new ZIndexManager(layers);
 let connectionManager = new ConnectionManager(allElements, layerManager);
 let clipboardManager = new ClipboardManager(layerManager, connectionManager);
+let calcManager = null;
 
 // Менеджеры, зависящие от колбэков (которые уже определены)
 let treeManager = new TreeManager(layers, activeLayerId, setActiveLayer, (element) => {
@@ -849,6 +869,117 @@ const renderOptions = {
   snapAngleDeg: readonly(snapAngleDeg),
   mouseWorldPos,
   traceMode: readonly(traceMode),
+};
+
+const formatTrace = async () => {
+  if (isFormattingTrace.value) return;
+
+  isFormattingTrace.value = true;
+
+  try {
+    console.log('=== ФОРМАТ ТРАССЫ ===');
+
+    if (!calcManager) {
+      // Если расчет еще не выполнялся, сначала выполняем его
+      showNotify({
+        type: 'info',
+        message: 'Сначала выполните расчет системы',
+        timeout: 2000
+      });
+      return;
+    }
+
+    const formattedData = await calcManager.formatTrace();
+
+    // Показываем результат в уведомлении
+    showNotify({
+      type: 'positive',
+      message: `Трасса отформатирована. Найдено трасс: ${formattedData.header.totalTraces}. Подробности в консоли.`,
+      timeout: 3000
+    });
+
+    // Можно также предложить скачать файл
+    const jsonString = JSON.stringify(formattedData, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trace_report_${new Date().toISOString().slice(0, 19)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+  } catch (error) {
+    console.error('Ошибка при форматировании:', error);
+    showNotify({
+      type: 'negative',
+      message: error.message || 'Ошибка при форматировании трассы',
+      timeout: 3000
+    });
+  } finally {
+    isFormattingTrace.value = false;
+  }
+};
+
+const calculateSystem = async () => {
+  if (isCalculating.value) return;
+
+  isCalculating.value = true;
+
+  try {
+    console.log('=== ЗАПУСК РАСЧЕТА ===');
+
+    // Получаем все элементы из слоев
+    const allElements = [];
+    for (const layer of layers.value) {
+      if (layer.visible !== false) {
+        allElements.push(...layer.elements);
+      }
+    }
+
+    if (allElements.length === 0) {
+      showNotify({
+        type: 'warning',
+        message: 'Нет элементов для расчета. Добавьте воздуховоды на схему.',
+        timeout: 3000
+      });
+      return;
+    }
+
+    // Создаем экземпляр Calc с текущими параметрами
+    calcManager = new Calc(layers, {
+      mmPerPx: mmPerPx.value,
+      totalAirFlow: totalAirFlow.value,
+      temperature: temperature.value,
+      atmosphericPressure: atmosphericPressure.value,
+      roughness: roughness.value
+    });
+
+    // Выполняем расчет (асинхронно)
+    const results = await calcManager.calculate();
+
+    // Выводим отчет в консоль
+    calcManager.printReport();
+
+    // Показываем уведомление о завершении
+    showNotify({
+      type: 'positive',
+      message: `Расчет завершен. Найдено трасс: ${results.tracesCount || 0}. Суммарные потери: ${results.totalLosses?.toFixed(2) || 0} Па.`,
+      timeout: 5000
+    });
+
+    // Можно сохранить результаты для дальнейшего использования
+    // calculationResults.value = results;
+
+  } catch (error) {
+    console.error('Ошибка при расчете:', error);
+    showNotify({
+      type: 'negative',
+      message: error.message || 'Ошибка при расчете системы',
+      timeout: 3000
+    });
+  } finally {
+    isCalculating.value = false;
+  }
 };
 
 // Реальные реализации scheduleRender и updateSelection
