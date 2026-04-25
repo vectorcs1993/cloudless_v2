@@ -314,6 +314,7 @@ export class TraceFormatter {
   }
 
   // Создание нового фитинга
+  // Создание нового фитинга
   createFitting(junction, fittingType) {
     const nextId = this.layerManager.getNextElementId();
 
@@ -324,6 +325,9 @@ export class TraceFormatter {
     }
 
     fitting.connectedPortIds = junction.ports.map(p => p.id);
+
+    // ВАЖНО: обновляем порты фитинга!
+    fitting.updatePorts();
 
     if (fitting.showCallout) {
       fitting.addCallout(fitting.x, fitting.y - 40);

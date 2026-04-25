@@ -1,4 +1,5 @@
-// Fitting.js
+// Fitting.js - добавляем метод для получения информации о связях
+
 import { BaseElement } from './Elements.js';
 import { Port } from './Port.js';
 
@@ -38,7 +39,31 @@ export class Fitting extends BaseElement {
       text += `\nУгол ответвления: ${this.branchAngle}°`;
     }
 
+    // Добавляем количество подключений
+    const connectionCount = this.getConnectionCount();
+    if (connectionCount > 0) {
+      text += `\nПодключений: ${connectionCount}`;
+    }
+
     return text;
+  }
+
+  // Получение количества подключений
+  getConnectionCount() {
+    if (!this.ports || !this.ports[0]) return 0;
+    return this.ports[0].connections?.length || 0;
+  }
+
+  // Получение списка подключенных элементов для отображения во вкладке "Связи"
+  getConnectedElements() {
+    if (!this.ports || !this.ports[0]) return [];
+
+    const connections = this.ports[0].connections || [];
+    return connections.map(conn => ({
+      elementId: conn.connectedElementId,
+      portId: conn.connectedPortId,
+      element: null // Заполняется внешним кодом
+    }));
   }
 
   getParameters() {
@@ -125,11 +150,22 @@ export class Fitting extends BaseElement {
     };
     ctx.fillText(symbols[this.fittingType] || 'F', this.x, this.y);
 
-    // РИСУЕМ ПОРТ (маленький кружок в центре)
+    // Рисуем порт (маленький кружок в центре) если включено отображение портов
     if (showPorts) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, 5 / scale, 0, 2 * Math.PI);
-      ctx.fillStyle = '#00cc00';
+
+      // Цвет порта зависит от количества подключений
+      const connectionCount = this.getConnectionCount();
+      if (connectionCount === 0) {
+        ctx.fillStyle = '#888888';
+      } else if (connectionCount === 1) {
+        ctx.fillStyle = '#00cc00';
+      } else if (connectionCount === 2) {
+        ctx.fillStyle = '#ffaa00';
+      } else {
+        ctx.fillStyle = '#ff0000';
+      }
       ctx.fill();
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1 / scale;
@@ -141,7 +177,7 @@ export class Fitting extends BaseElement {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
-  // ПОРТ - ОДИН, ПО ЦЕНТРУ (ВАЖНО: правильно обновляем мировые координаты)
+  // Порт - один, по центру
   getPorts() {
     const ports = [];
 
@@ -171,7 +207,7 @@ export class Fitting extends BaseElement {
     const oldPorts = this.ports || [];
     const newPorts = this.getPorts();
 
-    // Восстанавливаем связи
+    // Восстанавливаем связи из старых портов
     newPorts.forEach(newPort => {
       const oldPort = oldPorts.find(p => p.direction === newPort.direction);
       if (oldPort && oldPort.connections) {

@@ -215,7 +215,7 @@ export class ConnectionManager {
           if (!alreadyConnected) {
             this.connectPorts(port, bestMatch);
             connectedCount++;
-            console.log(`Соединен порт ${port.id} с ${bestMatch.id}`);
+            // console.log(`Соединен порт ${port.id} с ${bestMatch.id}`);
           }
         }
       }

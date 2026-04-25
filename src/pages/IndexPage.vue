@@ -303,29 +303,45 @@
                         </div>
                       </q-tab-panel>
                       <q-tab-panel name="links">
-                        <div v-if="selectedElement?.ports?.length" class="connections-info">
-                          <div v-for="port in selectedElement.ports" :key="port.id" class="connection-item">
-                            <div class="row items-center q-mb-sm">
-                              <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
-                                size="16px" />
-                              <span class="q-ml-sm">{{ port.side }} ({{ port.getDirectionName?.() || port.direction }})</span>
-                              <span class="q-ml-sm text-caption" v-if="port.connections?.length">
-                                ({{ port.connections.length }} подключений)
-                              </span>
-                            </div>
-
-                            <div v-if="port.connections?.length" class="q-ml-md">
-                              <div v-for="(conn, idx) in port.connections" :key="idx" class="row items-center q-mb-xs">
-                                <q-icon name="link" size="12px" color="primary" />
-                                <span class="q-ml-sm">→ Элемент {{ conn.connectedElementId }}</span>
-                                <q-btn flat dense size="xs" color="primary" icon="open_in_new" @click="gotoConnectedElement(conn.connectedElementId)"
-                                  class="q-ml-sm" />
+                        <div v-if="selectedElement" class="connections-info">
+                          <template v-if="selectedElement.ports && selectedElement.ports.length">
+                            <div v-for="(port, portIdx) in selectedElement.ports" :key="port.id" class="q-mb-md">
+                              <div class="row items-center q-mb-sm">
+                                <q-icon :name="port.isConnected?.() ? 'link' : 'link_off'" :color="port.isConnected?.() ? 'positive' : 'negative'"
+                                  size="18px" />
+                                <span class="q-ml-sm text-weight-medium">
+                                  {{ selectedElement.type === 'fitting' ? 'Центральный порт' : `${port.side} (${port.direction})` }}
+                                </span>
+                                <span class="q-ml-sm text-caption text-grey" v-if="port.connections?.length">
+                                  ({{ port.connections.length }} подключений)
+                                </span>
                               </div>
+                              <!-- Список подключений -->
+                              <div v-if="port.connections?.length" class="q-ml-md">
+                                <q-btn v-for="(conn, idx) in port.connections" :key="idx" class="row items-center q-mb-sm q-pa-sm rounded-borders"
+                                  :class="isDarkTheme ? 'bg-grey-9' : 'bg-grey-3'" @click="gotoConnectedElement(conn.connectedElementId)">
+                                  <q-icon name="subdirectory_arrow_right" size="14px" color="primary" />
+                                  <span class="q-ml-sm ">
+                                    <strong>{{ getElementById(conn.connectedElementId)?.name || `Элемент ${conn.connectedElementId}` }}</strong>
+                                    <span class="text-caption text-grey"> ({{ getElementTypeName(getElementById(conn.connectedElementId)) }})</span>
+                                  </span>
+                                </q-btn>
+                              </div>
+                              <div v-else class="q-ml-md text-caption text-grey">
+                                └─ не подключен
+                              </div>
+                              <q-separator v-if="portIdx < selectedElement.ports.length - 1" class="q-mt-md q-mb-md" />
                             </div>
-                            <div v-else class="q-ml-md text-negative text-caption">не подключен</div>
+                          </template>
+                          <div v-else class="text-center q-pa-md text-grey">
+                            <q-icon name="info" size="32px" />
+                            <div class="q-mt-sm">Нет портов у элемента</div>
                           </div>
                         </div>
-                        <div v-else class="text-center q-pa-md text-grey">Нет портов у выбранного элемента</div>
+                        <div v-else class="text-center q-pa-md text-grey">
+                          <q-icon name="help_outline" size="32px" />
+                          <div class="q-mt-sm">Выберите элемент для просмотра связей</div>
+                        </div>
                       </q-tab-panel>
                     </q-tab-panels>
                   </div>
@@ -482,7 +498,14 @@ const setActiveLayer = (layerId) => {
   clearSelection();
   activeLayerId.value = layerId;
 };
-
+// Поиск элемента по ID во всех слоях
+const getElementById = (elementId) => {
+  for (const layer of layers.value) {
+    const found = layer.elements.find(el => el.id === elementId);
+    if (found) return found;
+  }
+  return null;
+};
 const isElementLocked = (element) => layerManager?.isLayerLocked(element) || false;
 
 const onParameterChange = (value, paramName) => {
@@ -877,25 +900,27 @@ const renderOptions = {
 
 const formatTrace = async () => {
   if (isFormattingTrace.value) return;
-
   isFormattingTrace.value = true;
 
   try {
-    console.log('=== ФОРМАТ ТРАССЫ ===');
-
-    // Создаем форматтер если еще не создан
     if (!traceFormatter) {
       traceFormatter = new TraceFormatter(layerManager, connectionManager, showNotify);
     }
 
-    // Выполняем форматирование
     const result = traceFormatter.format();
 
-    // Обновляем отображение
+    // Принудительно обновляем порты у всех фитингов
+    for (const layer of layers.value) {
+      for (const el of layer.elements) {
+        if (el.type === 'fitting' && el.updatePorts) {
+          el.updatePorts();
+        }
+      }
+    }
+
     layers.value = [...layers.value];
     scheduleRender();
 
-    // Дополнительно обновляем связи
     setTimeout(() => {
       connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
       scheduleRender();
