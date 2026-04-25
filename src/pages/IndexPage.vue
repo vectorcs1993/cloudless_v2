@@ -198,7 +198,7 @@
                     <q-card-section class="row items-center justify-between">
                       <q-list class="full-width" :dark="isDarkTheme" dense>
                         <q-item><q-item-section caption>ID</q-item-section><q-item-section>{{ selectedElement?.id
-                        }}</q-item-section></q-item>
+                            }}</q-item-section></q-item>
                         <q-item><q-item-section caption>Тип</q-item-section><q-item-section>{{
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
@@ -215,7 +215,7 @@
                           <q-list dense>
                             <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                               <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                              }}:</q-item-label></q-item-section>
+                                  }}:</q-item-label></q-item-section>
                               <q-item-section>
                                 <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                                   :disable="isElementLocked(selectedElement)"
@@ -229,7 +229,7 @@
                                   @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
                               </q-item-section>
                               <q-item-section side class="param-unit-col"><span v-if="param.unit">{{ param.unit
-                              }}</span><span v-else>—</span></q-item-section>
+                                  }}</span><span v-else>—</span></q-item-section>
                             </q-item>
                           </q-list>
                           <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
@@ -982,7 +982,6 @@ const calculateSystem = async () => {
   isCalculating.value = true;
 
   try {
-    Logger.info('=== АЭРОДИНАМИЧЕСКИЙ РАСЧЕТ ===');
 
     calcManager = new Calc(layers, {
       mmPerPx: mmPerPx.value,
