@@ -1,18 +1,25 @@
-// Fitting.js - добавляем метод для получения информации о связях
-
-import { BaseElement } from './Elements.js';
+// Fitting.js - фитинг наследуется от DuctBase
+import { DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
-export class Fitting extends BaseElement {
+export class Fitting extends DuctBase {
   constructor(id, x, y, fittingType = 'elbow') {
-    super(id, 'fitting', x, y, `Фитинг ${id}`);
-    this.type = 'fitting';
+    super(id, 'fitting', x, y, `Фитинг ${id}`, 'galvanized', 'round', 125, 100, 125);
     this.fittingType = fittingType;
     this.angle = 90;
     this.branchAngle = 90;
-    this._radius = 15;
-    this.color = '#ff9800';
+    this._radius = 9;
+    this._lineWidth = 2;
   }
+
+  get a() { return null; }
+  set a(value) { }
+
+  get b() { return null; }
+  set b(value) { }
+
+  get c() { return null; }
+  set c(value) { }
 
   getWidth() { return this._radius * 2; }
   getHeight() { return this._radius * 2; }
@@ -39,7 +46,6 @@ export class Fitting extends BaseElement {
       text += `\nУгол ответвления: ${this.branchAngle}°`;
     }
 
-    // Добавляем количество подключений
     const connectionCount = this.getConnectionCount();
     if (connectionCount > 0) {
       text += `\nПодключений: ${connectionCount}`;
@@ -48,39 +54,43 @@ export class Fitting extends BaseElement {
     return text;
   }
 
-  // Получение количества подключений
   getConnectionCount() {
     if (!this.ports || !this.ports[0]) return 0;
     return this.ports[0].connections?.length || 0;
   }
 
-  // Получение списка подключенных элементов для отображения во вкладке "Связи"
   getConnectedElements() {
     if (!this.ports || !this.ports[0]) return [];
-
     const connections = this.ports[0].connections || [];
     return connections.map(conn => ({
       elementId: conn.connectedElementId,
       portId: conn.connectedPortId,
-      element: null // Заполняется внешним кодом
+      element: null
     }));
   }
 
   getParameters() {
-    const params = [...super.getParameters()];
-
-    params.push({
-      name: 'fittingType',
-      label: 'Тип фитинга',
-      type: 'select',
-      options: [
-        { value: 'elbow', label: 'Отвод' },
-        { value: 'tee', label: 'Тройник' },
-        { value: 'cross', label: 'Крестовина' },
-        { value: 'transition', label: 'Переход' }
-      ],
-      value: this.fittingType
-    });
+    const params = [
+      { name: 'name', label: 'Имя', type: 'text', value: this.name },
+      {
+        name: 'fittingType',
+        label: 'Тип фитинга',
+        type: 'select',
+        options: [
+          { value: 'elbow', label: 'Отвод' },
+          { value: 'tee', label: 'Тройник' },
+          { value: 'cross', label: 'Крестовина' },
+          { value: 'transition', label: 'Переход' }
+        ],
+        value: this.fittingType
+      },
+      {
+        name: 'materialType', label: 'Материал', type: 'select', options: DuctBase.getMaterialsTypes(), value: this.materialType,
+      },
+      {
+        name: 'sectionType', label: 'Тип сечения', type: 'select', options: DuctBase.getSectionTypes(), value: this.sectionType,
+      },
+    ];
 
     if (this.fittingType === 'elbow') {
       params.push({
@@ -119,7 +129,6 @@ export class Fitting extends BaseElement {
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     ctx.save();
 
-    // Рисуем круг фитинга
     ctx.beginPath();
     ctx.arc(this.x, this.y, this._radius, 0, 2 * Math.PI);
 
@@ -136,7 +145,6 @@ export class Fitting extends BaseElement {
     ctx.lineWidth = 2 / scale;
     ctx.stroke();
 
-    // Символ внутри
     ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
     ctx.font = `${Math.max(10, 14 / scale)}px Arial`;
     ctx.textAlign = 'center';
@@ -150,12 +158,10 @@ export class Fitting extends BaseElement {
     };
     ctx.fillText(symbols[this.fittingType] || 'F', this.x, this.y);
 
-    // Рисуем порт (маленький кружок в центре) если включено отображение портов
     if (showPorts) {
       ctx.beginPath();
       ctx.arc(this.x, this.y, 5 / scale, 0, 2 * Math.PI);
 
-      // Цвет порта зависит от количества подключений
       const connectionCount = this.getConnectionCount();
       if (connectionCount === 0) {
         ctx.fillStyle = '#888888';
@@ -177,10 +183,8 @@ export class Fitting extends BaseElement {
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
   }
 
-  // Порт - один, по центру
   getPorts() {
     const ports = [];
-
     const existingPort = this.ports?.find(p => p.direction === 'center');
 
     const port = new Port(
@@ -194,7 +198,6 @@ export class Fitting extends BaseElement {
       this.y
     );
 
-    // Сохраняем существующие связи если есть
     if (existingPort && existingPort.connections) {
       port.connections = [...existingPort.connections];
     }
@@ -207,7 +210,6 @@ export class Fitting extends BaseElement {
     const oldPorts = this.ports || [];
     const newPorts = this.getPorts();
 
-    // Восстанавливаем связи из старых портов
     newPorts.forEach(newPort => {
       const oldPort = oldPorts.find(p => p.direction === newPort.direction);
       if (oldPort && oldPort.connections) {
@@ -224,6 +226,18 @@ export class Fitting extends BaseElement {
     const dx = worldX - this.x;
     const dy = worldY - this.y;
     return Math.sqrt(dx * dx + dy * dy) < this._radius;
+  }
+
+  drawCenterLines(ctx, scale, isDarkTheme) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this._radius / 2, 0, 2 * Math.PI);
+    ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
+    ctx.lineWidth = Math.max(0.5, 1 / scale);
+    ctx.setLineDash([4 / scale, 4 / scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   toJSON() {

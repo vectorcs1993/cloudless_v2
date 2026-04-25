@@ -1,5 +1,6 @@
 // TraceFormatter.js
 import { Fitting } from './Fitting.js';
+import { Logger } from './Logger.js';
 
 export class TraceFormatter {
   constructor(layerManager, connectionManager, showNotify) {
@@ -8,73 +9,60 @@ export class TraceFormatter {
     this.showNotify = showNotify;
   }
 
-  // Главный метод форматирования
   format() {
-    console.log('=== ФОРМАТ ТРАССЫ ===');
+    Logger.info('=== ФОРМАТ ТРАССЫ ===');
 
     const allElements = this.layerManager.getAllElements();
     const ducts = allElements.filter(el => el.type === 'duct');
     const existingFittings = allElements.filter(el => el.type === 'fitting');
 
-    console.log(`Найдено воздуховодов: ${ducts.length}`);
-    console.log(`Существующих фитингов: ${existingFittings.length}`);
+    Logger.info(`Найдено воздуховодов: ${ducts.length}`);
+    Logger.info(`Существующих фитингов: ${existingFittings.length}`);
 
-    // 1. Анализируем все соединения портов
     const junctions = this.analyzeJunctions(ducts);
+    Logger.info(`Найдено узлов соединений: ${junctions.length}`);
 
-    console.log(`Найдено узлов соединений: ${junctions.length}`);
-
-    // 2. Для каждого узла определяем нужный фитинг
     const newFittings = [];
     const updatedFittings = [];
 
     for (const junction of junctions) {
-      // Проверяем, есть ли уже фитинг в этой точке
       const existingFitting = this.findFittingAt(junction.x, junction.y, existingFittings);
 
       if (existingFitting) {
-        // Обновляем существующий фитинг
         const newType = this.determineFittingType(junction);
         if (newType !== 'none') {
           if (existingFitting.fittingType !== newType) {
             existingFitting.fittingType = newType;
-            // Если это отвод, устанавливаем угол
             if (newType === 'elbow' && junction.detectedAngle) {
               existingFitting.angle = junction.detectedAngle;
             }
             updatedFittings.push(existingFitting);
-            console.log(`Обновлен фитинг ${existingFitting.id}: ${newType}${newType === 'elbow' ? ` (${existingFitting.angle}°)` : ''}`);
+            Logger.info(`Обновлен фитинг ${existingFitting.id}: ${newType}${newType === 'elbow' ? ` (${existingFitting.angle}°)` : ''}`);
           } else if (newType === 'elbow' && junction.detectedAngle && existingFitting.angle !== junction.detectedAngle) {
-            // Обновляем угол если изменился
             existingFitting.angle = junction.detectedAngle;
             updatedFittings.push(existingFitting);
-            console.log(`Обновлен угол фитинга ${existingFitting.id}: ${existingFitting.angle}°`);
+            Logger.info(`Обновлен угол фитинга ${existingFitting.id}: ${existingFitting.angle}°`);
           }
         }
       } else {
-        // Создаем новый фитинг
         const fittingType = this.determineFittingType(junction);
         if (fittingType !== 'none') {
           const newFitting = this.createFitting(junction, fittingType);
           newFittings.push(newFitting);
-          console.log(`Создан фитинг ${newFitting.id}: ${fittingType}${fittingType === 'elbow' ? ` (${newFitting.angle}°)` : ''} в (${junction.x}, ${junction.y})`);
+          Logger.success(`Создан фитинг ${newFitting.id}: ${fittingType}${fittingType === 'elbow' ? ` (${newFitting.angle}°)` : ''} в (${Math.round(junction.x)}, ${Math.round(junction.y)})`);
         }
       }
     }
 
-    // 3. Добавляем новые фитинги в активный слой
     const activeLayer = this.layerManager.getActiveLayer();
     if (activeLayer && !activeLayer.locked) {
       activeLayer.elements.push(...newFittings);
     }
 
-    // 4. Обновляем связи (переподключаем порты через фитинги)
     this.updateConnectionsThroughFittings([...newFittings, ...updatedFittings]);
-
-    // 5. Очищаем старые прямые соединения между воздуховодами
     this.cleanupDirectConnections(ducts);
 
-    console.log(`Создано фитингов: ${newFittings.length}, обновлено: ${updatedFittings.length}`);
+    Logger.success(`Создано фитингов: ${newFittings.length}, обновлено: ${updatedFittings.length}`);
 
     this.showNotify({
       type: 'positive',
@@ -85,7 +73,6 @@ export class TraceFormatter {
     return { newFittings, updatedFittings, junctions };
   }
 
-  // Анализ всех соединений между воздуховодами
   analyzeJunctions(ducts) {
     const junctions = new Map();
 
@@ -129,53 +116,46 @@ export class TraceFormatter {
 
     const result = [];
     for (const [key, junction] of junctions) {
-      const uniqueAngles = [...new Set(junction.angles.map(a => Math.round(a / 45) * 45))];
-
       result.push({
         ...junction,
         key,
         portCount: junction.ports.length,
-        ductCount: junction.ducts.size,
-        uniqueAngles
+        ductCount: junction.ducts.size
       });
     }
 
     return result;
   }
 
-  // Определение типа фитинга по соединению
   determineFittingType(junction) {
     const ductCount = junction.ductCount;
     const portCount = junction.portCount;
-
     const ducts = this.getDuctsAtJunction(junction);
 
-    console.log(`Анализ узла: ductCount=${ductCount}, portCount=${portCount}`);
+    Logger.info(`Анализ узла: ductCount=${ductCount}, portCount=${portCount}`);
 
-    // 2 воздуховода
     if (ductCount === 2) {
       return this.analyzeTwoDucts(junction, ducts);
     }
 
-    // 3 воздуховода - тройник
     if (ductCount === 3) {
+      Logger.info(`  → ТРОЙНИК`);
       return 'tee';
     }
 
-    // 4 воздуховода - крестовина
     if (ductCount === 4) {
+      Logger.info(`  → КРЕСТОВИНА`);
       return 'cross';
     }
 
-    // Переход
     if (portCount >= 3 && ductCount === 2) {
+      Logger.info(`  → ПЕРЕХОД`);
       return 'transition';
     }
 
     return 'none';
   }
 
-  // Анализ двух воздуховодов
   analyzeTwoDucts(junction, ducts) {
     const duct1 = ducts[0];
     const duct2 = ducts[1];
@@ -187,18 +167,16 @@ export class TraceFormatter {
     const angle2 = junction.angles[1];
     const angleDiff = this.getAngleDifference(angle1, angle2);
 
-    console.log(`  2 воздуховода: разница углов=${angleDiff}°`);
-
     const isDifferentSize = this.areSizesDifferent(size1, size2);
     const isCollinear = Math.abs(angleDiff - 180) < 15 || Math.abs(angleDiff) < 15;
 
-    // Переход (разные размеры, соосно)
+    Logger.info(`  2 воздуховода: разница углов=${Math.round(angleDiff)}°, ${isDifferentSize ? 'разные размеры' : 'одинаковые'}`);
+
     if (isDifferentSize && isCollinear) {
-      console.log(`    → ПЕРЕХОД`);
+      Logger.warn(`    → ПЕРЕХОД`);
       return 'transition';
     }
 
-    // Отвод (есть угол)
     const isAngled = Math.abs(angleDiff - 180) > 15 && Math.abs(angleDiff) > 15;
 
     if (isAngled) {
@@ -213,20 +191,18 @@ export class TraceFormatter {
       } else {
         junction.detectedAngle = Math.round(angleDiff);
       }
-      console.log(`    → ОТВОД (${junction.detectedAngle}°)`);
+      Logger.warn(`    → ОТВОД (${junction.detectedAngle}°)`);
       return 'elbow';
     }
 
-    // Соосное соединение - фитинг не нужен
     if (isCollinear) {
-      console.log(`    → БЕЗ ФИТИНГА (соосно)`);
+      Logger.info(`    → БЕЗ ФИТИНГА (соосно)`);
       return 'none';
     }
 
     return 'none';
   }
 
-  // Получение воздуховодов в узле
   getDuctsAtJunction(junction) {
     const ducts = [];
     const allElements = this.layerManager.getAllElements();
@@ -239,7 +215,6 @@ export class TraceFormatter {
     return ducts;
   }
 
-  // Получение размеров воздуховода
   getDuctSize(duct) {
     if (duct.sectionType === 'round') {
       return {
@@ -258,7 +233,6 @@ export class TraceFormatter {
     }
   }
 
-  // Проверка разных размеров
   areSizesDifferent(size1, size2) {
     if (size1.type === 'round' && size2.type === 'round') {
       return Math.abs(size1.width - size2.width) > 10;
@@ -273,7 +247,6 @@ export class TraceFormatter {
     return true;
   }
 
-  // Получение угла порта
   getPortAngle(port, element) {
     const side = port.side;
     const rotation = element.rotation || 0;
@@ -292,14 +265,12 @@ export class TraceFormatter {
     return angle;
   }
 
-  // Разница между двумя углами
   getAngleDifference(angle1, angle2) {
     let diff = Math.abs(angle1 - angle2);
     if (diff > 180) diff = 360 - diff;
     return diff;
   }
 
-  // Поиск существующего фитинга в точке
   findFittingAt(x, y, existingFittings) {
     const tolerance = 15;
 
@@ -313,11 +284,8 @@ export class TraceFormatter {
     return null;
   }
 
-  // Создание нового фитинга
-  // Создание нового фитинга
   createFitting(junction, fittingType) {
     const nextId = this.layerManager.getNextElementId();
-
     const fitting = new Fitting(nextId, junction.x, junction.y, fittingType);
 
     if (fittingType === 'elbow' && junction.detectedAngle) {
@@ -325,8 +293,6 @@ export class TraceFormatter {
     }
 
     fitting.connectedPortIds = junction.ports.map(p => p.id);
-
-    // ВАЖНО: обновляем порты фитинга!
     fitting.updatePorts();
 
     if (fitting.showCallout) {
@@ -337,7 +303,6 @@ export class TraceFormatter {
     return fitting;
   }
 
-  // Обновление связей через фитинги
   updateConnectionsThroughFittings(allFittings) {
     for (const fitting of allFittings) {
       const portsAtPoint = this.findPortsAtPoint(fitting.x, fitting.y);
@@ -355,7 +320,6 @@ export class TraceFormatter {
     }
   }
 
-  // Поиск всех портов в точке
   findPortsAtPoint(x, y) {
     const tolerance = 10;
     const allPorts = this.connectionManager.getAllPorts();
@@ -367,7 +331,6 @@ export class TraceFormatter {
     });
   }
 
-  // Очистка прямых соединений между воздуховодами
   cleanupDirectConnections(ducts) {
     const allElements = this.layerManager.getAllElements();
     const fittings = allElements.filter(el => el.type === 'fitting');

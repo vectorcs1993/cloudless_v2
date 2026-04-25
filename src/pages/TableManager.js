@@ -13,8 +13,8 @@ export class TableManager {
       { name: 'name', label: 'Наименование', field: 'name', sortable: true, align: 'left' },
       { name: 'material', label: 'Материал', field: (row) => this.getElementMaterialName(row), sortable: true, align: 'left' },
       { name: 'section', label: 'Тип сечения', field: (row) => this.getElementSectionName(row), sortable: true, align: 'left' },
-      { name: 'a', label: 'A, мм', field: 'a', sortable: true, align: 'left' },
-      { name: 'b', label: 'B, мм', field: 'b', sortable: true, align: 'left' },
+      { name: 'a', label: 'A, мм', field: (row) => this.getElementA(row), sortable: true, align: 'left' },
+      { name: 'b', label: 'B, мм', field: (row) => this.getElementB(row), sortable: true, align: 'left' },
       { name: 'c', label: 'C, мм', field: (row) => this.getElementC(row), sortable: true, align: 'left' },
     ]);
 
@@ -31,8 +31,14 @@ export class TableManager {
   getElementSectionName(el) {
     return el?.getSection?.().label || '-';
   }
+  getElementA(el) {
+    return (el?.a === undefined || el?.a === null) ? '-' : el?.a;
+  }
+  getElementB(el) {
+    return (el?.b === undefined || el?.b === null) ? '-' : el?.b;
+  }
   getElementC(el) {
-    return el?.c || '-';
+    return (el?.c === undefined || el?.c === null) ? '-' : el?.c;
   }
   onTableSelectionChange(selectedRows, updateSelectionCallback) {
     if (selectedRows.length === 0) {

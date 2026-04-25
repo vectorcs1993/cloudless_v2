@@ -198,7 +198,7 @@
                     <q-card-section class="row items-center justify-between">
                       <q-list class="full-width" :dark="isDarkTheme" dense>
                         <q-item><q-item-section caption>ID</q-item-section><q-item-section>{{ selectedElement?.id
-                            }}</q-item-section></q-item>
+                        }}</q-item-section></q-item>
                         <q-item><q-item-section caption>Тип</q-item-section><q-item-section>{{
                           getElementTypeName(selectedElement) }}</q-item-section></q-item>
                       </q-list>
@@ -215,7 +215,7 @@
                           <q-list dense>
                             <q-item v-for="param in getElementParameters(selectedElement)" :key="param.name">
                               <q-item-section class="param-label-col"><q-item-label>{{ param.label
-                                  }}:</q-item-label></q-item-section>
+                              }}:</q-item-label></q-item-section>
                               <q-item-section>
                                 <q-toggle v-if="param.type === 'boolean'" :dark="isDarkTheme" v-model="selectedElement[param.name]"
                                   :disable="isElementLocked(selectedElement)"
@@ -229,7 +229,7 @@
                                   @update:model-value="val => onParameterChange(val, selectedElement[param.name])" />
                               </q-item-section>
                               <q-item-section side class="param-unit-col"><span v-if="param.unit">{{ param.unit
-                                  }}</span><span v-else>—</span></q-item-section>
+                              }}</span><span v-else>—</span></q-item-section>
                             </q-item>
                           </q-list>
                           <div v-if="isElementLocked(selectedElement)" class="text-negative q-mt-sm text-center">
@@ -390,6 +390,27 @@
                     <q-input :dark="isDarkTheme" type="text" v-model.text="activeLayer.name" dense outlined />
                   </q-card-section>
                 </q-tab-panel>
+                <!-- Вкладка "Вывод данных" -->
+                <q-tab-panel name="console" class="console-panel">
+                  <div class="console-toolbar row items-center q-mb-sm">
+                    <q-btn dense flat size="sm" icon="delete_sweep" @click="clearLogs" label="Очистить" />
+                    <q-btn dense flat size="sm" icon="content_copy" @click="copyLogs" label="Копировать" />
+                    <q-space />
+                  </div>
+                  <q-separator />
+                  <div class="console-content">
+                    <div v-if="logs.length === 0" class="text-center text-grey q-pa-md">
+                      <q-icon name="terminal" size="32px" />
+                      <div class="q-mt-sm">Здесь будут отображаться сообщения</div>
+                      <div class="text-caption">Нажмите "Формат трассы" или "Рассчитать"</div>
+                    </div>
+
+                    <div v-for="(log, index) in logs" :key="index" class="console-line" :class="`console-${log.type}`">
+                      <span class="console-timestamp">[{{ log.timestamp }}]</span>
+                      <span class="console-message">{{ log.message }}</span>
+                    </div>
+                  </div>
+                </q-tab-panel>
               </q-tab-panels>
             </q-card>
           </template>
@@ -400,7 +421,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onBeforeUnmount, readonly } from 'vue';
+import { ref, onMounted, computed, watch, onBeforeUnmount, readonly, nextTick } from 'vue';
 import { Notify } from 'quasar';
 import { CanvasRenderer } from './CanvasRenderer.js';
 import { ZIndexManager } from './ZIndexManager.js';
@@ -428,6 +449,7 @@ import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
 import { ElementFactory } from './ElementFactory.js';
 import { globalScale } from './GlobalScale.js';
+import { Logger } from './Logger.js';
 
 document.title = 'Редактор воздуховодов онлайн';
 const showNotify = (options) => Notify.create(options);
@@ -477,6 +499,14 @@ const activeLayerId = ref('layer_default');
 const traceMode = ref('8dir');
 const isTraceModeActive = ref(false);
 const currentTool = ref('select');
+
+
+// Логи
+const logs = ref([]);
+
+// Подписка на логи
+let unsubscribeLogger = null;
+
 
 const activeLayer = computed(() => layers.value.find(l => l.id === activeLayerId.value));
 const selectedElement = computed(() => selectedElements.value.length === 1 ? selectedElements.value[0] : null);
@@ -843,6 +873,18 @@ const handleKeyDown = (e) => {
     }
   }
 };
+// Очистка логов
+const clearLogs = () => {
+  logs.value = [];
+  Logger.clear();
+};
+
+// Копирование логов
+const copyLogs = async () => {
+  const text = logs.value.map(l => `[${l.timestamp}] ${l.message}`).join('\n');
+  await navigator.clipboard.writeText(text);
+  showNotify({ type: 'positive', message: 'Логи скопированы', timeout: 1500 });
+};
 
 // ========== СОЗДАНИЕ МЕНЕДЖЕРОВ (после объявления всех функций) ==========
 let storageManager = new StorageManager('hvac_editor_data');
@@ -903,11 +945,12 @@ const formatTrace = async () => {
   isFormattingTrace.value = true;
 
   try {
+
     if (!traceFormatter) {
       traceFormatter = new TraceFormatter(layerManager, connectionManager, showNotify);
     }
 
-    const result = traceFormatter.format();
+    traceFormatter.format();
 
     // Принудительно обновляем порты у всех фитингов
     for (const layer of layers.value) {
@@ -927,12 +970,8 @@ const formatTrace = async () => {
     }, 100);
 
   } catch (error) {
-    console.error('Ошибка при форматировании трассы:', error);
-    showNotify({
-      type: 'negative',
-      message: error.message || 'Ошибка при форматировании трассы',
-      timeout: 3000
-    });
+    Logger.error(`Ошибка: ${error.message}`);
+    showNotify({ type: 'negative', message: error.message, timeout: 3000 });
   } finally {
     isFormattingTrace.value = false;
   }
@@ -943,6 +982,8 @@ const calculateSystem = async () => {
   isCalculating.value = true;
 
   try {
+    Logger.info('=== АЭРОДИНАМИЧЕСКИЙ РАСЧЕТ ===');
+
     calcManager = new Calc(layers, {
       mmPerPx: mmPerPx.value,
       totalAirFlow: totalAirFlow.value,
@@ -952,7 +993,8 @@ const calculateSystem = async () => {
     });
 
     const results = await calcManager.calculate();
-    calcManager.printReport();
+
+    Logger.success(`Расчет завершен. Потери: ${results.totalLosses.toFixed(2)} Па`);
 
     showNotify({
       type: 'positive',
@@ -960,6 +1002,7 @@ const calculateSystem = async () => {
       timeout: 5000
     });
   } catch (error) {
+    Logger.error(error.message);
     showNotify({ type: 'negative', message: error.message, timeout: 3000 });
   } finally {
     isCalculating.value = false;
@@ -1039,13 +1082,25 @@ onMounted(() => {
   scheduleRender();
 
   window.addEventListener('mouseleave', onWindowMouseLeave);
+  // Подписываемся на логи
+  unsubscribeLogger = Logger.subscribe((logEntry) => {
+    if (logEntry === null) {
+      logs.value = [];
+    } else {
+      logs.value.push(logEntry);
+    }
+  });
 
+  Logger.log('Редактор загружен', 'info');
   onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeyDown);
     resizeObserver.disconnect();
     if (redrawTimeout) clearTimeout(redrawTimeout);
     if (renderFrameRequest) cancelAnimationFrame(renderFrameRequest);
     window.removeEventListener('mouseleave', onWindowMouseLeave);
+    if (unsubscribeLogger) {
+      unsubscribeLogger();
+    }
   });
 });
 </script>

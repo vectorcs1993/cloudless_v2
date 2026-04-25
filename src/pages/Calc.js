@@ -1,4 +1,5 @@
-// Calc.js - только аэродинамический расчет с поддержкой фитингов
+// Calc.js - аэродинамический расчет с поддержкой фитингов
+import { Logger } from './Logger.js';
 
 export class Calc {
   constructor(elements, options = {}) {
@@ -19,41 +20,38 @@ export class Calc {
     };
   }
 
-  // Обновление опций
   updateOptions(options) {
     this.options = { ...this.options, ...options };
   }
 
-  // Основной метод расчета
   async calculate() {
-    console.log('=== НАЧАЛО АЭРОДИНАМИЧЕСКОГО РАСЧЕТА ===');
+    Logger.info('=== НАЧАЛО АЭРОДИНАМИЧЕСКОГО РАСЧЕТА ===');
 
     return new Promise((resolve, reject) => {
       try {
         const allElements = this.getAllElements();
-        console.log(`Всего элементов: ${allElements.length}`);
-        console.log(`  Воздуховодов: ${allElements.filter(el => el.type === 'duct').length}`);
-        console.log(`  Фитингов: ${allElements.filter(el => el.type === 'fitting').length}`);
+        Logger.info(`Всего элементов: ${allElements.length}`);
+        Logger.info(`  Воздуховодов: ${allElements.filter(el => el.type === 'duct').length}`);
+        Logger.info(`  Фитингов: ${allElements.filter(el => el.type === 'fitting').length}`);
 
         if (allElements.length === 0) {
+          Logger.error('Нет элементов для расчета');
           reject(new Error('Нет элементов для расчета'));
           return;
         }
 
-        // Строим граф связей (учитывая фитинги)
         const graph = this.buildGraph(allElements);
-        console.log(`Граф: ${graph.nodes.size} узлов, ${graph.edges.length} связей`);
+        Logger.info(`Граф: ${graph.nodes.size} узлов, ${graph.edges.length} связей`);
 
-        // Находим все трассы
         const traces = this.findAllTraces(graph);
-        console.log(`Найдено трасс: ${traces.length}`);
+        Logger.info(`Найдено трасс: ${traces.length}`);
 
         if (traces.length === 0) {
+          Logger.error('Не найдено ни одной трассы');
           reject(new Error('Не найдено ни одной трассы. Проверьте соединения воздуховодов.'));
           return;
         }
 
-        // Рассчитываем каждую трассу
         const traceResults = [];
         let totalLosses = 0;
         let totalFlow = 0;
@@ -63,6 +61,7 @@ export class Calc {
           traceResults.push(result);
           totalLosses += result.losses;
           totalFlow += result.flow;
+          Logger.success(`Трасса ${i + 1}: ${result.sections.length} участков, потери ${result.losses.toFixed(2)} Па`);
         }
 
         this.results = {
@@ -73,19 +72,18 @@ export class Calc {
           timestamp: new Date().toISOString()
         };
 
-        console.log(`\n=== ИТОГО ===`);
-        console.log(`Потери: ${totalLosses.toFixed(2)} Па`);
-        console.log(`Расход: ${totalFlow} м³/ч`);
+        Logger.success(`=== РАСЧЕТ ЗАВЕРШЕН ===`);
+        Logger.success(`Суммарные потери: ${totalLosses.toFixed(2)} Па`);
+        Logger.success(`Общий расход: ${totalFlow} м³/ч`);
 
         resolve(this.results);
       } catch (error) {
-        console.error('Ошибка расчета:', error);
+        Logger.error(`Ошибка расчета: ${error.message}`);
         reject(error);
       }
     });
   }
 
-  // Получение всех элементов из слоев
   getAllElements() {
     if (!this.elements) return [];
 
@@ -106,7 +104,6 @@ export class Calc {
     return [];
   }
 
-  // Построение графа (учитываем фитинги)
   buildGraph(elements) {
     const nodes = new Map();
     const edges = [];
@@ -144,60 +141,100 @@ export class Calc {
     return { nodes, edges };
   }
 
-  // Поиск концевых точек (только воздуховоды)
+  // Поиск концевых точек (воздуховоды, у которых только одно соединение)
   findEndpoints(graph) {
     const endpoints = [];
     const connectionCount = new Map();
 
+    // Подсчитываем количество соединений для каждого узла
     for (const edge of graph.edges) {
-      connectionCount.set(edge.from, (connectionCount.get(edge.from) || 0) + 1);
-      connectionCount.set(edge.to, (connectionCount.get(edge.to) || 0) + 1);
+      // Считаем только соединения воздуховод-воздуховод (без фитингов)
+      const fromEl = graph.nodes.get(edge.from);
+      const toEl = graph.nodes.get(edge.to);
+
+      if (fromEl?.type === 'duct' && toEl?.type === 'duct') {
+        connectionCount.set(edge.from, (connectionCount.get(edge.from) || 0) + 1);
+        connectionCount.set(edge.to, (connectionCount.get(edge.to) || 0) + 1);
+      }
     }
 
+    // Находим узлы с одним соединением
     for (const [nodeId, count] of connectionCount) {
       if (count === 1) {
         const element = graph.nodes.get(nodeId);
         if (element && element.type === 'duct') {
           endpoints.push(element);
+          Logger.info(`Концевая точка: ${this.getElementName(element)}`);
         }
       }
     }
 
+    // Если нет концевых точек, значит система замкнутая (кольцевая)
     if (endpoints.length === 0) {
-      const firstDuct = Array.from(graph.nodes.values()).find(el => el.type === 'duct');
-      if (firstDuct) endpoints.push(firstDuct);
+      Logger.warn('Система замкнутая (кольцевая), концевых точек не найдено');
+      // Возвращаем все воздуховоды как потенциальные начала
+      for (const [nodeId, element] of graph.nodes) {
+        if (element.type === 'duct') {
+          endpoints.push(element);
+          break; // берем только первый
+        }
+      }
     }
 
     return endpoints;
   }
 
-  // Поиск всех трасс
   findAllTraces(graph) {
     const traces = [];
-    const endpoints = this.findEndpoints(graph);
+    const visitedTraces = new Set(); // для отслеживания уникальных трасс
 
+    // Находим все концевые точки (воздуховоды с 1 соединением)
+    const endpoints = this.findEndpoints(graph);
+    Logger.info(`Найдено концевых точек: ${endpoints.length}`);
+
+    // Для каждой концевой точки строим трассу
     for (const endpoint of endpoints) {
       const trace = this.buildTraceFromEndpoint(graph, endpoint);
       if (trace && trace.length > 0) {
-        traces.push(trace);
+        // Создаем ключ трассы (из ID первого и последнего элемента)
+        const firstId = trace[0].from.id;
+        const lastId = trace[trace.length - 1].to.id;
+        const traceKey = `${Math.min(firstId, lastId)}_${Math.max(firstId, lastId)}`;
+
+        if (!visitedTraces.has(traceKey)) {
+          visitedTraces.add(traceKey);
+          traces.push(trace);
+          Logger.info(`Найдена трасса: ${trace.length} участков, от ${this.getElementName(trace[0].from)} до ${this.getElementName(trace[trace.length - 1].to)}`);
+        }
+      }
+    }
+
+    // Если нет концевых точек (замкнутая система), берем любой воздуховод и идем в обе стороны
+    if (traces.length === 0 && graph.nodes.size > 0) {
+      Logger.warn('Замкнутая система, поиск циклических трасс');
+      const anyDuct = Array.from(graph.nodes.values()).find(el => el.type === 'duct');
+      if (anyDuct) {
+        const traceForward = this.buildTraceFromEndpoint(graph, anyDuct, true);
+        if (traceForward.length > 0) traces.push(traceForward);
       }
     }
 
     return traces;
   }
 
-  // Построение трассы от конца до конца (через фитинги)
-  buildTraceFromEndpoint(graph, startElement) {
+  buildTraceFromEndpoint(graph, startElement, isCyclic = false) {
     const trace = [];
     let currentElement = startElement;
     let previousElementId = null;
     let maxIterations = 100;
     let iterations = 0;
+    const visited = new Set(); // предотвращаем зацикливание
 
-    while (currentElement && iterations < maxIterations) {
+    while (currentElement && iterations < maxIterations && !visited.has(currentElement.id)) {
+      visited.add(currentElement.id);
       iterations++;
 
-      // Ищем следующее ребро
+      // Ищем следующее ребро (не возвращаясь назад)
       const nextEdge = graph.edges.find(edge => {
         if (edge.from === currentElement.id && edge.to !== previousElementId) {
           return true;
@@ -215,9 +252,8 @@ export class Calc {
 
       if (!nextElement) break;
 
-      // Если следующий элемент - фитинг, пропускаем его и берем следующий
+      // Если следующий элемент - фитинг, пропускаем и идем дальше
       if (nextElement.type === 'fitting') {
-        // Ищем ребро от фитинга к следующему воздуховоду (не возвращаясь назад)
         const nextAfterFitting = graph.edges.find(edge => {
           if (edge.from === nextElement.id && edge.to !== currentElement.id) {
             return true;
@@ -232,16 +268,8 @@ export class Calc {
           const afterFittingId = nextAfterFitting.from === nextElement.id ? nextAfterFitting.to : nextAfterFitting.from;
           const afterFitting = graph.nodes.get(afterFittingId);
 
-          if (afterFitting && afterFitting.type === 'duct') {
-            // Добавляем участок от текущего воздуховода до следующего (через фитинг)
-            trace.push({
-              from: currentElement,
-              to: afterFitting,
-              viaFitting: nextElement,
-              length: this.getDuctLength(currentElement, afterFitting),
-              section: this.getDuctSection(currentElement)
-            });
-
+          if (afterFitting && (afterFitting.type === 'duct' || afterFitting.type === 'fitting')) {
+            // Пропускаем фитинг, но не добавляем в трассу
             previousElementId = currentElement.id;
             currentElement = afterFitting;
             continue;
@@ -250,7 +278,7 @@ export class Calc {
         break;
       }
 
-      // Если следующий элемент - воздуховод
+      // Если следующий элемент - воздуховод, добавляем участок
       if (nextElement.type === 'duct') {
         trace.push({
           from: currentElement,
@@ -262,6 +290,10 @@ export class Calc {
 
         previousElementId = currentElement.id;
         currentElement = nextElement;
+      } else if (nextElement.type === 'fitting' && !isCyclic) {
+        // Пропускаем фитинг
+        previousElementId = currentElement.id;
+        currentElement = nextElement;
       } else {
         break;
       }
@@ -270,7 +302,6 @@ export class Calc {
     return trace;
   }
 
-  // Получение длины воздуховода
   getDuctLength(ductA, ductB) {
     if (ductA.b) return ductA.b;
     if (ductB.b) return ductB.b;
@@ -293,7 +324,6 @@ export class Calc {
     return 100;
   }
 
-  // Получение сечения воздуховода
   getDuctSection(duct) {
     if (duct.sectionType === 'round') {
       return {
@@ -311,7 +341,6 @@ export class Calc {
     }
   }
 
-  // Расчет площади сечения
   calculateArea(type, a, b = null) {
     if (type === 'round') {
       return Math.PI * Math.pow(a / 2, 2);
@@ -320,7 +349,6 @@ export class Calc {
     }
   }
 
-  // Имя элемента для отображения
   getElementName(element) {
     if (!element) return '?';
     if (element.name) return element.name;
@@ -337,14 +365,12 @@ export class Calc {
     return `${element.type}_${element.id}`;
   }
 
-  // Расчет одной трассы
   calculateTrace(trace, traceNumber) {
-    console.log(`\n--- ТРАССА ${traceNumber} ---`);
+    Logger.info(`--- ТРАССА ${traceNumber} ---`);
 
     let totalLength = 0;
     let totalLosses = 0;
     const sections = [];
-
     const flowPerSection = this.options.totalAirFlow / Math.max(1, trace.length);
 
     for (let i = 0; i < trace.length; i++) {
@@ -361,8 +387,7 @@ export class Calc {
       let toName = this.getElementName(segment.to);
 
       if (viaFitting) {
-        const fittingType = viaFitting.fittingType === 'elbow' ? `Отв${viaFitting.angle || ''}°` : this.getElementName(viaFitting);
-        toName = `${fittingType} → ${toName}`;
+        toName = `${viaFitting.fittingType === 'elbow' ? `Отв${viaFitting.angle || ''}°` : this.getElementName(viaFitting)} → ${toName}`;
       }
 
       sections.push({
@@ -378,9 +403,9 @@ export class Calc {
         section: segment.section
       });
 
-      console.log(`  Уч.${i + 1}: ${fromName} → ${toName} | L=${length.toFixed(0)} мм | Q=${flow.toFixed(0)} м³/ч | ΔP=${losses.toFixed(1)} Па`);
+      Logger.info(`  Уч.${i + 1}: ${fromName} → ${toName} | L=${length.toFixed(0)} мм | Q=${flow.toFixed(0)} м³/ч | ΔP=${losses.toFixed(1)} Па`);
       if (viaFitting) {
-        console.log(`       через фитинг: ${viaFitting.fittingType}${viaFitting.angle ? ` (${viaFitting.angle}°)` : ''} [${viaFitting.id}]`);
+        Logger.info(`       через фитинг: ${viaFitting.fittingType}${viaFitting.angle ? ` (${viaFitting.angle}°)` : ''} [${viaFitting.id}]`);
       }
     }
 
@@ -393,7 +418,6 @@ export class Calc {
     };
   }
 
-  // Расчет потерь на участке
   calculateSectionLosses(section, flow, length) {
     const flowM3s = flow / 3600;
     const areaM2 = section.section.area / 1e6;
@@ -420,36 +444,21 @@ export class Calc {
     const lengthM = length / 1000;
     const frictionLoss = r * lengthM;
 
-    // Коэффициент местных потерь для фитинга (если есть)
     let localCoeff = 0.3;
     if (section.viaFitting) {
-      localCoeff = this.getFittingLossCoefficient(section.viaFitting);
+      const coefficients = { elbow: 0.5, tee: 0.8, cross: 1.2, transition: 0.3 };
+      localCoeff = coefficients[section.viaFitting.fittingType] || 0.5;
     }
 
-    const localLoss = frictionLoss * localCoeff;
-
-    return frictionLoss + localLoss;
+    return frictionLoss + frictionLoss * localCoeff;
   }
 
-  // Коэффициент местного сопротивления для фитинга
-  getFittingLossCoefficient(fitting) {
-    const coefficients = {
-      elbow: 0.5,
-      tee: 0.8,
-      cross: 1.2,
-      transition: 0.3
-    };
-    return coefficients[fitting.fittingType] || 0.5;
-  }
-
-  // Плотность воздуха
   calculateAirDensity() {
     const rAir = 287.05;
     const tK = this.options.temperature + 273.15;
     return this.options.atmosphericPressure / (rAir * tK);
   }
 
-  // Динамическая вязкость воздуха
   calculateDynamicViscosity() {
     const tK = this.options.temperature + 273.15;
     const mu0 = 1.716e-5;
@@ -458,47 +467,45 @@ export class Calc {
     return mu0 * Math.pow(tK / t0, 1.5) * (t0 + s) / (tK + s);
   }
 
-  // Получение результатов
   getResults() {
     return this.results;
   }
 
-  // Печать отчета
   printReport() {
-    console.log('\n╔════════════════════════════════════════════════════════════════╗');
-    console.log('║                    ОТЧЕТ ПО РАСЧЕТУ ВОЗДУХОВОДОВ                ║');
-    console.log('╚════════════════════════════════════════════════════════════════╝');
+    Logger.info('\n╔════════════════════════════════════════════════════════════════╗');
+    Logger.info('║                    ОТЧЕТ ПО РАСЧЕТУ ВОЗДУХОВОДОВ                ║');
+    Logger.info('╚════════════════════════════════════════════════════════════════╝');
 
-    console.log(`\n📊 Исходные данные:`);
-    console.log(`   Общий расход воздуха: ${this.options.totalAirFlow} м³/ч`);
-    console.log(`   Температура воздуха: ${this.options.temperature} °C`);
-    console.log(`   Атмосферное давление: ${this.options.atmosphericPressure} Па`);
-    console.log(`   Шероховатость стенок: ${this.options.roughness} мм`);
+    Logger.info(`\n📊 Исходные данные:`);
+    Logger.info(`   Общий расход воздуха: ${this.options.totalAirFlow} м³/ч`);
+    Logger.info(`   Температура воздуха: ${this.options.temperature} °C`);
+    Logger.info(`   Атмосферное давление: ${this.options.atmosphericPressure} Па`);
+    Logger.info(`   Шероховатость стенок: ${this.options.roughness} мм`);
 
-    console.log(`\n📈 Результаты расчета:`);
-    console.log(`   Всего трасс: ${this.results.tracesCount}`);
-    console.log(`   Суммарные потери: ${this.results.totalLosses?.toFixed(2) || 0} Па`);
-    console.log(`   Общий расход: ${this.results.totalFlow || 0} м³/ч`);
+    Logger.info(`\n📈 Результаты расчета:`);
+    Logger.info(`   Всего трасс: ${this.results.tracesCount}`);
+    Logger.info(`   Суммарные потери: ${this.results.totalLosses?.toFixed(2) || 0} Па`);
+    Logger.info(`   Общий расход: ${this.results.totalFlow || 0} м³/ч`);
 
     if (this.results.traces && this.results.traces.length) {
-      console.log(`\n📋 Детализация по трассам:`);
+      Logger.info(`\n📋 Детализация по трассам:`);
       for (const trace of this.results.traces) {
-        console.log(`\n   Трасса ${trace.traceNumber}:`);
-        console.log(`     Длина: ${trace.totalLength?.toFixed(1) || 0} мм`);
-        console.log(`     Расход: ${trace.flow?.toFixed(1) || 0} м³/ч`);
-        console.log(`     Потери: ${trace.losses?.toFixed(2) || 0} Па`);
+        Logger.info(`\n   Трасса ${trace.traceNumber}:`);
+        Logger.info(`     Длина: ${trace.totalLength?.toFixed(1) || 0} мм`);
+        Logger.info(`     Расход: ${trace.flow?.toFixed(1) || 0} м³/ч`);
+        Logger.info(`     Потери: ${trace.losses?.toFixed(2) || 0} Па`);
 
         if (trace.sections && trace.sections.length) {
           for (const sec of trace.sections) {
             const fittingInfo = sec.fittingType ? ` [${sec.fittingType}${sec.fittingAngle ? ` ${sec.fittingAngle}°` : ''}]` : '';
-            console.log(`       Уч.${sec.index}: ${sec.from} → ${sec.to}${fittingInfo} | L=${sec.length.toFixed(0)} мм | Q=${sec.flow.toFixed(0)} м³/ч | ΔP=${sec.losses.toFixed(1)} Па`);
+            Logger.info(`       Уч.${sec.index}: ${sec.from} → ${sec.to}${fittingInfo} | L=${sec.length.toFixed(0)} мм | Q=${sec.flow.toFixed(0)} м³/ч | ΔP=${sec.losses.toFixed(1)} Па`);
           }
         }
       }
     }
 
-    console.log('\n╔════════════════════════════════════════════════════════════════╗');
-    console.log('║                       РАСЧЕТ ЗАВЕРШЕН                           ║');
-    console.log('╚════════════════════════════════════════════════════════════════╝');
+    Logger.info('\n╔════════════════════════════════════════════════════════════════╗');
+    Logger.info('║                       РАСЧЕТ ЗАВЕРШЕН                           ║');
+    Logger.info('╚════════════════════════════════════════════════════════════════╝');
   }
 }
