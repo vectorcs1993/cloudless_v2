@@ -1,4 +1,5 @@
-// только аэродинамический расчет
+// Calc.js - только аэродинамический расчет с поддержкой фитингов
+
 export class Calc {
   constructor(elements, options = {}) {
     this.elements = elements;
@@ -31,6 +32,8 @@ export class Calc {
       try {
         const allElements = this.getAllElements();
         console.log(`Всего элементов: ${allElements.length}`);
+        console.log(`  Воздуховодов: ${allElements.filter(el => el.type === 'duct').length}`);
+        console.log(`  Фитингов: ${allElements.filter(el => el.type === 'fitting').length}`);
 
         if (allElements.length === 0) {
           reject(new Error('Нет элементов для расчета'));
@@ -44,6 +47,11 @@ export class Calc {
         // Находим все трассы
         const traces = this.findAllTraces(graph);
         console.log(`Найдено трасс: ${traces.length}`);
+
+        if (traces.length === 0) {
+          reject(new Error('Не найдено ни одной трассы. Проверьте соединения воздуховодов.'));
+          return;
+        }
 
         // Рассчитываем каждую трассу
         const traceResults = [];
@@ -98,7 +106,7 @@ export class Calc {
     return [];
   }
 
-  // Построение графа
+  // Построение графа (учитываем фитинги)
   buildGraph(elements) {
     const nodes = new Map();
     const edges = [];
@@ -114,7 +122,6 @@ export class Calc {
             for (const conn of port.connections) {
               const targetElement = nodes.get(conn.connectedElementId);
               if (targetElement) {
-                // Проверяем уникальность ребра
                 const edgeKey = [el.id, conn.connectedElementId].sort().join('_');
                 if (!edges.some(e => e.key === edgeKey)) {
                   edges.push({
@@ -122,7 +129,9 @@ export class Calc {
                     from: el.id,
                     to: conn.connectedElementId,
                     fromPort: port,
-                    toPortId: conn.connectedPortId
+                    toPortId: conn.connectedPortId,
+                    fromType: el.type,
+                    toType: targetElement.type
                   });
                 }
               }
@@ -135,8 +144,9 @@ export class Calc {
     return { nodes, edges };
   }
 
-  // Поиск концевых точек
+  // Поиск концевых точек (только воздуховоды)
   findEndpoints(graph) {
+    const endpoints = [];
     const connectionCount = new Map();
 
     for (const edge of graph.edges) {
@@ -144,7 +154,6 @@ export class Calc {
       connectionCount.set(edge.to, (connectionCount.get(edge.to) || 0) + 1);
     }
 
-    const endpoints = [];
     for (const [nodeId, count] of connectionCount) {
       if (count === 1) {
         const element = graph.nodes.get(nodeId);
@@ -154,7 +163,6 @@ export class Calc {
       }
     }
 
-    // Если нет концевых точек, берем первый воздуховод
     if (endpoints.length === 0) {
       const firstDuct = Array.from(graph.nodes.values()).find(el => el.type === 'duct');
       if (firstDuct) endpoints.push(firstDuct);
@@ -178,7 +186,7 @@ export class Calc {
     return traces;
   }
 
-  // Построение трассы от конца до конца
+  // Построение трассы от конца до конца (через фитинги)
   buildTraceFromEndpoint(graph, startElement) {
     const trace = [];
     let currentElement = startElement;
@@ -191,8 +199,12 @@ export class Calc {
 
       // Ищем следующее ребро
       const nextEdge = graph.edges.find(edge => {
-        if (edge.from === currentElement.id && edge.to !== previousElementId) return true;
-        if (edge.to === currentElement.id && edge.from !== previousElementId) return true;
+        if (edge.from === currentElement.id && edge.to !== previousElementId) {
+          return true;
+        }
+        if (edge.to === currentElement.id && edge.from !== previousElementId) {
+          return true;
+        }
         return false;
       });
 
@@ -201,10 +213,49 @@ export class Calc {
       const nextElementId = nextEdge.from === currentElement.id ? nextEdge.to : nextEdge.from;
       const nextElement = graph.nodes.get(nextElementId);
 
-      if (nextElement && nextElement.type === 'duct') {
+      if (!nextElement) break;
+
+      // Если следующий элемент - фитинг, пропускаем его и берем следующий
+      if (nextElement.type === 'fitting') {
+        // Ищем ребро от фитинга к следующему воздуховоду (не возвращаясь назад)
+        const nextAfterFitting = graph.edges.find(edge => {
+          if (edge.from === nextElement.id && edge.to !== currentElement.id) {
+            return true;
+          }
+          if (edge.to === nextElement.id && edge.from !== currentElement.id) {
+            return true;
+          }
+          return false;
+        });
+
+        if (nextAfterFitting) {
+          const afterFittingId = nextAfterFitting.from === nextElement.id ? nextAfterFitting.to : nextAfterFitting.from;
+          const afterFitting = graph.nodes.get(afterFittingId);
+
+          if (afterFitting && afterFitting.type === 'duct') {
+            // Добавляем участок от текущего воздуховода до следующего (через фитинг)
+            trace.push({
+              from: currentElement,
+              to: afterFitting,
+              viaFitting: nextElement,
+              length: this.getDuctLength(currentElement, afterFitting),
+              section: this.getDuctSection(currentElement)
+            });
+
+            previousElementId = currentElement.id;
+            currentElement = afterFitting;
+            continue;
+          }
+        }
+        break;
+      }
+
+      // Если следующий элемент - воздуховод
+      if (nextElement.type === 'duct') {
         trace.push({
           from: currentElement,
           to: nextElement,
+          viaFitting: null,
           length: this.getDuctLength(currentElement, nextElement),
           section: this.getDuctSection(currentElement)
         });
@@ -221,29 +272,25 @@ export class Calc {
 
   // Получение длины воздуховода
   getDuctLength(ductA, ductB) {
-    // Если у воздуховода есть свойство b (длина)
     if (ductA.b) return ductA.b;
     if (ductB.b) return ductB.b;
 
-    // Иначе считаем по координатам портов
     if (ductA.ports && ductB.ports) {
       for (const portA of ductA.ports) {
         for (const portB of ductB.ports) {
-          if (portA.isConnected?.() && portB.isConnected?.()) {
-            const isConnected = portA.connections.some(c => c.connectedElementId === ductB.id) ||
-              portB.connections.some(c => c.connectedElementId === ductA.id);
-            if (isConnected) {
-              const dx = (portA.worldX || 0) - (portB.worldX || 0);
-              const dy = (portA.worldY || 0) - (portB.worldY || 0);
-              const distancePx = Math.hypot(dx, dy);
-              return distancePx * this.options.mmPerPx;
-            }
+          const isConnected = portA.connections?.some(c => c.connectedElementId === ductB.id) ||
+            portB.connections?.some(c => c.connectedElementId === ductA.id);
+          if (isConnected) {
+            const dx = (portA.worldX || 0) - (portB.worldX || 0);
+            const dy = (portA.worldY || 0) - (portB.worldY || 0);
+            const distancePx = Math.hypot(dx, dy);
+            return distancePx * this.options.mmPerPx;
           }
         }
       }
     }
 
-    return 100; // значение по умолчанию
+    return 100;
   }
 
   // Получение сечения воздуховода
@@ -273,6 +320,23 @@ export class Calc {
     }
   }
 
+  // Имя элемента для отображения
+  getElementName(element) {
+    if (!element) return '?';
+    if (element.name) return element.name;
+    if (element.type === 'duct') return `ВД_${element.id}`;
+    if (element.type === 'fitting') {
+      const types = {
+        elbow: 'Отв',
+        tee: 'Тр',
+        cross: 'Кр',
+        transition: 'Пер'
+      };
+      return `${types[element.fittingType] || 'Ф'}_${element.id}`;
+    }
+    return `${element.type}_${element.id}`;
+  }
+
   // Расчет одной трассы
   calculateTrace(trace, traceNumber) {
     console.log(`\n--- ТРАССА ${traceNumber} ---`);
@@ -281,29 +345,43 @@ export class Calc {
     let totalLosses = 0;
     const sections = [];
 
-    // Расход равномерно распределяем по участкам трассы
     const flowPerSection = this.options.totalAirFlow / Math.max(1, trace.length);
 
     for (let i = 0; i < trace.length; i++) {
       const segment = trace[i];
       const length = segment.length;
       const flow = flowPerSection;
+      const viaFitting = segment.viaFitting;
 
       totalLength += length;
       const losses = this.calculateSectionLosses(segment, flow, length);
       totalLosses += losses;
 
+      let fromName = this.getElementName(segment.from);
+      let toName = this.getElementName(segment.to);
+
+      if (viaFitting) {
+        const fittingType = viaFitting.fittingType === 'elbow' ? `Отв${viaFitting.angle || ''}°` : this.getElementName(viaFitting);
+        toName = `${fittingType} → ${toName}`;
+      }
+
       sections.push({
         index: i + 1,
-        from: this.getElementName(segment.from),
-        to: this.getElementName(segment.to),
+        from: fromName,
+        to: toName,
+        viaFitting: viaFitting ? viaFitting.id : null,
+        fittingType: viaFitting ? viaFitting.fittingType : null,
+        fittingAngle: viaFitting ? viaFitting.angle : null,
         length: length,
         flow: flow,
         losses: losses,
         section: segment.section
       });
 
-      console.log(`  Уч.${i + 1}: ${this.getElementName(segment.from)} → ${this.getElementName(segment.to)} | L=${length.toFixed(0)} мм | Q=${flow.toFixed(0)} м³/ч | ΔP=${losses.toFixed(1)} Па`);
+      console.log(`  Уч.${i + 1}: ${fromName} → ${toName} | L=${length.toFixed(0)} мм | Q=${flow.toFixed(0)} м³/ч | ΔP=${losses.toFixed(1)} Па`);
+      if (viaFitting) {
+        console.log(`       через фитинг: ${viaFitting.fittingType}${viaFitting.angle ? ` (${viaFitting.angle}°)` : ''} [${viaFitting.id}]`);
+      }
     }
 
     return {
@@ -315,21 +393,12 @@ export class Calc {
     };
   }
 
-  // Имя элемента для отображения
-  getElementName(element) {
-    if (element.name) return element.name;
-    if (element.type === 'duct') return `ВД_${element.id}`;
-    if (element.type === 'fitting') return `Ф_${element.id}`;
-    return `${element.type}_${element.id}`;
-  }
-
   // Расчет потерь на участке
   calculateSectionLosses(section, flow, length) {
     const flowM3s = flow / 3600;
-    const areaM2 = section.section.area / 1e6; // перевод мм² в м²
+    const areaM2 = section.section.area / 1e6;
     const velocity = areaM2 > 0 ? flowM3s / areaM2 : 0;
 
-    // Эквивалентный диаметр
     let dh = 0;
     if (section.section.type === 'round') {
       dh = section.section.diameter / 1000;
@@ -343,20 +412,34 @@ export class Calc {
     const dynamicViscosity = this.calculateDynamicViscosity();
     const re = dh > 0 ? (velocity * dh * airDensity) / dynamicViscosity : 0;
 
-    // Коэффициент трения (формула Альтшуля)
     const relativeRoughness = this.options.roughness / 1000 / dh;
     let lambda = 0.11 * Math.pow(relativeRoughness + 68 / re, 0.25);
     lambda = Math.max(0.01, Math.min(0.1, lambda));
 
-    // Потери на трение
     const r = lambda * (airDensity * Math.pow(velocity, 2)) / (2 * dh);
     const lengthM = length / 1000;
     const frictionLoss = r * lengthM;
 
-    // Местные потери (30% от потерь на трение - упрощенно)
-    const localLoss = frictionLoss * 0.3;
+    // Коэффициент местных потерь для фитинга (если есть)
+    let localCoeff = 0.3;
+    if (section.viaFitting) {
+      localCoeff = this.getFittingLossCoefficient(section.viaFitting);
+    }
+
+    const localLoss = frictionLoss * localCoeff;
 
     return frictionLoss + localLoss;
+  }
+
+  // Коэффициент местного сопротивления для фитинга
+  getFittingLossCoefficient(fitting) {
+    const coefficients = {
+      elbow: 0.5,
+      tee: 0.8,
+      cross: 1.2,
+      transition: 0.3
+    };
+    return coefficients[fitting.fittingType] || 0.5;
   }
 
   // Плотность воздуха
@@ -407,7 +490,8 @@ export class Calc {
 
         if (trace.sections && trace.sections.length) {
           for (const sec of trace.sections) {
-            console.log(`       Уч.${sec.index}: ${sec.from} → ${sec.to} | L=${sec.length.toFixed(0)} мм | Q=${sec.flow.toFixed(0)} м³/ч | ΔP=${sec.losses.toFixed(1)} Па`);
+            const fittingInfo = sec.fittingType ? ` [${sec.fittingType}${sec.fittingAngle ? ` ${sec.fittingAngle}°` : ''}]` : '';
+            console.log(`       Уч.${sec.index}: ${sec.from} → ${sec.to}${fittingInfo} | L=${sec.length.toFixed(0)} мм | Q=${sec.flow.toFixed(0)} м³/ч | ΔP=${sec.losses.toFixed(1)} Па`);
           }
         }
       }
