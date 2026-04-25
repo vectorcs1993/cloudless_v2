@@ -52,4 +52,15 @@ export const dragItems = Object.freeze([
       <line x1="32" y1="12" x2="32" y2="52" stroke="#9b59b6" stroke-width="4" stroke-linecap="round"/>
     </svg>`
   },
+  {
+    type: 'fitting',
+    label: 'Фитинг',
+    color: '#ff9800',
+    width: 64,
+    height: 64,
+    svg: `<svg width="64" height="64" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="14" fill="none" stroke="#ff9800" stroke-width="4"/>
+    <text x="32" y="37" text-anchor="middle" fill="#ff9800" font-size="14" font-weight="bold">F</text>
+  </svg>`
+  }
 ]);

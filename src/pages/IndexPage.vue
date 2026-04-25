@@ -391,6 +391,7 @@ import { ZIndexManager } from './ZIndexManager.js';
 import { ConnectionManager } from './ConnectionManager.js';
 import { InteractionManager } from './InteractionManager.js';
 import { StorageManager } from './StorageManager.js';
+import { TraceFormatter } from './TraceFormatter.js';
 import { Calc } from './Calc.js';
 import { ClipboardManager } from './ClipboardManager.js';
 import { SelectionManager } from './SelectionManager.js';
@@ -405,6 +406,7 @@ import { BaseElement } from './Elements.js';
 import { dragItems } from './dragItems.js';
 import { DuctDirect } from './DuctDirect.js';
 import { Transition } from './Transition.js';
+import { Fitting } from './Fitting.js';
 import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
@@ -721,6 +723,7 @@ const onDrop = (e) => {
     elbow: (id, x, y) => new Elbow(id, x, y),
     cross: (id, x, y) => new Cross(id, x, y),
     transition: (id, x, y) => new Transition(id, x, y),
+    fitting: (id, x, y) => new Fitting(id, x, y, 'elbow')
   };
   dragDropManager.onDrop(e, creatorsMap);
 };
@@ -843,6 +846,7 @@ let selectionManager = null;
 let interactionManager = null;
 let dragDropManager = null;
 let traceManager = null;
+let traceFormatter = null;
 let transformManager = null;
 
 let redrawTimeout = null;
@@ -879,37 +883,26 @@ const formatTrace = async () => {
   try {
     console.log('=== ФОРМАТ ТРАССЫ ===');
 
-    if (!calcManager) {
-      // Если расчет еще не выполнялся, сначала выполняем его
-      showNotify({
-        type: 'info',
-        message: 'Сначала выполните расчет системы',
-        timeout: 2000
-      });
-      return;
+    // Создаем форматтер если еще не создан
+    if (!traceFormatter) {
+      traceFormatter = new TraceFormatter(layerManager, connectionManager, showNotify);
     }
 
-    const formattedData = await calcManager.formatTrace();
+    // Выполняем форматирование
+    const result = traceFormatter.format();
 
-    // Показываем результат в уведомлении
-    showNotify({
-      type: 'positive',
-      message: `Трасса отформатирована. Найдено трасс: ${formattedData.header.totalTraces}. Подробности в консоли.`,
-      timeout: 3000
-    });
+    // Обновляем отображение
+    layers.value = [...layers.value];
+    scheduleRender();
 
-    // Можно также предложить скачать файл
-    const jsonString = JSON.stringify(formattedData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `trace_report_${new Date().toISOString().slice(0, 19)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Дополнительно обновляем связи
+    setTimeout(() => {
+      connectionManager.updateAllPortsAndConnections(snapDistance.value, layerManager);
+      scheduleRender();
+    }, 100);
 
   } catch (error) {
-    console.error('Ошибка при форматировании:', error);
+    console.error('Ошибка при форматировании трассы:', error);
     showNotify({
       type: 'negative',
       message: error.message || 'Ошибка при форматировании трассы',
@@ -922,30 +915,9 @@ const formatTrace = async () => {
 
 const calculateSystem = async () => {
   if (isCalculating.value) return;
-
   isCalculating.value = true;
 
   try {
-    console.log('=== ЗАПУСК РАСЧЕТА ===');
-
-    // Получаем все элементы из слоев
-    const allElements = [];
-    for (const layer of layers.value) {
-      if (layer.visible !== false) {
-        allElements.push(...layer.elements);
-      }
-    }
-
-    if (allElements.length === 0) {
-      showNotify({
-        type: 'warning',
-        message: 'Нет элементов для расчета. Добавьте воздуховоды на схему.',
-        timeout: 3000
-      });
-      return;
-    }
-
-    // Создаем экземпляр Calc с текущими параметрами
     calcManager = new Calc(layers, {
       mmPerPx: mmPerPx.value,
       totalAirFlow: totalAirFlow.value,
@@ -954,29 +926,16 @@ const calculateSystem = async () => {
       roughness: roughness.value
     });
 
-    // Выполняем расчет (асинхронно)
     const results = await calcManager.calculate();
-
-    // Выводим отчет в консоль
     calcManager.printReport();
 
-    // Показываем уведомление о завершении
     showNotify({
       type: 'positive',
-      message: `Расчет завершен. Найдено трасс: ${results.tracesCount || 0}. Суммарные потери: ${results.totalLosses?.toFixed(2) || 0} Па.`,
+      message: `Расчет завершен. Потери: ${results.totalLosses.toFixed(2)} Па`,
       timeout: 5000
     });
-
-    // Можно сохранить результаты для дальнейшего использования
-    // calculationResults.value = results;
-
   } catch (error) {
-    console.error('Ошибка при расчете:', error);
-    showNotify({
-      type: 'negative',
-      message: error.message || 'Ошибка при расчете системы',
-      timeout: 3000
-    });
+    showNotify({ type: 'negative', message: error.message, timeout: 3000 });
   } finally {
     isCalculating.value = false;
   }

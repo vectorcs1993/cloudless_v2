@@ -492,11 +492,20 @@ export class CanvasRenderer {
   }
 
   drawPorts(ctx) {
-    const allPorts = [];
+    // Собираем позиции фитингов
+    const fittingPositions = new Set();
     const visibleElements = this.getVisibleElements();
 
     for (const element of visibleElements) {
-      if (this.isElementVisible(element) && element.ports?.length) {
+      if (element.type === 'fitting') {
+        const key = `${Math.round(element.x * 10)},${Math.round(element.y * 10)}`;
+        fittingPositions.add(key);
+      }
+    }
+
+    const allPorts = [];
+    for (const element of visibleElements) {
+      if (this.isElementVisible(element) && element.ports?.length && element.type !== 'fitting') {
         allPorts.push(...element.ports);
       }
     }
@@ -504,14 +513,12 @@ export class CanvasRenderer {
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
 
-      if (port.worldX < this.visibleBounds.minX - 50 ||
-        port.worldX > this.visibleBounds.maxX + 50 ||
-        port.worldY < this.visibleBounds.minY - 50 ||
-        port.worldY > this.visibleBounds.maxY + 50) {
-        continue;
+      // Проверяем, есть ли фитинг в этой позиции
+      const portKey = `${Math.round(port.worldX * 10)},${Math.round(port.worldY * 10)}`;
+      if (fittingPositions.has(portKey)) {
+        continue; // Не рисуем порт, если там фитинг
       }
 
-      // ИСПОЛЬЗУЕМ МЕТОДЫ ПОРТА
       const isHighlighted = this.highlightedPort === port;
       port.draw(ctx, this.scale.value, this.options.mmPerPx?.value || 2,
         this.options.isDarkTheme.value, isHighlighted);

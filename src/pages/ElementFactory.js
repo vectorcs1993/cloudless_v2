@@ -3,6 +3,7 @@ import { Elbow } from './Elbow.js';
 import { Cross } from './Cross.js';
 import { Tee } from './Tee.js';
 import { Transition } from './Transition.js';
+import { Fitting } from './Fitting.js';
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
 
@@ -82,6 +83,15 @@ export class ElementFactory {
         if (params.lineWidth !== undefined) elbow.lineWidth = params.lineWidth;
         elbow.showCallout = showCallout;
         return elbow;
+
+      case 'fitting':
+        const fitting = new Fitting(id, x_px, y_px, params.fittingType || 'elbow');
+        if (params.rotation !== undefined) fitting.rotation = params.rotation;
+        if (params.name) fitting.name = params.name;
+        if (params.color) fitting.color = params.color;
+        if (params.lineWidth !== undefined) fitting.lineWidth = params.lineWidth;
+        fitting.showCallout = params.showCallout !== undefined ? params.showCallout : true;
+        return fitting;
       default:
         throw new Error(`Unknown element type: ${type}`);
     }
@@ -161,7 +171,8 @@ export class ElementFactory {
       tee: () => new Tee(-1, x, y),
       elbow: () => new Elbow(-1, x, y),
       cross: () => new Cross(-1, x, y),
-      transition: () => new Transition(-1, x, y)
+      transition: () => new Transition(-1, x, y),
+      fitting: () => new Fitting(-1, x, y, 'elbow'),
     };
     const creator = creators[type];
     return creator ? creator() : null;

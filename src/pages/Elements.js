@@ -52,6 +52,7 @@ export class BaseElement {
       'tee': 'Тройник',
       'elbow': 'Отвод',
       'cross': 'Крестовина',
+      'fitting': 'Фитинг',
     };
   }
   getTypeName() {
