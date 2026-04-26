@@ -163,6 +163,8 @@ export class TraceFormatter {
     const size1 = this.getDuctSize(duct1);
     const size2 = this.getDuctSize(duct2);
 
+    Logger.warn(`size1 ${size1.area}`);
+    Logger.warn(`size2 ${size2.area}`);
     const angle1 = junction.angles[0];
     const angle2 = junction.angles[1];
     const angleDiff = this.getAngleDifference(angle1, angle2);
@@ -219,32 +221,33 @@ export class TraceFormatter {
     if (duct.sectionType === 'round') {
       return {
         type: 'round',
-        width: duct.a || 125,
-        height: duct.a || 125,
-        area: Math.PI * Math.pow((duct.a || 125) / 2, 2)
+        width: duct.a,
+        height: duct.a,
+        area: (Math.PI * Math.pow((duct.a) / 2, 2)).toFixed(0),
       };
     } else {
       return {
         type: 'rectangular',
-        width: duct.a || 125,
-        height: duct.c || 100,
-        area: (duct.a || 125) * (duct.c || 100)
+        width: duct.a,
+        height: duct.c,
+        area: ((duct.a) * (duct.c)).toFixed(0),
       };
     }
   }
 
   areSizesDifferent(size1, size2) {
-    if (size1.type === 'round' && size2.type === 'round') {
-      return Math.abs(size1.width - size2.width) > 10;
+    if ((size1.type === 'round' && size2.type === 'rectangular') || (size1.type === 'rectangular' && size2.type === 'round')) {
+      return true;
+    } else {
+      if (size1.type === 'round' && size2.type === 'round') {
+        return Math.abs(size1.width - size2.width) > 0;
+      } else if (size1.type === 'rectangular' && size2.type === 'rectangular') {
+        const widthDiff = Math.abs(size1.width - size2.width);
+        const heightDiff = Math.abs(size1.height - size2.height);
+        return widthDiff > 0 || heightDiff > 0;
+      }
     }
-
-    if (size1.type === 'rectangular' && size2.type === 'rectangular') {
-      const widthDiff = Math.abs(size1.width - size2.width);
-      const heightDiff = Math.abs(size1.height - size2.height);
-      return widthDiff > 10 || heightDiff > 10;
-    }
-
-    return true;
+    return false;
   }
 
   getPortAngle(port, element) {
@@ -285,12 +288,22 @@ export class TraceFormatter {
   }
 
   createFitting(junction, fittingType) {
+
+
+
     const nextId = this.layerManager.getNextElementId();
     const fitting = new Fitting(nextId, junction.x, junction.y, fittingType);
 
     if (fittingType === 'elbow' && junction.detectedAngle) {
       fitting.angle = junction.detectedAngle;
     }
+
+    if (fittingType === 'transition') {
+      const [d1, d2] = this.getDuctsAtJunction(junction);
+      fitting.sectionType = d1.sectionType;
+      fitting.sectionType2 = d2.sectionType;
+    }
+
 
     fitting.connectedPortIds = junction.ports.map(p => p.id);
     fitting.updatePorts();

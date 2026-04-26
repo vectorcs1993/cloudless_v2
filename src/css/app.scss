@@ -131,21 +131,23 @@
   gap: 8px;
 }
 
-.single-element-info {
-  .param-label-col {
-    flex: 0 0 100px;
-  }
+// .single-element-info {
 
-  .param-unit-col {
-    flex: 0 0 40px;
-    font-size: 12px;
-    color: #666;
 
-    .dark-theme & {
-      color: #aaa;
-    }
-  }
-}
+//   .param-label-col {
+//     flex: 0 0 100px;
+//   }
+
+//   .param-unit-col {
+//     flex: 0 0 40px;
+//     font-size: 12px;
+//     color: #666;
+
+//     .dark-theme & {
+//       color: #aaa;
+//     }
+//   }
+// }
 
 .connection-item {
   display: flex;

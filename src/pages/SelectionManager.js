@@ -151,29 +151,6 @@ export class SelectionManager {
       lines.push({ x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, lineWidth: element.lineWidth });
     }
 
-    // Для отвода - дополнительные линии
-    if (element.type === 'elbow' && element.getPathPoints) {
-      const { inlet, corner, outlet } = element.getPathPoints();
-      p1 = rotatePoint(inlet.x, inlet.y);
-      let pCorner = rotatePoint(corner.x, corner.y);
-      p2 = rotatePoint(outlet.x, outlet.y);
-      lines.push({ x1: p1.x, y1: p1.y, x2: pCorner.x, y2: pCorner.y, lineWidth: element.lineWidth });
-      lines.push({ x1: pCorner.x, y1: pCorner.y, x2: p2.x, y2: p2.y, lineWidth: element.lineWidth });
-    }
-
-    // Для тройника - линия ветки
-    if (element.type === 'tee' && element.getPorts) {
-      const ports = element.getPorts();
-      const branchPort = ports.find(p => p.direction === 'branch');
-      if (branchPort && branchPort.worldX && branchPort.worldY) {
-        lines.push({
-          x1: centerX, y1: centerY,
-          x2: branchPort.worldX, y2: branchPort.worldY,
-          lineWidth: element.lineWidth
-        });
-      }
-    }
-
     return lines;
   }
 

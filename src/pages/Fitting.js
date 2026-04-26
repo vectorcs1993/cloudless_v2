@@ -6,8 +6,6 @@ export class Fitting extends DuctBase {
   constructor(id, x, y, fittingType = 'elbow') {
     super(id, 'fitting', x, y, `Фитинг ${id}`, 'galvanized', 'round', 125, 100, 125);
     this.fittingType = fittingType;
-    this.angle = 90;
-    this.branchAngle = 90;
     this._radius = 9;
     this._lineWidth = 2;
   }
@@ -39,12 +37,6 @@ export class Fitting extends DuctBase {
       transition: 'Переход'
     };
     let text = `${types[this.fittingType] || this.fittingType}\n${this.name}`;
-
-    if (this.fittingType === 'elbow') {
-      text += `\nУгол: ${this.angle}°`;
-    } else if (this.fittingType === 'tee') {
-      text += `\nУгол ответвления: ${this.branchAngle}°`;
-    }
 
     const connectionCount = this.getConnectionCount();
     if (connectionCount > 0) {
@@ -87,41 +79,7 @@ export class Fitting extends DuctBase {
       {
         name: 'materialType', label: 'Материал', type: 'select', options: DuctBase.getMaterialsTypes(), value: this.materialType,
       },
-      {
-        name: 'sectionType', label: 'Тип сечения', type: 'select', options: DuctBase.getSectionTypes(), value: this.sectionType,
-      },
     ];
-
-    if (this.fittingType === 'elbow') {
-      params.push({
-        name: 'angle',
-        label: 'Угол отвода',
-        type: 'select',
-        options: [
-          { value: 30, label: '30°' },
-          { value: 45, label: '45°' },
-          { value: 60, label: '60°' },
-          { value: 90, label: '90°' }
-        ],
-        value: this.angle,
-        unit: '°'
-      });
-    }
-
-    if (this.fittingType === 'tee') {
-      params.push({
-        name: 'branchAngle',
-        label: 'Угол ответвления',
-        type: 'select',
-        options: [
-          { value: 45, label: '45°' },
-          { value: 60, label: '60°' },
-          { value: 90, label: '90°' }
-        ],
-        value: this.branchAngle,
-        unit: '°'
-      });
-    }
 
     return params;
   }
@@ -149,14 +107,6 @@ export class Fitting extends DuctBase {
     ctx.font = `${Math.max(10, 14 / scale)}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
-    const symbols = {
-      elbow: '↺',
-      tee: '┬',
-      cross: '┼',
-      transition: '▷'
-    };
-    ctx.fillText(symbols[this.fittingType] || 'F', this.x, this.y);
 
     if (showPorts) {
       ctx.beginPath();
@@ -239,14 +189,16 @@ export class Fitting extends DuctBase {
     ctx.setLineDash([]);
     ctx.restore();
   }
-
+  allowEditRotate() {
+    return false;
+  }
+  allowEditLineWidth() {
+    return false;
+  }
   toJSON() {
     return {
       ...super.toJSON(),
       fittingType: this.fittingType,
-      angle: this.angle,
-      branchAngle: this.branchAngle,
-      _radius: this._radius
     };
   }
 }

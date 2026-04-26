@@ -48,10 +48,6 @@ export class BaseElement {
   static getAvailableTypes() {
     return {
       'duct': 'Прямой воздуховод',
-      'transition': 'Переход',
-      'tee': 'Тройник',
-      'elbow': 'Отвод',
-      'cross': 'Крестовина',
       'fitting': 'Фитинг',
     };
   }
@@ -308,7 +304,12 @@ export class DuctBase extends BaseElement {
     }
     return params;
   }
-
+  allowEditRotate() {
+    return true;
+  }
+  allowEditLineWidth() {
+    return true;
+  }
   toJSON() {
     return {
       ...super.toJSON(),

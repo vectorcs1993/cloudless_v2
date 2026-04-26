@@ -1,91 +1,24 @@
 import { DuctDirect } from './DuctDirect.js';
-import { Elbow } from './Elbow.js';
-import { Cross } from './Cross.js';
-import { Tee } from './Tee.js';
-import { Transition } from './Transition.js';
 import { Fitting } from './Fitting.js';
 import { Port } from './Port.js';
 import { Callout } from './Callout.js';
 
 // ========== ФАБРИКА ==========
 export class ElementFactory {
-  static createElement(type, id, x_px, y_px, params = {}) {
-    const sectionType = params.sectionType || 'round';
-    const sectionType2 = params.sectionType2 || 'round';
-    const materialType = params.materialType || 'galvanized';
-    const a = params.a || 50;
-    const b = params.b || 50;
-    const c = params.c || 50;
-    const a2 = params.a2 || 50;
-    const c2 = params.c2 || 50;
-    const showCallout = params.showCallout;
+  static createElement(type, id, x, y, params = {}) {
 
     switch (type) {
       case 'duct':
-        const duct = new DuctDirect(id, x_px, y_px, materialType, sectionType, a, b, c);
+        const duct = new DuctDirect(id, x, y, params.materialType, params.sectionType, params.a, params.b, params.c);
         if (params.rotation !== undefined) duct.rotation = params.rotation;
         if (params.name) duct.name = params.name;
         if (params.color) duct.color = params.color;
         if (params.lineWidth !== undefined) duct.lineWidth = params.lineWidth;
-        duct.showCallout = showCallout;
+        duct.showCallout = params.showCallout !== undefined ? params.showCallout : true;
         return duct;
 
-      case 'transition':
-        const transition = new Transition(
-          id, x_px, y_px,
-          materialType,
-          params.sectionType || 'round',
-          params.sectionType2 || 'round',
-          params.a || 125,
-          params.a2 || 200,
-          params.b || 500,
-          params.c || 125,
-          params.c2 || 150
-        );
-        if (params.rotation !== undefined) transition.rotation = params.rotation;
-        if (params.name) transition.name = params.name;
-        if (params.color) transition.color = params.color;
-        if (params.lineWidth !== undefined) transition.lineWidth = params.lineWidth;
-        transition.showCallout = params.showCallout !== undefined ? params.showCallout : true;
-        return transition;
-
-      case 'tee':
-        const tee = new Tee(id, x_px, y_px, materialType, sectionType, a);
-        if (params.l1 !== undefined) tee.l1 = params.l1;
-        if (params.l2 !== undefined) tee.l2 = params.l2;
-        if (params.l3 !== undefined) tee.l3 = params.l3;
-        if (params.anglel2 !== undefined) tee.angle = params.anglel2;
-        if (params.rotation !== undefined) tee.rotation = params.rotation;
-        if (params.name) tee.name = params.name;
-        if (params.color) tee.color = params.color;
-        if (params.lineWidth !== undefined) tee.lineWidth = params.lineWidth;
-        tee.showCallout = showCallout;
-        return tee;
-
-      case 'cross':
-        const cross = new Cross(id, x_px, y_px, materialType, sectionType, a);
-        if (params.l1 !== undefined) cross.l1 = params.l1;
-        if (params.l2 !== undefined) cross.l2 = params.l2;
-        if (params.rotation !== undefined) cross.rotation = params.rotation;
-        if (params.name) cross.name = params.name;
-        if (params.color) cross.color = params.color;
-        if (params.lineWidth !== undefined) cross.lineWidth = params.lineWidth;
-        cross.showCallout = showCallout;
-        return cross;
-
-      case 'elbow':
-        const elbow = new Elbow(id, x_px, y_px, materialType, sectionType, a);
-        if (params.r !== undefined) elbow.r = params.r;
-        if (params.direction !== undefined) elbow.direction = params.direction; // ДОБАВЛЕНО: поддержка направления
-        if (params.rotation !== undefined) elbow.rotation = params.rotation;
-        if (params.name) elbow.name = params.name;
-        if (params.color) elbow.color = params.color;
-        if (params.lineWidth !== undefined) elbow.lineWidth = params.lineWidth;
-        elbow.showCallout = showCallout;
-        return elbow;
-
       case 'fitting':
-        const fitting = new Fitting(id, x_px, y_px, params.fittingType || 'elbow');
+        const fitting = new Fitting(id, x, y, params.fittingType);
         if (params.rotation !== undefined) fitting.rotation = params.rotation;
         if (params.name) fitting.name = params.name;
         if (params.color) fitting.color = params.color;
@@ -108,10 +41,9 @@ export class ElementFactory {
         sectionType2: jsonData.sectionType2,
         materialType: jsonData.materialType,
         a: jsonData.a,
-        a2: jsonData.a2,
         b: jsonData.b,
         c: jsonData.c,
-        c2: jsonData.c2,
+        fittingType: jsonData.fittingType,
         l1: jsonData.l1,
         l2: jsonData.l2,
         l3: jsonData.l3,
@@ -168,10 +100,6 @@ export class ElementFactory {
   static createGhostElement(type, x, y) {
     const creators = {
       duct: () => new DuctDirect(-1, x, y),
-      tee: () => new Tee(-1, x, y),
-      elbow: () => new Elbow(-1, x, y),
-      cross: () => new Cross(-1, x, y),
-      transition: () => new Transition(-1, x, y),
       fitting: () => new Fitting(-1, x, y, 'elbow'),
     };
     const creator = creators[type];
