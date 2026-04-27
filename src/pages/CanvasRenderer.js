@@ -25,8 +25,15 @@ export class CanvasRenderer {
     };
 
     this.transformGhostPoints = [];
+
+        this.snapPoint = null;
+    this.snapType = null;
   }
 
+  setSnapPoint(point, type) {
+    this.snapPoint = point;
+    this.snapType = type;
+  }
 
   setTransformGhostPoints(points) {
     this.transformGhostPoints = points || [];
@@ -278,9 +285,72 @@ export class CanvasRenderer {
 
     ctx.restore();
 
+ if (this.snapPoint && this.snapType) {
+      this.drawSnapIndicator(ctx, this.snapPoint, this.snapType, this.scale.value);
+    }
+
     if (this.selectionRect) {
       this.drawSelectionRect(ctx);
     }
+  }
+drawSnapIndicator(ctx, snapPoint, snapType, scale) {
+    if (!snapPoint) return;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const screenPos = this.worldToScreen(snapPoint.x, snapPoint.y);
+    const size = 20;
+    const lineWidth = 2;
+
+    if (snapType === 'port') {
+      // Кружок для порта (зеленый)
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 12, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+
+      // Внутренний кружок
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 6, 0, 2 * Math.PI);
+      ctx.stroke();
+
+      // Анимация пульсации (опционально)
+      const pulse = Date.now() % 1000 / 1000;
+      const extraRadius = 4 * pulse;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 16 + extraRadius, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+      ctx.stroke();
+
+    } else if (snapType === 'grid') {
+      // Перекрестие для сетки (желтое)
+      ctx.beginPath();
+      // Горизонтальная линия
+      ctx.moveTo(screenPos.x - size, screenPos.y);
+      ctx.lineTo(screenPos.x - size/3, screenPos.y);
+      ctx.moveTo(screenPos.x + size/3, screenPos.y);
+      ctx.lineTo(screenPos.x + size, screenPos.y);
+
+      // Вертикальная линия
+      ctx.moveTo(screenPos.x, screenPos.y - size);
+      ctx.lineTo(screenPos.x, screenPos.y - size/3);
+      ctx.moveTo(screenPos.x, screenPos.y + size/3);
+      ctx.lineTo(screenPos.x, screenPos.y + size);
+
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+
+      // Центральная точка
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffff00';
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   drawSelectionRect(ctx) {

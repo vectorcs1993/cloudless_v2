@@ -41,9 +41,43 @@ export class InteractionManager {
     this.transformActive = false;
     this.transformPort = null;
     this.transformElement = null;
+
+    this.currentSnapPoint = null;
+    this.currentSnapType = null; // 'port' или 'grid'
   }
 
   // ========== РЕЖИМ РИСОВАНИЯ ==========
+
+  updateSnapIndicator(worldPos) {
+    if (this.currentTool?.value !== 'trace') {
+      this.currentSnapPoint = null;
+      this.currentSnapType = null;
+      return;
+    }
+
+    // 1. Сначала ищем порт (приоритет)
+    const port = this.findPortAt(worldPos.x, worldPos.y, 20);
+    if (port && this.isInteractive(this.findElementById(port.elementId))) {
+      this.currentSnapPoint = { x: port.worldX, y: port.worldY };
+      this.currentSnapType = 'port';
+      return;
+    }
+
+    // 2. Если порта нет и включена сетка - привязываем к сетке
+    if (this.options.showGrid?.value && this.options.gridStepM?.value) {
+      const gridStepWorld = this.options.gridStepM.value;
+      this.currentSnapPoint = {
+        x: Math.round(worldPos.x / gridStepWorld) * gridStepWorld,
+        y: Math.round(worldPos.y / gridStepWorld) * gridStepWorld
+      };
+      this.currentSnapType = 'grid';
+      return;
+    }
+
+    // 3. Нет привязки
+    this.currentSnapPoint = null;
+    this.currentSnapType = null;
+  }
 
   startTrace(port) {
     if (!port) return;
@@ -60,7 +94,18 @@ export class InteractionManager {
     this.traceActive = true;
     this.traceStartPort = null;
     this.traceStartPoint = point;
-    this.traceStartWorldPoint = { x: point.x, y: point.y };
+
+    // Привязываем начальную точку к сетке если она включена
+    let snappedPoint = { ...point };
+    if (this.options.showGrid?.value && this.options.gridStepM?.value) {
+      const gridStepWorld = this.options.gridStepM.value;
+      snappedPoint = {
+        x: Math.round(point.x / gridStepWorld) * gridStepWorld,
+        y: Math.round(point.y / gridStepWorld) * gridStepWorld
+      };
+    }
+
+    this.traceStartWorldPoint = { x: snappedPoint.x, y: snappedPoint.y };
     this.canvas.style.cursor = 'crosshair';
     if (this.onTraceStart) this.onTraceStart(null);
   }
@@ -71,9 +116,12 @@ export class InteractionManager {
     this.traceStartPoint = null;
     this.traceStartWorldPoint = null;
     this.traceGhostPoints = [];
+    this.currentSnapPoint = null;
+    this.currentSnapType = null;
 
     if (this.renderer) {
       this.renderer.setTraceGhostPoints([]);
+      this.renderer.setSnapPoint(null, null);
       this.renderer.draw();
     }
 
@@ -474,7 +522,30 @@ export class InteractionManager {
     if (!this.traceStartWorldPoint) return;
 
     const startPoint = this.traceStartWorldPoint;
-    let endPoint = { x: worldPos.x, y: worldPos.y };
+
+    // Получаем привязанную точку
+    let endPoint;
+    const port = this.findPortAt(worldPos.x, worldPos.y, 20);
+
+    if (port && this.isInteractive(this.findElementById(port.elementId))) {
+      // Привязка к порту
+      endPoint = { x: port.worldX, y: port.worldY };
+      this.currentSnapPoint = endPoint;
+      this.currentSnapType = 'port';
+    } else if (this.options.showGrid?.value && this.options.gridStepM?.value) {
+      // Привязка к сетке
+      const gridStepWorld = this.options.gridStepM.value;
+      endPoint = {
+        x: Math.round(worldPos.x / gridStepWorld) * gridStepWorld,
+        y: Math.round(worldPos.y / gridStepWorld) * gridStepWorld
+      };
+      this.currentSnapPoint = endPoint;
+      this.currentSnapType = 'grid';
+    } else {
+      endPoint = worldPos;
+      this.currentSnapPoint = null;
+      this.currentSnapType = null;
+    }
 
     const dx = endPoint.x - startPoint.x;
     const dy = endPoint.y - startPoint.y;
@@ -517,6 +588,8 @@ export class InteractionManager {
         x: startPoint.x + Math.cos(rad) * snappedDistancePx,
         y: startPoint.y + Math.sin(rad) * snappedDistancePx
       };
+      // Обновляем snap point для отображения
+      this.currentSnapPoint = endPoint;
     } else {
       // Если угол не привязывается, просто привязываем длину
       const rad = angle * Math.PI / 180;
@@ -524,9 +597,14 @@ export class InteractionManager {
         x: startPoint.x + Math.cos(rad) * snappedDistancePx,
         y: startPoint.y + Math.sin(rad) * snappedDistancePx
       };
+      this.currentSnapPoint = endPoint;
     }
 
     this.traceGhostPoints = [startPoint, endPoint];
+
+    // Передаем точку привязки в рендерер
+    this.renderer?.setSnapPoint(this.currentSnapPoint, this.currentSnapType);
+
     this.renderer?.setTraceGhostPoints(this.traceGhostPoints);
     this.renderer?.draw();
   }
@@ -771,8 +849,6 @@ export class InteractionManager {
 
   // ========== ОБРАБОТЧИКИ СОБЫТИЙ ==========
 
-  // InteractionManager.js - исправленный метод onMouseMove
-
   onMouseMove(e) {
     const world = this.renderer.screenToWorld(e.clientX, e.clientY);
     const rect = this.canvas.getBoundingClientRect();
@@ -784,8 +860,8 @@ export class InteractionManager {
         world,
         this.options.gridStepM?.value || 50,
         this.options.mmPerPx?.value || 2,
-        this.options.snapLengthMm?.value || 50,   // ← добавить
-        this.options.snapAngleDeg?.value || 45    // ← добавить
+        this.options.snapLengthMm?.value || 50,
+        this.options.snapAngleDeg?.value || 45
       );
       this.renderer.setTransformGhostPoints(this.transformManager.getGhostPoints());
       this.renderer.draw();
@@ -829,8 +905,24 @@ export class InteractionManager {
 
     // ========== РЕЖИМ РИСОВАНИЯ ==========
     if (this.traceActive) {
+      // Обновляем индикатор привязки
+      this.updateSnapIndicator(world);
       this.updateTracePreview(world);
       return;
+    }
+
+    if (this.currentTool?.value === 'trace' && !this.traceActive) {
+      this.updateSnapIndicator(world);
+      this.renderer?.setSnapPoint(this.currentSnapPoint, this.currentSnapType);
+      this.renderer?.draw();
+    } else if (this.currentTool?.value !== 'trace') {
+      // Очищаем индикатор если не в режиме рисования
+      if (this.currentSnapPoint !== null) {
+        this.currentSnapPoint = null;
+        this.currentSnapType = null;
+        this.renderer?.setSnapPoint(null, null);
+        this.renderer?.draw();
+      }
     }
 
     // ========== ВЫДЕЛЕНИЕ ПРЯМОУГОЛЬНИКОМ ==========
@@ -902,7 +994,16 @@ export class InteractionManager {
             // ВАЖНО: передаем сам порт, а не координаты мыши
             this.startTrace(port);
           } else {
-            this.startTraceFromPoint(world);
+            // Привязываем начальную точку к сетке перед стартом
+            let startPoint = world;
+            if (this.options.showGrid?.value && this.options.gridStepM?.value) {
+              const gridStepWorld = this.options.gridStepM.value;
+              startPoint = {
+                x: Math.round(world.x / gridStepWorld) * gridStepWorld,
+                y: Math.round(world.y / gridStepWorld) * gridStepWorld
+              };
+            }
+            this.startTraceFromPoint(startPoint);
           }
           this.renderer.draw();
           return;
@@ -1047,7 +1148,6 @@ export class InteractionManager {
       this.renderer.draw();
     }, 100);
   }
-  // В InteractionManager.js добавьте метод:
 
   onMouseLeave() {
     // Завершаем перетаскивание элементов
@@ -1098,12 +1198,21 @@ export class InteractionManager {
       this.renderer?.draw();
     }
 
+    // НОВОЕ: Очищаем индикатор привязки при уходе с канваса
+    if (this.currentSnapPoint !== null || this.currentSnapType !== null) {
+      this.currentSnapPoint = null;
+      this.currentSnapType = null;
+      this.renderer?.setSnapPoint(null, null);
+      this.renderer?.draw();
+    }
+
     // Сбрасываем курсор
     this.canvas.style.cursor = 'default';
 
     // Очищаем кэш
     this.clearSnapCache();
   }
+
   onWheel(e) {
     e.preventDefault();
 
