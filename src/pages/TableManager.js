@@ -29,7 +29,7 @@ export class TableManager {
     return el?.getMaterial?.().label || '-';
   }
   getElementSectionName(el) {
-    return el?.getSection?.().label || '-';
+    return (el?.getSection() === undefined || el?.getSection() === null) ? '-' : el?.getSection?.().label;
   }
   getElementA(el) {
     return (el?.a === undefined || el?.a === null) ? '-' : el?.a;

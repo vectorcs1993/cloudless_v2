@@ -1,4 +1,4 @@
-// Fitting.js - фитинг наследуется от DuctBase
+import { BaseElement } from './Elements.js';
 import { DuctBase } from './Elements.js';
 import { Port } from './Port.js';
 
@@ -9,7 +9,17 @@ export class Fitting extends DuctBase {
     this._radius = 9; // Базовый радиус в пикселях (при масштабе 1)
     this._lineWidth = 2;
   }
-
+  static getAvailableFittingTypes() {
+    return {
+      'elbow': 'Отвод',
+      'tee': 'Тройник',
+      'cross': 'Крестовина',
+      'transition': 'Переход'
+    };
+  }
+  getTypeName() {
+    return `${BaseElement.getAvailableTypes()[this.type]} (${Fitting.getAvailableFittingTypes()[this.fittingType]})`;
+  }
   // Метод для получения радиуса с учетом масштаба
   getRadius(scale) {
     // Минимальный и максимальный видимый размер на экране
@@ -34,13 +44,15 @@ export class Fitting extends DuctBase {
   get c() { return null; }
   set c(value) { }
 
+  getSection() {
+    return null;
+  }
+
   getWidth() {
-    const scale = 1; // Для bounding box используем базовый размер
     return this.getRadius(1) * 2;
   }
 
   getHeight() {
-    const scale = 1;
     return this.getRadius(1) * 2;
   }
 
@@ -53,13 +65,8 @@ export class Fitting extends DuctBase {
   }
 
   getCalloutText() {
-    const types = {
-      elbow: 'Отвод',
-      tee: 'Тройник',
-      cross: 'Крестовина',
-      transition: 'Переход'
-    };
-    let text = `${types[this.fittingType] || this.fittingType}\n${this.name}`;
+
+    let text = `${Fitting.getAvailableFittingTypes()[this.fittingType] || this.fittingType}\n${this.name}`;
 
     const connectionCount = this.getConnectionCount();
     if (connectionCount > 0) {
@@ -111,18 +118,12 @@ export class Fitting extends DuctBase {
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, this._radius, 0, 2 * Math.PI);
-
-    if (isSelected) {
-      ctx.fillStyle = '#e5ff00';
-    } else if (isHighlighted) {
-      ctx.fillStyle = '#00c8ff';
-    } else {
-      ctx.fillStyle = this.color;
-    }
-    ctx.fill();
-
-
-
+    this.createPath(ctx);
+    if (isSelected) ctx.strokeStyle = '#e5ff00';
+    else if (isHighlighted) ctx.strokeStyle = '#00c8ff';
+    else ctx.strokeStyle = this.color;
+    ctx.lineWidth = this._lineWidth;
+    ctx.stroke();
     ctx.restore();
 
     if (showElementAxes) this.drawCenterLines(ctx, scale, isDarkTheme);
@@ -173,7 +174,7 @@ export class Fitting extends DuctBase {
     const dx = worldX - this.x;
     const dy = worldY - this.y;
     // Увеличиваем зону клика для удобства (базовый радиус + запас)
-    const hitRadius = this._radius + 5;
+    const hitRadius = this._radius;
     return Math.sqrt(dx * dx + dy * dy) < hitRadius;
   }
 
