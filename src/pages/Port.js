@@ -10,8 +10,7 @@ export class Port {
     this.localY = localY;
     this.worldX = worldX;
     this.worldY = worldY;
-    // ИЗМЕНЕНИЕ: массив соединений вместо одного
-    this.connections = []; // [{ connectedElementId, connectedPortId }]
+    this.connections = []; // массив соединений вместо одного [{ connectedElementId, connectedPortId }]
     this.radius = 5;
   }
 
@@ -83,11 +82,39 @@ export class Port {
   connectTo(port) {
     this.addConnection(port.elementId, port.id);
   }
-
   getDirectionName() {
-    return 'Порт';
-  }
+    const names = {
+      // Для воздуховодов (DuctDirect)
+      'inlet': 'Вход',
+      'outlet': 'Выход',
+      'left': 'Левый',
+      'right': 'Правый',
+      // Для фитингов (Fitting)
+      'center': 'Центральный',
+      // Для других элементов
+      'top': 'Верхний',
+      'bottom': 'Нижний'
+    };
 
+    return names[this.direction] || this.direction;
+  }
+  // Метод для получения полного названия порта с дополнительной информацией
+  getFullName() {
+    let name = this.getDirectionName();
+    // Если есть side (сторона) и она отличается от direction
+    if (this.side && this.side !== this.direction) {
+      const sideNames = {
+        'left': 'Левый',
+        'right': 'Правый',
+        'top': 'Верхний',
+        'bottom': 'Нижний',
+        'center': 'Центральный'
+      };
+      name = `${sideNames[this.side] || this.side} (${name})`;
+    }
+
+    return name;
+  }
   updateWorldPosition(centerX, centerY, rotation, pointX, pointY) {
     const angleRad = rotation * Math.PI / 180;
     const dx = pointX - centerX;

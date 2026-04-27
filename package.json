@@ -1,8 +1,8 @@
 {
   "name": "cloudless-v2",
   "version": "0.0.1",
-  "description": "CloudLessV2Project",
-  "productName": "CloudLessV2",
+  "description": "AeroductProject",
+  "productName": "Aeroduct",
   "author": "vectorcs1993 <vectorcs@mail.ru>",
   "type": "module",
   "private": true,

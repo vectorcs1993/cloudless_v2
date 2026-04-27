@@ -215,3 +215,173 @@
 .layer-panel-content {
   height: 100%;
 }
+
+/* ========== КОНСОЛЬ С ЦВЕТНЫМИ СООБЩЕНИЯМИ ========== */
+.console-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.console-toolbar {
+  padding: 4px 8px;
+  border-bottom: 1px solid;
+  flex-shrink: 0;
+}
+
+/* Используем переменные Quasar для границ */
+.console-toolbar {
+  border-bottom-color: var(--q-separator-color);
+}
+
+.console-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.console-line {
+  font-family: inherit;
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.console-timestamp {
+  min-width: 85px;
+  font-size: 11px;
+}
+
+.console-message {
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Цветные сообщения - используем переменные Quasar */
+.console-info {
+  border-left: 3px solid #2196f3;
+}
+.console-info .console-message {
+  color: #2196f3;
+}
+
+.console-success {
+  border-left: 3px solid #4caf50;
+}
+.console-success .console-message {
+  color: #4caf50;
+}
+
+.console-warning {
+  border-left: 3px solid #ff9800;
+}
+.console-warning .console-message {
+  color: #ff9800;
+}
+
+.console-error {
+  border-left: 3px solid #f44336;
+}
+.console-error .console-message {
+  color: #f44336;
+}
+
+.console-debug {
+  border-left: 3px solid #9c27b0;
+}
+.console-debug .console-message {
+  color: #9c27b0;
+}
+
+/* Hover эффекты */
+.console-line:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Кастомизация скроллбара */
+.console-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.console-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.console-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.console-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Темная тема - Quasar автоматически добавляет class="dark" на body */
+.dark .console-info .console-message {
+  color: #64b5f6;
+}
+.dark .console-info {
+  border-left-color: #42a5f5;
+}
+
+.dark .console-success .console-message {
+  color: #81c784;
+}
+.dark .console-success {
+  border-left-color: #66bb6a;
+}
+
+.dark .console-warning .console-message {
+  color: #ffb74d;
+}
+.dark .console-warning {
+  border-left-color: #ffa726;
+}
+
+.dark .console-error .console-message {
+  color: #ef5350;
+}
+.dark .console-error {
+  border-left-color: #ef5350;
+}
+
+.dark .console-debug .console-message {
+  color: #ce93d8;
+}
+.dark .console-debug {
+  border-left-color: #ab47bc;
+}
+
+.dark .console-line:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark .console-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark .console-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.dark .console-toolbar {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Анимация для новых сообщений */
+.console-line {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

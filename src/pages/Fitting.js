@@ -6,8 +6,23 @@ export class Fitting extends DuctBase {
   constructor(id, x, y, fittingType = 'elbow') {
     super(id, 'fitting', x, y, `Фитинг ${id}`, 'galvanized', 'round', 125, 100, 125);
     this.fittingType = fittingType;
-    this._radius = 9;
+    this._radius = 9; // Базовый радиус в пикселях (при масштабе 1)
     this._lineWidth = 2;
+  }
+
+  // Метод для получения радиуса с учетом масштаба
+  getRadius(scale) {
+    // Минимальный и максимальный видимый размер на экране
+    const minScreenRadius = 6;
+    const maxScreenRadius = 18;
+
+    // Радиус в пикселях на экране (с учетом масштаба)
+    let screenRadius = this._radius / scale;
+
+    // Ограничиваем размер
+    screenRadius = Math.min(maxScreenRadius, Math.max(minScreenRadius, screenRadius));
+
+    return screenRadius;
   }
 
   get a() { return null; }
@@ -19,13 +34,21 @@ export class Fitting extends DuctBase {
   get c() { return null; }
   set c(value) { }
 
-  getWidth() { return this._radius * 2; }
-  getHeight() { return this._radius * 2; }
+  getWidth() {
+    const scale = 1; // Для bounding box используем базовый размер
+    return this.getRadius(1) * 2;
+  }
+
+  getHeight() {
+    const scale = 1;
+    return this.getRadius(1) * 2;
+  }
 
   getTopLeft() {
+    const radius = this.getRadius(1);
     return {
-      x: this.x - this._radius,
-      y: this.y - this._radius
+      x: this.x - radius,
+      y: this.y - radius
     };
   }
 
@@ -83,7 +106,6 @@ export class Fitting extends DuctBase {
 
     return params;
   }
-
   draw(ctx, scale, isSelected, isHighlighted, isDarkTheme, showPorts, showColors, showElementAxes) {
     ctx.save();
 
@@ -99,34 +121,7 @@ export class Fitting extends DuctBase {
     }
     ctx.fill();
 
-    ctx.strokeStyle = isDarkTheme ? '#fff' : '#333';
-    ctx.lineWidth = 2 / scale;
-    ctx.stroke();
 
-    ctx.fillStyle = isDarkTheme ? '#fff' : '#000';
-    ctx.font = `${Math.max(10, 14 / scale)}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    if (showPorts) {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, 5 / scale, 0, 2 * Math.PI);
-
-      const connectionCount = this.getConnectionCount();
-      if (connectionCount === 0) {
-        ctx.fillStyle = '#888888';
-      } else if (connectionCount === 1) {
-        ctx.fillStyle = '#00cc00';
-      } else if (connectionCount === 2) {
-        ctx.fillStyle = '#ffaa00';
-      } else {
-        ctx.fillStyle = '#ff0000';
-      }
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1 / scale;
-      ctx.stroke();
-    }
 
     ctx.restore();
 
@@ -173,15 +168,20 @@ export class Fitting extends DuctBase {
   createPath(ctx) { }
 
   hitTest(worldX, worldY, ctx) {
+    // Для hit test используем всегда базовый радиус (без учета масштаба)
+    // Потому что hit test выполняется в мировых координатах
     const dx = worldX - this.x;
     const dy = worldY - this.y;
-    return Math.sqrt(dx * dx + dy * dy) < this._radius;
+    // Увеличиваем зону клика для удобства (базовый радиус + запас)
+    const hitRadius = this._radius + 5;
+    return Math.sqrt(dx * dx + dy * dy) < hitRadius;
   }
 
   drawCenterLines(ctx, scale, isDarkTheme) {
     ctx.save();
+    const radius = this.getRadius(scale);
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this._radius / 2, 0, 2 * Math.PI);
+    ctx.arc(this.x, this.y, radius / 2, 0, 2 * Math.PI);
     ctx.strokeStyle = isDarkTheme ? '#ff3366' : '#cc2244';
     ctx.lineWidth = Math.max(0.5, 1 / scale);
     ctx.setLineDash([4 / scale, 4 / scale]);
@@ -189,12 +189,15 @@ export class Fitting extends DuctBase {
     ctx.setLineDash([]);
     ctx.restore();
   }
+
   allowEditRotate() {
     return false;
   }
+
   allowEditLineWidth() {
     return false;
   }
+
   toJSON() {
     return {
       ...super.toJSON(),

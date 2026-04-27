@@ -561,21 +561,13 @@ drawSnapIndicator(ctx, snapPoint, snapType, scale) {
     ctx.fillText('Y', 5 / this.scale.value, endY - 5 / this.scale.value);
   }
 
-  drawPorts(ctx) {
-    // Собираем позиции фитингов
-    const fittingPositions = new Set();
+drawPorts(ctx) {
+    const allPorts = [];
     const visibleElements = this.getVisibleElements();
 
     for (const element of visibleElements) {
-      if (element.type === 'fitting') {
-        const key = `${Math.round(element.x * 10)},${Math.round(element.y * 10)}`;
-        fittingPositions.add(key);
-      }
-    }
-
-    const allPorts = [];
-    for (const element of visibleElements) {
-      if (this.isElementVisible(element) && element.ports?.length && element.type !== 'fitting') {
+      // Убираем проверку element.type !== 'fitting'
+      if (this.isElementVisible(element) && element.ports?.length) {
         allPorts.push(...element.ports);
       }
     }
@@ -583,17 +575,11 @@ drawSnapIndicator(ctx, snapPoint, snapType, scale) {
     for (const port of allPorts) {
       if (port.worldX === undefined || port.worldY === undefined) continue;
 
-      // Проверяем, есть ли фитинг в этой позиции
-      const portKey = `${Math.round(port.worldX * 10)},${Math.round(port.worldY * 10)}`;
-      if (fittingPositions.has(portKey)) {
-        continue; // Не рисуем порт, если там фитинг
-      }
-
       const isHighlighted = this.highlightedPort === port;
       port.draw(ctx, this.scale.value, this.options.mmPerPx?.value || 2,
         this.options.isDarkTheme.value, isHighlighted);
     }
-  }
+}
 
   drawCallouts(ctx) {
     // Если активен режим рисования - не рисуем выноски (или рисуем полупрозрачными)

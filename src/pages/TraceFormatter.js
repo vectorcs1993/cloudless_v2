@@ -163,8 +163,6 @@ export class TraceFormatter {
     const size1 = this.getDuctSize(duct1);
     const size2 = this.getDuctSize(duct2);
 
-    Logger.warn(`size1 ${size1.area}`);
-    Logger.warn(`size2 ${size2.area}`);
     const angle1 = junction.angles[0];
     const angle2 = junction.angles[1];
     const angleDiff = this.getAngleDifference(angle1, angle2);
